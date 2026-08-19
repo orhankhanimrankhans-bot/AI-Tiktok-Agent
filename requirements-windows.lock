@@ -1,0 +1,8 @@
+# Reproducible Windows desktop build dependencies (Python 3.12 x64).
+PySide6==6.11.1
+python-dotenv==1.2.2
+google-genai==2.18.1
+pywinauto==0.6.9
+faster-whisper==1.2.1
+pyttsx3==2.99
+pyinstaller==6.21.0

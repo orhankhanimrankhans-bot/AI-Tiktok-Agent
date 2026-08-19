@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# AI TikTok Agent data
+data/
+output/
+models/
+logs/
+app_backup/
+audio_test.wav
+
+# Secrets
+.env
+*.key
+*.pem
+credentials.json
+
+# VS Code
+.vscode/
+# Source code must remain versioned. Keep only generated/private artifacts ignored.
+agent_test.py
+
+build/
+dist/
+
+build/
+dist/
+
+node_modules/
