@@ -1,4 +1,5 @@
-const express = require("express");
+﻿const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const session = require("express-session");
@@ -103,7 +104,7 @@ function makePopupResultHtml({ status, message = "" }) {
   <body>
     <div class="card">
       <h2>${status === "connected" ? "Google account connected" : "Google sign-in not completed"}</h2>
-      <p>${message || (status === "connected" ? "Returning to Jarvis…" : "You can close this window.")}</p>
+      <p>${message || (status === "connected" ? "Returning to Jarvisâ€¦" : "You can close this window.")}</p>
     </div>
     <script>
       (function () {
@@ -324,6 +325,19 @@ app.post("/api/google/auth/disconnect", async (req, res) => {
   }
 });
 
+
+// Serve the production React/Vite frontend.
+const CLIENT_DIST = path.join(__dirname, "..", "client", "dist");
+
+app.use(express.static(CLIENT_DIST));
+
+app.use((req, res, next) => {
+  if (req.method === "GET" && !req.path.startsWith("/api/")) {
+    return res.sendFile(path.join(CLIENT_DIST, "index.html"));
+  }
+
+  return next();
+});
 app.listen(PORT, () => {
   console.log("");
   console.log("=================================");
@@ -337,3 +351,5 @@ app.listen(PORT, () => {
   console.log("=================================");
   console.log("");
 });
+
+

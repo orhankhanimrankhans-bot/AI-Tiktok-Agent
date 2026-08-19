@@ -1,0 +1,16 @@
+{
+  "name": "jarvis-web",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=client",
+    "start": "npm start --workspace=server"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

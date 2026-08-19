@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import "./App.css";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
 
 function GoogleDriveIcon({ className = "" }) {
   return (
@@ -34,7 +34,7 @@ const NODE_LIBRARY = [
     name: "Schedule Trigger",
     description: "Start a workflow automatically on a schedule",
     type: "TRIGGER",
-    icon: "◷",
+    icon: "â—·",
   },
   {
     id: "facebook-graph-api",
@@ -76,7 +76,7 @@ const NODE_LIBRARY = [
     name: "Search Files and Folders",
     description: "Search files and folders in Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-download",
@@ -84,7 +84,7 @@ const NODE_LIBRARY = [
     name: "Download File",
     description: "Download a file from Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-delete",
@@ -92,7 +92,7 @@ const NODE_LIBRARY = [
     name: "Delete File",
     description: "Delete the selected file from Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-copy",
@@ -100,7 +100,7 @@ const NODE_LIBRARY = [
     name: "Copy File",
     description: "Copy a file in Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-create-text",
@@ -108,7 +108,7 @@ const NODE_LIBRARY = [
     name: "Create File from Text",
     description: "Create a new Google Drive file from text",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-move",
@@ -116,7 +116,7 @@ const NODE_LIBRARY = [
     name: "Move File",
     description: "Move a file to another folder in Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-share-file",
@@ -124,7 +124,7 @@ const NODE_LIBRARY = [
     name: "Share File",
     description: "Share a Google Drive file",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-update",
@@ -132,7 +132,7 @@ const NODE_LIBRARY = [
     name: "Update File",
     description: "Update a Google Drive file",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-upload",
@@ -140,7 +140,7 @@ const NODE_LIBRARY = [
     name: "Upload File",
     description: "Upload a file to Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-create-folder",
@@ -148,7 +148,7 @@ const NODE_LIBRARY = [
     name: "Create Folder",
     description: "Create a new Google Drive folder",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-delete-folder",
@@ -156,7 +156,7 @@ const NODE_LIBRARY = [
     name: "Delete Folder",
     description: "Delete a Google Drive folder",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-share-folder",
@@ -164,7 +164,7 @@ const NODE_LIBRARY = [
     name: "Share Folder",
     description: "Share a Google Drive folder",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-create-shared-drive",
@@ -172,7 +172,7 @@ const NODE_LIBRARY = [
     name: "Create Shared Drive",
     description: "Create a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-delete-shared-drive",
@@ -180,7 +180,7 @@ const NODE_LIBRARY = [
     name: "Delete Shared Drive",
     description: "Delete a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-get-shared-drive",
@@ -188,7 +188,7 @@ const NODE_LIBRARY = [
     name: "Get Shared Drive",
     description: "Get a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-get-many-shared-drives",
@@ -196,7 +196,7 @@ const NODE_LIBRARY = [
     name: "Get Many Shared Drives",
     description: "List shared drives",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-update-shared-drive",
@@ -204,7 +204,7 @@ const NODE_LIBRARY = [
     name: "Update Shared Drive",
     description: "Update a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "limit",
@@ -342,18 +342,18 @@ const saveAndClose = () => {
 
         <header className="node-editor-header">
           <div className="node-editor-title">
-            <div className="schedule-title-icon">◷</div>
+            <div className="schedule-title-icon">â—·</div>
             <strong>Schedule Trigger</strong>
           </div>
 
           <div className="node-editor-header-actions">
-            <button>Docs ↗</button>
+            <button>Docs â†—</button>
 
             <button
               className="node-editor-close"
              onClick={saveAndClose}
             >
-              ×
+              Ã—
             </button>
           </div>
         </header>
@@ -389,7 +389,7 @@ const saveAndClose = () => {
                 className="execute-step"
                 onClick={executeTrigger}
               >
-                ♙ Execute step
+                â™™ Execute step
               </button>
             </div>
 
@@ -408,7 +408,7 @@ const saveAndClose = () => {
                   <div className="trigger-rules-title">
                     <strong>Trigger Rules</strong>
 
-                    <button onClick={addRule}>＋</button>
+                    <button onClick={addRule}>ï¼‹</button>
                   </div>
 
                   {rules.map((rule, index) => (
@@ -422,7 +422,7 @@ const saveAndClose = () => {
                           className="rule-expand"
                           onClick={() => toggleRule(rule.id)}
                         >
-                          {rule.expanded ? "⌄" : "›"}
+                          {rule.expanded ? "âŒ„" : "â€º"}
                         </button>
 
                         <strong>
@@ -435,7 +435,7 @@ const saveAndClose = () => {
                             deleteRule(rule.id)
                           }
                         >
-                          ♲
+                          â™²
                         </button>
                       </div>
 
@@ -484,7 +484,7 @@ const saveAndClose = () => {
                               />
 
                               <small>
-                                Must be in range 1–59
+                                Must be in range 1â€“59
                               </small>
                             </>
                           )}
@@ -510,7 +510,7 @@ const saveAndClose = () => {
                               />
 
                               <small>
-                                Must be in range 1–59
+                                Must be in range 1â€“59
                               </small>
                             </>
                           )}
@@ -575,7 +575,7 @@ const saveAndClose = () => {
                               />
 
                               <small>
-                                Must be in range 1–31
+                                Must be in range 1â€“31
                               </small>
 
                               <label>
@@ -810,7 +810,7 @@ const saveAndClose = () => {
                     className="add-rule-button"
                     onClick={addRule}
                   >
-                    ＋ Add Rule
+                    ï¼‹ Add Rule
                   </button>
                 </>
               )}
@@ -931,7 +931,7 @@ const saveAndClose = () => {
 
             {!output ? (
               <div className="empty-output">
-                <div className="output-bolt">ϟ</div>
+                <div className="output-bolt">ÏŸ</div>
 
                 <h3>No trigger output</h3>
 
@@ -1019,13 +1019,13 @@ function GoogleDriveProviderBrowser({
   return (
     <div className="provider-browser">
       <div className="provider-browser-header">
-        <button className="provider-back" onClick={onBack}>←</button>
+        <button className="provider-back" onClick={onBack}>â†</button>
         <GoogleDriveIcon className="drive-provider-logo" />
         <h2>Google Drive</h2>
       </div>
 
       <div className="provider-action-search">
-        <span>⌕</span>
+        <span>âŒ•</span>
         <input
           autoFocus
           value={actionSearch}
@@ -1079,8 +1079,8 @@ function FacebookProviderBrowser({ onBack, onSelectAction }) {
 
   return (
     <div className="provider-browser">
-      <div className="provider-browser-header facebook-provider-header"><button className="provider-back" onClick={onBack}>←</button><FacebookIcon className="facebook-provider-logo" /><h2>Facebook</h2></div>
-      <div className="provider-action-search"><span>⌕</span><input autoFocus value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Search Facebook Actions..." /></div>
+      <div className="provider-browser-header facebook-provider-header"><button className="provider-back" onClick={onBack}>â†</button><FacebookIcon className="facebook-provider-logo" /><h2>Facebook</h2></div>
+      <div className="provider-action-search"><span>âŒ•</span><input autoFocus value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Search Facebook Actions..." /></div>
       <div className="provider-action-scroll">
         {groups.map((group) => {
           const items = group.items.filter(([, label]) => label.toLowerCase().includes(query));
@@ -1164,8 +1164,8 @@ function GoogleCredentialModal({
 
           <div className="credential-modal-actions">
             <button type="button" onClick={saveCredential}>Save</button>
-            <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">⌫</button>
-            <button type="button" onClick={onClose} aria-label="Close credential modal">×</button>
+            <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">âŒ«</button>
+            <button type="button" onClick={onClose} aria-label="Close credential modal">Ã—</button>
           </div>
         </header>
 
@@ -1184,7 +1184,7 @@ function GoogleCredentialModal({
               </select>
             </div>
 
-            {status === "connected" ? <div className="credential-connected"><span>✓</span><strong>Account connected{credential?.accountEmail ? ` · ${credential.accountEmail}` : ""}</strong><div><button type="button" onClick={onStartOAuth}>Switch account</button><button type="button" className="disconnect-button" onClick={disconnectCredential}>Disconnect</button></div></div> : <div className="credential-warning"><span>⚠</span><span>Connect your account to use this credential</span><button type="button" onClick={onStartOAuth}>Sign in with Google</button></div>}
+            {status === "connected" ? <div className="credential-connected"><span>âœ“</span><strong>Account connected{credential?.accountEmail ? ` Â· ${credential.accountEmail}` : ""}</strong><div><button type="button" onClick={onStartOAuth}>Switch account</button><button type="button" className="disconnect-button" onClick={disconnectCredential}>Disconnect</button></div></div> : <div className="credential-warning"><span>âš </span><span>Connect your account to use this credential</span><button type="button" onClick={onStartOAuth}>Sign in with Google</button></div>}
             {connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}
 
             <label htmlFor="google-allowed-domains">Allowed HTTP Request Domains</label>
@@ -1216,7 +1216,7 @@ function FacebookCredentialModal({ onClose, onSave }) {
       <div className="credential-modal">
         <header className="credential-modal-header">
           <div className="credential-modal-title"><FacebookIcon className="facebook-provider-logo" /><div><input className="credential-name-input" value={credentialName} onChange={(event) => setCredentialName(event.target.value)} /><div className="credential-subtitle">Meta Graph API</div></div></div>
-          <div className="credential-modal-actions"><button onClick={() => onSave(credentialName)}>Save</button><button onClick={onClose}>×</button></div>
+          <div className="credential-modal-actions"><button onClick={() => onSave(credentialName)}>Save</button><button onClick={onClose}>Ã—</button></div>
         </header>
         <div className="credential-modal-body">
           <aside className="credential-tabs"><button className="credential-tab-active">Connection</button><button>Sharing</button><button>Details</button></aside>
@@ -1341,12 +1341,12 @@ function GoogleDriveSearchEditor({
           </div>
 
           <div className="node-editor-header-actions">
-            <button>Docs ↗</button>
+            <button>Docs â†—</button>
             <button
               className="node-editor-close"
               onClick={saveAndClose}
             >
-              ×
+              Ã—
             </button>
           </div>
         </header>
@@ -1363,13 +1363,13 @@ function GoogleDriveSearchEditor({
             </div>
 
             <div className="input-source-select">
-              <span>{previousNode?.icon ?? "◷"}</span>
+              <span>{previousNode?.icon ?? "â—·"}</span>
               <span>{previousNode?.name ?? "Schedule Trigger"}</span>
-              <span>⌄</span>
+              <span>âŒ„</span>
             </div>
 
             {!input ? <div className="input-empty-state">
-              <div className="input-arrow">→|</div>
+              <div className="input-arrow">â†’|</div>
               <h3>No input data</h3>
               <button
                 onClick={executePreviousNodes}
@@ -1454,7 +1454,7 @@ function GoogleDriveSearchEditor({
                       onClick={onCreateCredential}
                       title="Edit credential"
                     >
-                      ✎
+                      âœŽ
                     </button>
                   </div>
 
@@ -1557,18 +1557,18 @@ function GoogleDriveSearchEditor({
 
                   <div className="config-section-row">
                     <span>Filter</span>
-                    <button>＋</button>
+                    <button>ï¼‹</button>
                   </div>
                   <button className="config-add-button">
-                    ＋ Add Filter
+                    ï¼‹ Add Filter
                   </button>
 
                   <div className="config-section-row">
                     <span>Options</span>
-                    <button>＋</button>
+                    <button>ï¼‹</button>
                   </div>
                   <button className="config-add-button">
-                    ＋ Add option
+                    ï¼‹ Add option
                   </button>
                 </div>
               )}
@@ -1697,7 +1697,7 @@ function GoogleDriveSearchEditor({
 
             {!output ? (
               <div className="empty-output">
-                <div className="output-bolt">→|</div>
+                <div className="output-bolt">â†’|</div>
                 <h3>No output data</h3>
                 <button onClick={executeStep}>
                   Execute step
@@ -1756,13 +1756,13 @@ function NodeInputPanel({ previousNode, input, onInputChange, allowMock = false 
         </div>
       </div>
       <div className="input-source-select">
-        <span>{previousNode?.icon ?? "○"}</span>
+        <span>{previousNode?.icon ?? "â—‹"}</span>
         <span>{previousNode?.name ?? "No connected node"}</span>
-        <span>⌄</span>
+        <span>âŒ„</span>
       </div>
       {input == null ? (
         <div className="input-empty-state">
-          <div className="input-arrow">→|</div>
+          <div className="input-arrow">â†’|</div>
           <h3>No input data</h3>
           <button onClick={loadPreviousOutput}>Execute previous nodes</button>
           <div>to view input data</div>
@@ -1788,7 +1788,7 @@ function NodeOutputPanel({ output, onExecute, allowMock = false, onMock }) {
       </div>
       {output == null ? (
         <div className="empty-output">
-          <div className="output-bolt">→|</div>
+          <div className="output-bolt">â†’|</div>
           <h3>No output data</h3>
           <button onClick={onExecute}>Execute step</button>
           {allowMock && <button className="mock-data-action" onClick={onMock}>set clearly labeled mock data</button>}
@@ -1867,7 +1867,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
       <div className="node-editor-window">
         <header className="node-editor-header">
           <div className="node-editor-title">{isLimit ? <span className="logic-title-icon">1</span> : <GoogleDriveIcon className="drive-title-icon" />}<strong>{node.name}</strong></div>
-          <div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div>
+          <div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>Ã—</button></div>
         </header>
         <div className="node-editor-body google-three-column">
           <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} allowMock={isLimit} />
@@ -1884,7 +1884,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
                     <label>Keep</label><select value={config.keep} onChange={(event) => setConfig({ ...config, keep: event.target.value })}><option>First Items</option><option>Last Items</option></select>
                   </> : <>
                     <label>Credential</label>
-                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.name}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={onCreateCredential}>✎</button></div>
+                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.name}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={onCreateCredential}>âœŽ</button></div>
                     <label>Resource</label><select value={config.resource} disabled><option>File</option></select>
                     <label>Operation</label><select value={config.operation} disabled><option>{config.operation}</option></select>
                     <label>File ID</label><div className="value-mode-switch">{["Fixed", "Expression"].map((mode) => <button key={mode} className={config.fileIdMode === mode ? "active" : ""} onClick={() => setConfig({ ...config, fileIdMode: mode })}>{mode}</button>)}</div>
@@ -1907,7 +1907,7 @@ function ParameterList({ title, addLabel, items, onChange }) {
   return (
     <div className="request-parameter-section">
       <div className="config-section-row"><span>{title}</span><button onClick={() => onChange([...items, { name: "", value: "" }])}>+</button></div>
-      {items.map((item, index) => <div className="parameter-pair" key={index}><input aria-label={`${title} name`} placeholder="Name" value={item.name} onChange={(event) => update(index, "name", event.target.value)} /><input aria-label={`${title} value`} placeholder="Value" value={item.value} onChange={(event) => update(index, "value", event.target.value)} /><button aria-label={`Remove ${title} item`} onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>×</button></div>)}
+      {items.map((item, index) => <div className="parameter-pair" key={index}><input aria-label={`${title} name`} placeholder="Name" value={item.name} onChange={(event) => update(index, "name", event.target.value)} /><input aria-label={`${title} value`} placeholder="Value" value={item.value} onChange={(event) => update(index, "value", event.target.value)} /><button aria-label={`Remove ${title} item`} onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>Ã—</button></div>)}
       <button className="config-add-button" onClick={() => onChange([...items, { name: "", value: "" }])}>+ {addLabel}</button>
     </div>
   );
@@ -1944,13 +1944,13 @@ function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredenti
 
   return (
     <div className="node-editor-overlay"><div className="node-editor-window">
-      <header className="node-editor-header"><div className="node-editor-title"><FacebookIcon className="facebook-title-icon" /><strong>Facebook Graph API</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
+      <header className="node-editor-header"><div className="node-editor-title"><FacebookIcon className="facebook-title-icon" /><strong>Facebook Graph API</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>Ã—</button></div></header>
       <div className="node-editor-body google-three-column">
         <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} />
         <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep}>Execute step</button></div>
           <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters facebook-parameters">
             {validationMessage && <div className="field-validation" role="alert">{validationMessage}</div>}
-            <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.name}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={onCreateCredential}>✎</button></div>
+            <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.name}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={onCreateCredential}>âœŽ</button></div>
             <label>HTTP Method</label><select value={config.method} onChange={(event) => setConfig({ ...config, method: event.target.value })}><option>GET</option><option>POST</option><option>DELETE</option></select>
             <label>Graph API Version</label><input value={config.apiVersion} onChange={(event) => setConfig({ ...config, apiVersion: event.target.value })} placeholder="vXX.X" />
             <label>Endpoint / Node</label><input value={config.endpoint} onChange={(event) => setConfig({ ...config, endpoint: event.target.value })} placeholder="me, me/accounts, {page-id}/feed, {page-id}/videos" /><small>Examples only: me, me/accounts, {'{page-id}'}/feed, {'{page-id}'}/videos</small>
@@ -2498,18 +2498,18 @@ function App() {
 
         <nav className="side-nav">
           {[
-            ["⌂", "Home"],
-            ["▣", "Chat"],
-            ["◉", "Voice"],
-            ["◌", "WhatsApp"],
-            ["♪", "TikTok"],
-            ["♧", "Memory"],
-            ["✓", "Tasks"],
-            ["▤", "Logs"],
-            ["↻", "Updates"],
-            ["▰", "Backups"],
-            ["⚙", "Settings"],
-            ["〽", "System Health"],
+            ["âŒ‚", "Home"],
+            ["â–£", "Chat"],
+            ["â—‰", "Voice"],
+            ["â—Œ", "WhatsApp"],
+            ["â™ª", "TikTok"],
+            ["â™§", "Memory"],
+            ["âœ“", "Tasks"],
+            ["â–¤", "Logs"],
+            ["â†»", "Updates"],
+            ["â–°", "Backups"],
+            ["âš™", "Settings"],
+            ["ã€½", "System Health"],
           ].map(([icon, label]) => (
             <button key={label}>
               <span>{icon}</span>
@@ -2521,7 +2521,7 @@ function App() {
         <div className="sidebar-bottom">
 
           <div className="assisted">
-            ⬡ ASSISTED MODE
+            â¬¡ ASSISTED MODE
           </div>
 
           <small>
@@ -2596,7 +2596,7 @@ function App() {
 
               <div className="workflow-actions">
                 <button className="run-button">
-                  ▶ Run Workflow
+                  â–¶ Run Workflow
                 </button>
 
                 <button onClick={saveWorkflow}>Save</button>
@@ -2618,13 +2618,13 @@ function App() {
                         setShowNodePicker(true)
                       }
                     >
-                      ＋
+                      ï¼‹
                     </button>
 
-                    <button>⌕</button>
-                    <button>▤</button>
-                    <button>⌘</button>
-                    <button>✦</button>
+                    <button>âŒ•</button>
+                    <button>â–¤</button>
+                    <button>âŒ˜</button>
+                    <button>âœ¦</button>
                   </div>
 
                   {canvasNodes.length > 0 && (
@@ -2662,7 +2662,7 @@ function App() {
                         }
                       >
                         <div className="empty-icon">
-                          ＋
+                          ï¼‹
                         </div>
 
                         <div>
@@ -2676,7 +2676,7 @@ function App() {
 
                       <button className="empty-card">
                         <div className="empty-icon">
-                          ✦
+                          âœ¦
                         </div>
 
                         <div>
@@ -2710,7 +2710,7 @@ function App() {
                               title="Delete node"
                               aria-label={`Delete ${node.name}`}
                             >
-                              ×
+                              Ã—
                             </button>
 
                             <div
@@ -2752,10 +2752,10 @@ function App() {
                   )}
 
                   <div className="zoom-tools">
-                    <button>⌗</button>
-                    <button>＋</button>
-                    <button>−</button>
-                    <button>↖</button>
+                    <button>âŒ—</button>
+                    <button>ï¼‹</button>
+                    <button>âˆ’</button>
+                    <button>â†–</button>
                   </div>
 
                   <div className="logs-bar">
@@ -2809,14 +2809,14 @@ function App() {
                           setShowNodePicker(false)
                         }
                       >
-                        ×
+                        Ã—
                       </button>
 
                     </div>
 
                     <div className="search-box">
 
-                      <span>⌕</span>
+                      <span>âŒ•</span>
 
                       <input
                         autoFocus
@@ -2835,7 +2835,7 @@ function App() {
                             setSearch("")
                           }
                         >
-                          ×
+                          Ã—
                         </button>
                       )}
 
