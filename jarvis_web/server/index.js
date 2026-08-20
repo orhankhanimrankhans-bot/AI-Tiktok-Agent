@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const path = require("path");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -104,7 +104,7 @@ function makePopupResultHtml({ status, message = "" }) {
   <body>
     <div class="card">
       <h2>${status === "connected" ? "Google account connected" : "Google sign-in not completed"}</h2>
-      <p>${message || (status === "connected" ? "Returning to Jarvisâ€¦" : "You can close this window.")}</p>
+      <p>${message || (status === "connected" ? "Returning to Jarvis…" : "You can close this window.")}</p>
     </div>
     <script>
       (function () {
