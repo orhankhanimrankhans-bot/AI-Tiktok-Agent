@@ -8,6 +8,49 @@ const { google } = require("googleapis");
 
 dotenv.config();
 
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+if (IS_PRODUCTION && !process.env.SESSION_SECRET) {
+  console.error(
+    "FATAL ERROR: SESSION_SECRET is required in production. " +
+      "Set it in your .env file or Hostinger environment variables."
+  );
+  process.exit(1);
+}
+
+if (IS_PRODUCTION && !process.env.GOOGLE_CLIENT_ID) {
+  console.error(
+    "FATAL ERROR: GOOGLE_CLIENT_ID is required in production. " +
+      "Set it in your .env file or Hostinger environment variables."
+  );
+  process.exit(1);
+}
+
+if (IS_PRODUCTION && !process.env.GOOGLE_REDIRECT_URI) {
+  console.error(
+    "FATAL ERROR: GOOGLE_REDIRECT_URI is required in production. " +
+      "Set it in your .env file or Hostinger environment variables."
+  );
+  process.exit(1);
+}
+
+if (IS_PRODUCTION && !process.env.GOOGLE_CLIENT_SECRET) {
+  console.error(
+    "FATAL ERROR: GOOGLE_CLIENT_SECRET is required in production. " +
+      "Set it in your .env file or Hostinger environment variables. " +
+      "Do not commit real secret values to source control."
+  );
+  process.exit(1);
+}
+
+if (IS_PRODUCTION && !process.env.CLIENT_URL) {
+  console.error(
+    "FATAL ERROR: CLIENT_URL is required in production. " +
+      "Set it in your .env file or Hostinger environment variables."
+  );
+  process.exit(1);
+}
+
 const app = express();
 
 const PORT = Number(process.env.PORT || 3001);
@@ -39,14 +82,15 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false, // localhost development. Use true behind HTTPS in production.
+      secure: IS_PRODUCTION, // HTTPS behind reverse proxy in production
       maxAge: 10 * 60 * 1000,
     },
   })
 );
 
 // Development-only in-memory credential store.
-// Replace this with encrypted persistent storage before production.
+// Tokens are lost when the server restarts.
+// Replace this with encrypted persistent storage (database) before production.
 const GOOGLE_CREDENTIAL_ID = "google_drive_main";
 const googleCredentialStore = new Map();
 
