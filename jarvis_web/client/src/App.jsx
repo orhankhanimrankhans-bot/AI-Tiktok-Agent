@@ -2197,7 +2197,7 @@ function App() {
     const handleOAuthMessage = async (event) => {
       let backendOrigin;
       try {
-        backendOrigin = new URL(API_BASE_URL).origin;
+        backendOrigin = new URL(API_BASE_URL || window.location.origin, window.location.origin).origin;
       } catch {
         return;
       }
