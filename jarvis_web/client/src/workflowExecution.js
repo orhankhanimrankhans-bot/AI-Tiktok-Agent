@@ -33,6 +33,13 @@ export function failedNode(node, error, now = new Date()) {
   };
 }
 
+export function upstreamInputError(error) {
+  return {
+    status: "error",
+    message: error?.message || "Upstream execution failed.",
+  };
+}
+
 export async function executeWithLifecycle({ node, input, executor, onTransition, now = () => new Date() }) {
   const running = runningNode(node, input, now());
   onTransition?.(running);
@@ -70,6 +77,11 @@ export async function executeUpstreamLinear({ targetNodeId, nodes, connections, 
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const visiting = new Set();
   const completed = new Set();
+  const targetIncoming = connections.filter((connection) => connection.target === targetNodeId);
+
+  if (targetIncoming.length === 0) {
+    throw new Error("No upstream node is connected.");
+  }
 
   const visit = async (nodeId, executeSelf = true) => {
     if (visiting.has(nodeId)) throw new Error("Workflow cycle detected. Upstream execution stopped safely.");
@@ -84,6 +96,11 @@ export async function executeUpstreamLinear({ targetNodeId, nodes, connections, 
     if (executeSelf) {
       const executed = await executeNode(node, input);
       nodeMap.set(nodeId, executed);
+      if (executed?.status === "error") {
+        const error = new Error(executed.error || executed.output?.message || `Upstream node ${node.name || node.id} failed.`);
+        error.updatedNodes = nodes.map((item) => nodeMap.get(item.id) || item);
+        throw error;
+      }
     } else {
       nodeMap.set(nodeId, { ...node, input });
     }

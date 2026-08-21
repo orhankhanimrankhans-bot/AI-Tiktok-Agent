@@ -11,6 +11,7 @@ import {
   createScheduleManualOutput,
   executeUpstreamLinear,
   executeWithLifecycle,
+  upstreamInputError,
 } from "./workflowExecution.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
@@ -1264,6 +1265,7 @@ function GoogleDriveSearchEditor({
   const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
   const [output, setOutput] = useState(node.output ?? null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isExecutingPrevious, setIsExecutingPrevious] = useState(false);
 
   const [config, setConfig] = useState(
     node.config ?? {
@@ -1341,11 +1343,15 @@ function GoogleDriveSearchEditor({
   };
 
   const executePreviousNodes = async () => {
+    if (isExecutingPrevious) return;
+    setIsExecutingPrevious(true);
     try {
       const previousInput = await onExecutePreviousNodes(node.id);
       setInput(previousInput);
     } catch (error) {
-      setInput({ status: "error", message: error?.message || "Upstream execution failed." });
+      setInput(upstreamInputError(error));
+    } finally {
+      setIsExecutingPrevious(false);
     }
   };
 
@@ -1399,8 +1405,9 @@ function GoogleDriveSearchEditor({
               <h3>No input data</h3>
               <button
                 onClick={executePreviousNodes}
+                disabled={isExecutingPrevious}
               >
-                Execute previous nodes
+                {isExecutingPrevious ? "Executing..." : "Execute previous nodes"}
               </button>
               <div>to view input data</div>
             </div> : <div className="input-data-view"><OutputViewer output={input} tab={inputTab} /></div>}
@@ -2058,11 +2065,19 @@ function App() {
 
   const [canvasNodes, setCanvasNodes] =
     useState([]);
+  const canvasNodesRef = useRef(canvasNodes);
 
   const [editingNode, setEditingNode] =
     useState(null);
 
   const [connections, setConnections] = useState([]);
+  const connectionsRef = useRef(connections);
+  useEffect(() => {
+    canvasNodesRef.current = canvasNodes;
+  }, [canvasNodes]);
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState(null);
   const [providerBrowser, setProviderBrowser] = useState(null);
   const [showGoogleCredential, setShowGoogleCredential] = useState(false);
@@ -2334,15 +2349,28 @@ function App() {
   });
 
   const executePreviousNodesFor = async (targetNodeId) => {
-    const result = await executeUpstreamLinear({
-      targetNodeId,
-      nodes: canvasNodes,
-      connections,
-      executeNode: executeRuntimeNode,
-    });
-    setCanvasNodes(result.nodes);
-    setEditingNode((node) => node?.id === targetNodeId ? { ...node, input: result.input } : node);
-    return result.input;
+    try {
+      const result = await executeUpstreamLinear({
+        targetNodeId,
+        nodes: canvasNodesRef.current,
+        connections: connectionsRef.current,
+        executeNode: executeRuntimeNode,
+      });
+      canvasNodesRef.current = result.nodes;
+      setCanvasNodes(result.nodes);
+      setEditingNode((node) => node?.id === targetNodeId ? { ...node, input: result.input } : node);
+      return result.input;
+    } catch (error) {
+      const visibleError = upstreamInputError(error);
+      const nodesAfterFailure = (Array.isArray(error?.updatedNodes)
+        ? error.updatedNodes
+        : canvasNodesRef.current
+      ).map((node) => node.id === targetNodeId ? { ...node, input: visibleError } : node);
+      canvasNodesRef.current = nodesAfterFailure;
+      setCanvasNodes(nodesAfterFailure);
+      setEditingNode((node) => node?.id === targetNodeId ? { ...node, input: visibleError } : node);
+      throw error;
+    }
   };
 
   const saveWorkflow = () => {

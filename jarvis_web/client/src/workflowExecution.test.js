@@ -5,6 +5,7 @@ import {
   createScheduleManualOutput,
   executeUpstreamLinear,
   executeWithLifecycle,
+  upstreamInputError,
 } from "./workflowExecution.js";
 
 test("previous node output becomes the connected node input", async () => {
@@ -16,6 +17,62 @@ test("previous node output becomes the connected node input", async () => {
   });
   assert.deepEqual(result.input, [{ id: 1 }]);
   assert.deepEqual(result.nodes.find((node) => node.id === "second").input, [{ id: 1 }]);
+});
+
+test("Schedule Trigger executes once and becomes Google Drive input", async () => {
+  let executionCount = 0;
+  const triggerOutput = createScheduleManualOutput(
+    { rules: [{ interval: "Minutes", minutes: 5 }] },
+    new Date("2026-01-01T00:00:00Z")
+  );
+  const result = await executeUpstreamLinear({
+    targetNodeId: "drive",
+    nodes: [
+      { id: "schedule", name: "Schedule Trigger", status: "idle" },
+      { id: "drive", name: "Search Files and Folders", input: null },
+    ],
+    connections: [{ id: "schedule-drive", source: "schedule", target: "drive" }],
+    executeNode: async (node) => {
+      executionCount += 1;
+      return { ...node, status: "success", output: triggerOutput };
+    },
+  });
+
+  assert.equal(executionCount, 1);
+  assert.deepEqual(result.input, triggerOutput);
+  assert.deepEqual(result.nodes.find((node) => node.id === "drive").input, triggerOutput);
+});
+
+test("no incoming connection reports a visible error instead of null", async () => {
+  try {
+    await executeUpstreamLinear({
+      targetNodeId: "drive",
+      nodes: [{ id: "drive", input: null }],
+      connections: [],
+      executeNode: async (node) => node,
+    });
+    assert.fail("Expected missing upstream connection to fail.");
+  } catch (error) {
+    assert.deepEqual(upstreamInputError(error), {
+      status: "error",
+      message: "No upstream node is connected.",
+    });
+  }
+});
+
+test("upstream lifecycle failure is surfaced with updated runtime nodes", async () => {
+  try {
+    await executeUpstreamLinear({
+      targetNodeId: "drive",
+      nodes: [{ id: "schedule", name: "Schedule Trigger" }, { id: "drive" }],
+      connections: [{ source: "schedule", target: "drive" }],
+      executeNode: async (node) => ({ ...node, status: "error", error: "Trigger failed", output: { status: "error", message: "Trigger failed" } }),
+    });
+    assert.fail("Expected upstream lifecycle failure.");
+  } catch (error) {
+    assert.deepEqual(upstreamInputError(error), { status: "error", message: "Trigger failed" });
+    assert.equal(error.updatedNodes.find((node) => node.id === "schedule").status, "error");
+  }
 });
 
 test("cyclic upstream execution is rejected safely", async () => {
