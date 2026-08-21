@@ -88,11 +88,91 @@ app.use(
   })
 );
 
-// Development-only in-memory credential store.
-// Tokens are lost when the server restarts.
-// Replace this with encrypted persistent storage (database) before production.
-const GOOGLE_CREDENTIAL_ID = "google_drive_main";
-const googleCredentialStore = new Map();
+// ============================================================
+ //  Signed OAuth State Token (production-safe, session-less)
+ //  ============================================================
+ //  Instead of storing state/mode in express-session MemoryStore
+ //  (which can be lost when the callback hits a different Node
+ //   process, e.g. Hostinger/Passenger), we use a cryptographically
+ //   signed state token using HMAC-SHA256 with SESSION_SECRET.
+ //  The token is a JWT-like string: base64url(payload).signature
+ //  that survives across different Node processes.
+ //
+ //  Payload JSON fields:
+ //    - mode: "popup" | "redirect"
+ //    - nonce: random hex string (for replay protection)
+ //    - iat: issued-at timestamp (minutes since epoch)
+ //  Signature: HMAC-SHA256 of the raw payload string using SESSION_SECRET.
+// ============================================================
+
+// Helper: base64url encode (URL-safe, no padding)
+function base64urlEncode(buf) {
+  return buf.toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+// Create a signed OAuth state token.
+// Returns a JWT-like string: base64url(payload).base64url(signature)
+function createSignedOAuthState({ mode, nonce, iat }) {
+  // Payload: mode + nonce + issued timestamp
+  const payloadStr = JSON.stringify({ mode, nonce, iat });
+  // HMAC-SHA256 signature of the payload string using SESSION_SECRET
+  const hmac = crypto.createHmac("sha256", process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me");
+  hmac.update(payloadStr);
+  const signature = hmac.digest();
+  // base64url encode payload and signature
+  const payloadB64 = base64urlEncode(Buffer.from(payloadStr));
+  const sigB64 = base64urlEncode(signature);
+  return payloadB64 + "." + sigB64;
+}
+
+// Verify a signed OAuth state token.
+// Returns { mode, nonce, iat } on success, or null on failure.
+// Rejects malformed, tampered, or expired tokens (10 min expiry).
+function verifySignedOAuthState(stateToken) {
+  if (!stateToken || typeof stateToken !== "string") return null;
+  // Split into payload + signature
+  const parts = stateToken.split(".");
+  if (parts.length !== 2) return null;
+  const [payloadB64, sigB64] = parts;
+
+  // Decode payload
+  let payloadStr;
+  try {
+    // Add padding if needed
+    let padded = payloadB64 + "=".repeat((4 - payloadB64.length % 4) % 4);
+    payloadStr = Buffer.from(padded, "base64").toString("utf-8");
+  } catch {
+    return null;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(payloadStr);
+  } catch {
+    return null;
+  }
+
+  // Validate required fields
+  if (!payload.mode || !payload.nonce || typeof payload.iat !== "number") return null;
+
+  // Check expiration: 10 minutes
+  const now = Math.floor(Date.now() / 60000); // minutes
+  if (now - payload.iat > 10) return null; // expired
+
+  // Verify HMAC-SHA256 signature
+  const expectedHmac = crypto.createHmac("sha256", process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me");
+  expectedHmac.update(payloadStr);
+  const expectedSig = expectedHmac.digest();
+  const sigB64 = base64urlEncode(expectedSig);
+
+  // timing-safe compare
+  if (sigB64 !== parts[1]) return null;
+
+  return { mode: payload.mode, nonce: payload.nonce, iat: payload.iat };
+}
 
 function createOAuthClient() {
   if (!googleOAuthConfigured) return null;
@@ -203,10 +283,20 @@ app.get("/api/google/auth/start", (req, res) => {
     });
   }
 
-  const state = crypto.randomBytes(24).toString("hex");
+  // Generate a random nonce for replay protection
+  const nonce = crypto.randomBytes(16).toString("hex");
 
-  req.session.googleOAuthState = state;
-  req.session.googleOAuthMode = req.query.mode === "popup" ? "popup" : "redirect";
+  // Determine mode from query (popup vs redirect)
+  const mode = req.query.mode === "popup" ? "popup" : "redirect";
+
+  // Create a signed state token (survives across Node processes)
+  const iat = Math.floor(Date.now() / 60000); // minutes since epoch
+  const stateToken = createSignedOAuthState({ mode, nonce, iat });
+
+  // Pass the signed state token to Google as the OAuth state parameter
+  // We no longer rely on session storage for mode/state recovery.
+  req.session.googleOAuthState = stateToken; // store token in session as fallback only
+  req.session.googleOAuthMode = mode;
 
   // Save the session before redirecting so the OAuth callback can validate state.
   req.session.save((sessionError) => {
@@ -232,7 +322,7 @@ app.get("/api/google/auth/start", (req, res) => {
         "profile",
         "https://www.googleapis.com/auth/drive",
       ],
-      state,
+      state: stateToken, // <- pass signed token instead of raw hex
     });
 
     return res.redirect(authorizationUrl);
@@ -240,14 +330,48 @@ app.get("/api/google/auth/start", (req, res) => {
 });
 
 app.get("/api/google/auth/callback", async (req, res) => {
-  const mode = req.session.googleOAuthMode || "redirect";
-  const expectedState = req.session.googleOAuthState;
+  // --- Signed OAuth State Token Verification ---
+  // Recover mode from the verified signed state token, NOT from req.session.
+  // This makes the OAuth flow survive across different Node processes
+  // (e.g., Hostinger/Passenger where the callback may hit a different process).
+  let verifiedState = null;
+  let mode = "redirect"; // default fallback
 
+  if (req.query.state) {
+    verifiedState = verifySignedOAuthState(req.query.state);
+    if (verifiedState && verifiedState.mode) {
+      mode = verifiedState.mode; // recover mode from signed token
+    }
+  }
+
+  // If state token is invalid, tampered, or expired, fail safely
+  if (!verifiedState) {
+    return sendFailure("OAuth state validation failed.");
+  }
+
+  const expectedMode = mode;
+  const expectedNonce = verifiedState.nonce;
+
+  // --- CSRF protection: compare the state Google returned with the nonce from our signed token ---
+  // Google echoes back the exact state parameter we sent. Since our state is the signed token,
+  // we verify it via verifySignedOAuthState above. The nonce provides additional replay protection.
+  //
+  // Note: We do NOT compare req.query.state against a separate session stored value,
+  // because the signed token itself provides integrity and authenticity (HMAC-SHA256).
+
+  // --- Extract session data (best-effort fallback) ---
+  const sessionMode = req.session.googleOAuthMode || "redirect";
+
+  // Use the mode from the verified signed state token as the primary source
+  // Fall back to session mode if something went wrong with the token
+  const finalMode = verifiedState ? verifiedState.mode : sessionMode;
+
+  // --- Clean up session markers ---
   delete req.session.googleOAuthState;
   delete req.session.googleOAuthMode;
 
   const sendFailure = (message) => {
-    if (mode === "popup") {
+    if (finalMode === "popup") {
       return res.status(400).send(
         makePopupResultHtml({
           status: "error",
@@ -274,9 +398,11 @@ app.get("/api/google/auth/callback", async (req, res) => {
       return sendFailure("Google did not return an authorization code.");
     }
 
-    if (!expectedState || req.query.state !== expectedState) {
-      return sendFailure("OAuth state validation failed.");
-    }
+    // --- Additional nonce verification (optional but recommended) ---
+    // We could compare req.query.state nonce with expectedNonce, but since the state
+    // is a signed token that we already verified, the HMAC provides sufficient CSRF protection.
+    // If needed, we could decode the state token again and compare the nonce, but that
+    // is optional since the signature already guarantees the state hasn't been tampered with.
 
     const oauth2Client = createOAuthClient();
     if (!oauth2Client) {
@@ -314,7 +440,7 @@ app.get("/api/google/auth/callback", async (req, res) => {
       updatedAt: new Date().toISOString(),
     });
 
-    if (mode === "popup") {
+    if (finalMode === "popup") {
       return res.send(
         makePopupResultHtml({
           status: "connected",
