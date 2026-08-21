@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import DataViewer from "./DataViewer.jsx";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
+import { assertSafeFacebookConfig, facebookCredentialLabel, sanitizeFacebookConfig } from "./facebookConfig.js";
 import {
   assignCredentialToNode,
   buildDriveSearchRequest,
@@ -15,7 +16,7 @@ import {
   upstreamInputError,
 } from "./workflowExecution.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
-import { normalizeSavedWorkflow } from "./workflowStorage.js";
+import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
@@ -1222,22 +1223,26 @@ function GoogleCredentialModal({
   );
 }
 
-function FacebookCredentialModal({ onClose, onSave }) {
-  const [credentialName, setCredentialName] = useState("Facebook Graph account");
+function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconnect }) {
   const [connectionMessage, setConnectionMessage] = useState("");
+  const disconnect = async () => {
+    if (!credential?.id) return;
+    try { setConnectionMessage("Disconnecting Meta account..."); await onDisconnect(credential.id); onClose(); }
+    catch (error) { setConnectionMessage(error?.message || "Could not disconnect Meta account."); }
+  };
   return (
     <div className="credential-modal-overlay">
       <div className="credential-modal">
         <header className="credential-modal-header">
-          <div className="credential-modal-title"><FacebookIcon className="facebook-provider-logo" /><div><input className="credential-name-input" value={credentialName} onChange={(event) => setCredentialName(event.target.value)} /><div className="credential-subtitle">Meta Graph API</div></div></div>
-          <div className="credential-modal-actions"><button onClick={() => onSave(credentialName)}>Save</button><button onClick={onClose}>×</button></div>
+          <div className="credential-modal-title"><FacebookIcon className="facebook-provider-logo" /><div><strong>{credential ? facebookCredentialLabel(credential) : "Facebook Graph account"}</strong><div className="credential-subtitle">Meta Graph API OAuth2</div></div></div>
+          <div className="credential-modal-actions"><button onClick={onClose}>×</button></div>
         </header>
         <div className="credential-modal-body">
           <aside className="credential-tabs"><button className="credential-tab-active">Connection</button><button>Sharing</button><button>Details</button></aside>
           <section className="credential-content">
-            <div className="credential-content-top"><h3>Credential Type</h3><strong>Meta Access Token</strong></div>
-            <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button onClick={() => setConnectionMessage("Facebook authentication backend is not configured. No connection was attempted.")}>Connect Meta Account</button></div>
-            <p>Authentication will be completed securely through the Jarvis backend.</p>
+            <div className="credential-content-top"><h3>Credential Type</h3><strong>Managed Meta OAuth2</strong></div>
+            {credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}
+            <p>Meta access tokens and Page tokens are encrypted and stored only by the Jarvis backend.</p>
             {connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}
           </section>
         </div>
@@ -1928,56 +1933,59 @@ function ParameterList({ title, addLabel, items, onChange }) {
   );
 }
 
-function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredential, onSaveNode, onClose }) {
+function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
   const defaults = { credentialId: "", method: "GET", apiVersion: "", endpoint: "", queryParameters: [], headers: [], bodyParameters: [], sendBinaryData: false, binaryProperty: "data", pageVideo: { pageId: "", description: "", published: false }, settings: defaultNodeSettings() };
   const [activeTab, setActiveTab] = useState("Parameters");
-  const [config, setConfig] = useState({ ...defaults, ...node.config, pageVideo: { ...defaults.pageVideo, ...node.config?.pageVideo }, settings: { ...defaults.settings, ...node.config?.settings } });
+  const [config, setConfig] = useState(() => { const safe = sanitizeFacebookConfig(node.config); return { ...defaults, ...safe, pageVideo: { ...defaults.pageVideo, ...safe.pageVideo }, settings: { ...defaults.settings, ...safe.settings } }; });
   const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
   const [output, setOutput] = useState(node.output ?? null);
   const [validationMessage, setValidationMessage] = useState("");
+  const [isExecuting, setIsExecuting] = useState(false);
   const updateSetting = (key, value) => setConfig((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
   const showPageVideo = config.method === "POST" && config.endpoint.toLowerCase().includes("videos");
 
   const executeStep = async () => {
-    onSaveNode({ ...node, config, input, output, status: "running" });
-    await Promise.resolve();
     let message = "";
-    if (!["GET", "POST", "DELETE"].includes(config.method)) message = "HTTP Method is invalid";
-    else if (!config.endpoint.trim()) message = "Endpoint is required";
+    try { assertSafeFacebookConfig(config); } catch (error) { message = error.message; }
+    if (!message && config.method !== "GET") message = "Phase 3A supports read-only Facebook GET operations only";
+    else if (!message && !config.credentialId) message = "Select a connected Facebook credential";
+    else if (!message && config.apiVersion && !/^v\d{1,2}\.\d{1,2}$/.test(config.apiVersion)) message = "Graph API Version must look like v25.0";
+    else if (!message && !config.endpoint.trim()) message = "Endpoint is required";
     else if (config.sendBinaryData && !config.binaryProperty.trim()) message = "Binary Property is required when Send Binary Data is enabled";
     else if (showPageVideo && (config.pageVideo.description || config.pageVideo.published) && !config.pageVideo.pageId.trim()) message = "Page ID is required when Facebook Page Video helpers are configured";
     if (message) {
       const result = { status: "error", message };
       setValidationMessage(message); setOutput(result); onSaveNode({ ...node, config, input, output: result, status: "error" }); return;
     }
-    setValidationMessage("");
-    const result = { status: "not_configured", provider: "facebook", operation: "graph-api", message: "Facebook Graph API backend/credential is not configured", request: { method: config.method, version: config.apiVersion, endpoint: config.endpoint } };
-    setOutput(result); onSaveNode({ ...node, config, input, output: result, status: "not_configured" });
+    setValidationMessage(""); setIsExecuting(true);
+    const executed = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" });
+    setOutput(executed.output); onSaveNode(executed); setIsExecuting(false);
   };
-  const saveAndClose = () => { onSaveNode({ ...node, config, input, output, status: node.status ?? "idle" }); onClose(); };
+  const saveAndClose = () => { try { assertSafeFacebookConfig(config); onSaveNode({ ...node, config: sanitizeFacebookConfig(config), input, output, status: node.status ?? "idle" }); onClose(); } catch (error) { setValidationMessage(error.message); } };
   const updatePageVideo = (key, value) => setConfig((current) => ({ ...current, pageVideo: { ...current.pageVideo, [key]: value } }));
+  const updateSafeParameters = (key, items) => { try { assertSafeFacebookConfig({ [key]: items }); setConfig({ ...config, [key]: items }); setValidationMessage(""); } catch (error) { setValidationMessage(error.message); } };
 
   return (
     <div className="node-editor-overlay"><div className="node-editor-window">
       <header className="node-editor-header"><div className="node-editor-title"><FacebookIcon className="facebook-title-icon" /><strong>Facebook Graph API</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
       <div className="node-editor-body google-three-column">
-        <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} />
-        <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep}>Execute step</button></div>
+        <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
+        <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
           <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters facebook-parameters">
             {validationMessage && <div className="field-validation" role="alert">{validationMessage}</div>}
-            <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.name}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={onCreateCredential}>✎</button></div>
+            <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{facebookCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
             <label>HTTP Method</label><select value={config.method} onChange={(event) => setConfig({ ...config, method: event.target.value })}><option>GET</option><option>POST</option><option>DELETE</option></select>
             <label>Graph API Version</label><input value={config.apiVersion} onChange={(event) => setConfig({ ...config, apiVersion: event.target.value })} placeholder="vXX.X" />
-            <label>Endpoint / Node</label><input value={config.endpoint} onChange={(event) => setConfig({ ...config, endpoint: event.target.value })} placeholder="me, me/accounts, {page-id}/feed, {page-id}/videos" /><small>Examples only: me, me/accounts, {'{page-id}'}/feed, {'{page-id}'}/videos</small>
-            <ParameterList title="Query Parameters" addLabel="Add Parameter" items={config.queryParameters} onChange={(items) => setConfig({ ...config, queryParameters: items })} />
-            <ParameterList title="Headers" addLabel="Add Header" items={config.headers} onChange={(items) => setConfig({ ...config, headers: items })} />
-            <ParameterList title="Body Parameters" addLabel="Add Parameter" items={config.bodyParameters} onChange={(items) => setConfig({ ...config, bodyParameters: items })} />
+            <label>Endpoint / Node</label><input value={config.endpoint} onChange={(event) => setConfig({ ...config, endpoint: event.target.value })} placeholder="me, me/accounts, or a numeric Page ID" /><small>Phase 3A read-only endpoints: me, me/accounts, or a numeric Page ID.</small>
+            <ParameterList title="Query Parameters" addLabel="Add Parameter" items={config.queryParameters} onChange={(items) => updateSafeParameters("queryParameters", items)} />
+            <ParameterList title="Headers" addLabel="Add Header" items={config.headers} onChange={(items) => updateSafeParameters("headers", items)} />
+            <ParameterList title="Body Parameters" addLabel="Add Parameter" items={config.bodyParameters} onChange={(items) => updateSafeParameters("bodyParameters", items)} />
             <ToggleSetting label="Send Binary Data" value={config.sendBinaryData} onChange={() => setConfig({ ...config, sendBinaryData: !config.sendBinaryData })} />
             {config.sendBinaryData && <><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /><small>Binary property from a previous node, for example data.</small></>}
             {showPageVideo && <div className="page-video-helper"><h3>Facebook Page Video</h3><label>Page ID</label><input value={config.pageVideo.pageId} onChange={(event) => updatePageVideo("pageId", event.target.value)} /><label>Caption / Description</label><textarea rows="4" value={config.pageVideo.description} onChange={(event) => updatePageVideo("description", event.target.value)} /><ToggleSetting label="Published" value={config.pageVideo.published} onChange={() => updatePageVideo("published", !config.pageVideo.published)} /><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /></div>}
           </div> : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version="Facebook Graph API node version 1.0" />}</div>
         </section>
-        <NodeOutputPanel output={output} onExecute={executeStep} allowMock onMock={() => setOutput({ status: "MOCK", provider: "facebook", message: "Explicit mock output. No Facebook request was made." })} />
+        <NodeOutputPanel output={output} onExecute={executeStep} />
       </div>
     </div></div>
   );
@@ -2070,6 +2078,8 @@ function App() {
   const [credentialToast, setCredentialToast] = useState("");
   const [showFacebookCredential, setShowFacebookCredential] = useState(false);
   const [facebookCredentials, setFacebookCredentials] = useState([]);
+  const [editingFacebookCredentialId, setEditingFacebookCredentialId] = useState(null);
+  const pendingFacebookCredentialNodeId = useRef(null);
   const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState(null);
   const [executions, setExecutions] = useState([]);
@@ -2116,6 +2126,30 @@ function App() {
     }
 
     return { connected: Boolean(selectedCredential || credentials.length), credentials, selectedCredential };
+  };
+
+  const syncFacebookCredentials = async (credentialId = null) => {
+    const response = await fetch(`${API_BASE_URL}/api/facebook/credentials`, { credentials: "include" });
+    if (!response.ok) throw new Error("Could not load Facebook credentials.");
+    const data = await response.json(); let credentials = Array.isArray(data.credentials) ? data.credentials : [];
+    if (credentialId) {
+      const status = await fetch(`${API_BASE_URL}/api/facebook/credentials/${encodeURIComponent(credentialId)}`, { credentials: "include" });
+      if (!status.ok) throw new Error("Connected Facebook credential was not found.");
+      const selected = await status.json(); credentials = [...credentials.filter((item) => item.id !== selected.id), selected];
+    }
+    setFacebookCredentials(credentials); return credentials.find((item) => item.id === credentialId) || null;
+  };
+
+  const startFacebookOAuth = (credentialId = null) => {
+    const popup = window.open(`${API_BASE_URL}/api/facebook/auth/start?mode=popup${credentialId ? `&credentialId=${encodeURIComponent(credentialId)}` : ""}`,
+      "jarvis_facebook_oauth", "popup=yes,width=600,height=760,resizable=yes,scrollbars=yes");
+    if (!popup) setCredentialToast("Popup was blocked. Allow popups and try again."); else popup.focus();
+  };
+
+  const disconnectFacebook = async (credentialId) => {
+    const response = await fetch(`${API_BASE_URL}/api/facebook/credentials/${encodeURIComponent(credentialId)}/disconnect`, { method: "POST", credentials: "include" });
+    if (!response.ok) throw new Error("Could not disconnect Facebook credential.");
+    setFacebookCredentials((items) => items.filter((item) => item.id !== credentialId));
   };
 
   const startGoogleOAuth = (credentialId = null) => {
@@ -2278,11 +2312,41 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const handleFacebookOAuth = async (event) => {
+      let origin; try { origin = new URL(API_BASE_URL || window.location.origin, window.location.origin).origin; } catch { return; }
+      if (event.origin !== origin || event.data?.type !== "jarvis-facebook-oauth") return;
+      if (event.data.status !== "connected" || !event.data.credentialId) {
+        setCredentialToast(event.data?.message || "Meta sign-in was not completed."); return;
+      }
+      try {
+        const credential = await syncFacebookCredentials(event.data.credentialId); if (cancelled || !credential) return;
+        setEditingFacebookCredentialId(credential.id); setShowFacebookCredential(true);
+        const nodeId = pendingFacebookCredentialNodeId.current;
+        if (nodeId) {
+          setCanvasNodes((nodes) => nodes.map((node) => node.id === nodeId ? { ...node, config: { ...node.config, credentialId: credential.id } } : node));
+          setEditingNode((node) => node?.id === nodeId ? { ...node, config: { ...node.config, credentialId: credential.id } } : node);
+          pendingFacebookCredentialNodeId.current = null;
+        }
+        setCredentialToast(`Facebook connected: ${credential.accountName || credential.accountId}`);
+      } catch (error) { if (!cancelled) setCredentialToast(error?.message || "Could not confirm Meta connection."); }
+    };
+    window.addEventListener("message", handleFacebookOAuth);
+    const initialSyncTimer = window.setTimeout(() => syncFacebookCredentials().catch(() => {}), 0);
+    return () => { cancelled = true; window.clearTimeout(initialSyncTimer); window.removeEventListener("message", handleFacebookOAuth); };
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem(WORKFLOW_STORAGE_KEY);
       if (!saved) return;
 
-      const workflow = normalizeSavedWorkflow(JSON.parse(saved));
+      const parsedWorkflow = JSON.parse(saved);
+      const workflow = normalizeSavedWorkflow(parsedWorkflow);
+      const safeWorkflow = workflowForStorage(parsedWorkflow);
+      if (JSON.stringify(safeWorkflow) !== JSON.stringify(parsedWorkflow)) {
+        localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(safeWorkflow));
+      }
       if (Array.isArray(workflow?.nodes)) {
         setCanvasNodes(workflow.nodes);
       }
@@ -2341,6 +2405,20 @@ function App() {
           if (!response.ok) throw new Error(data?.error || `${node.name} failed.`);
           return data;
         });
+      }
+      if (node.name === "Facebook Graph API") {
+        assertSafeFacebookConfig(node.config);
+        if (node.config?.method !== "GET") throw new Error("Phase 3A supports read-only Facebook GET operations only.");
+        if (!node.config?.credentialId) throw new Error("Select a connected Facebook credential.");
+        const executeRead = async (item) => {
+          const endpoint = String(resolveExpression(node.config.endpoint, item)).trim().replace(/^\/+|\/+$/g, "");
+          const route = endpoint === "me" ? "me" : endpoint === "me/accounts" ? "pages" : /^\d{3,30}$/.test(endpoint) ? "page" : null;
+          if (!route) throw new Error("Phase 3A supports only me, me/accounts, or a numeric Page ID.");
+          const response = await fetch(`${API_BASE_URL}/api/facebook/graph/${route}`, { method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credentialId: node.config.credentialId, pageId: route === "page" ? endpoint : undefined }) });
+          const data = await response.json(); if (!response.ok) throw new Error(data?.error || "Facebook Graph request failed."); return data;
+        };
+        return String(node.config.endpoint || "").includes("{{") ? executePerItem(input, executeRead) : executeRead(input);
       }
       throw new Error(`${node.name} does not support real execution in Phase 2.`);
   };
@@ -2447,7 +2525,7 @@ function App() {
 
       localStorage.setItem(
         WORKFLOW_STORAGE_KEY,
-        JSON.stringify(workflow)
+        JSON.stringify(workflowForStorage(workflow))
       );
 
       setWorkflowNotice({ status: "success", message: "Workflow saved." });
@@ -3113,7 +3191,9 @@ function App() {
           node={editingNode}
           previousNode={getPreviousNode(editingNode.id)}
           credentials={facebookCredentials}
-          onCreateCredential={() => setShowFacebookCredential(true)}
+          onCreateCredential={(credentialId = null) => { pendingFacebookCredentialNodeId.current = editingNode.id; setEditingFacebookCredentialId(credentialId); setShowFacebookCredential(true); }}
+          onExecutePreviousNodes={executePreviousNodesFor}
+          onExecuteNode={executeRuntimeNode}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
         />
@@ -3156,11 +3236,10 @@ function App() {
 
       {showFacebookCredential && (
         <FacebookCredentialModal
-          onClose={() => setShowFacebookCredential(false)}
-          onSave={(name) => {
-            setFacebookCredentials((current) => [...current, { id: `facebook-${Date.now()}`, name, provider: "facebook", status: "not_connected" }]);
-            setShowFacebookCredential(false);
-          }}
+          onClose={() => { setShowFacebookCredential(false); setEditingFacebookCredentialId(null); }}
+          credential={facebookCredentials.find((item) => item.id === editingFacebookCredentialId)}
+          onStartOAuth={startFacebookOAuth}
+          onDisconnect={disconnectFacebook}
         />
       )}
 

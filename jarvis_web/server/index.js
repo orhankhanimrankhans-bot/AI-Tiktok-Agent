@@ -9,6 +9,10 @@ const { CredentialStore } = require("./credentialStore");
 const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
 const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
+const { FacebookCredentialStore } = require("./facebookCredentialStore");
+const { containsForbiddenSecretFields, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
+const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
+const { makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 
 dotenv.config();
@@ -73,6 +77,11 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GOOGLE_REDIRECT_URI =
   process.env.GOOGLE_REDIRECT_URI ||
   `http://localhost:${PORT}/api/google/auth/callback`;
+const META_APP_ID = process.env.META_APP_ID || "";
+const META_APP_SECRET = process.env.META_APP_SECRET || "";
+const META_REDIRECT_URI = process.env.META_REDIRECT_URI || `http://localhost:${PORT}/api/facebook/auth/callback`;
+const META_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v25.0";
+const META_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(META_GRAPH_VERSION_VALUE) ? META_GRAPH_VERSION_VALUE : "";
 const JARVIS_DB_PATH = path.resolve(
   process.env.JARVIS_DB_PATH || path.join(__dirname, "data", "credentials.sqlite3")
 );
@@ -83,6 +92,7 @@ const CREDENTIAL_ENCRYPTION_SECRET =
 const googleOAuthConfigured = Boolean(
   GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI
 );
+const facebookOAuthConfigured = Boolean(META_APP_ID && META_APP_SECRET && META_REDIRECT_URI && META_GRAPH_VERSION);
 
 app.use(
   cors({
@@ -216,6 +226,7 @@ const credentialStore = new CredentialStore({
   encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
 });
 let executionStore;
+let facebookCredentialStore;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
@@ -231,8 +242,89 @@ app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
     googleOAuthConfigured,
+    facebookOAuthConfigured,
   });
 });
+
+function facebookGraphService() { return new FacebookGraphService({ version: META_GRAPH_VERSION }); }
+function publicFacebookError(res, error) {
+  if (error instanceof FacebookGraphError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message, permission: error.permission || undefined });
+  console.error("Facebook operation failed safely.");
+  return res.status(500).json({ status: "error", code: "facebook_server_error", error: "Facebook operation could not be completed." });
+}
+
+app.get("/api/facebook/credentials", (req, res) => {
+  try { return res.json({ credentials: facebookCredentialStore.list() }); } catch (error) { return publicFacebookError(res, error); }
+});
+app.get("/api/facebook/credentials/:credentialId", (req, res) => {
+  if (!FacebookCredentialStore.isValidId(req.params.credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
+  const credential = facebookCredentialStore.get(req.params.credentialId);
+  return credential ? res.json(credential) : res.status(404).json({ error: "Facebook credential not found." });
+});
+
+app.get("/api/facebook/auth/start", (req, res) => {
+  if (!facebookOAuthConfigured) return res.status(503).json({ status: "not_configured", error: "Meta OAuth is not configured." });
+  const credentialId = req.query.credentialId || null; const intent = credentialId ? "reconnect" : "create";
+  if (credentialId && !FacebookCredentialStore.isValidId(credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
+  if (credentialId && !facebookCredentialStore.get(credentialId)) return res.status(404).json({ error: "Facebook credential not found." });
+  const state = createFacebookOAuthState({ secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me",
+    mode: req.query.mode === "popup" ? "popup" : "redirect", intent, credentialId });
+  const url = new URL(`https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`);
+  url.searchParams.set("client_id", META_APP_ID); url.searchParams.set("redirect_uri", META_REDIRECT_URI);
+  url.searchParams.set("state", state); url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "public_profile,email,pages_show_list,pages_read_engagement");
+  return res.redirect(url.toString());
+});
+
+app.get("/api/facebook/auth/callback", async (req, res) => {
+  let mode = "redirect"; let state = null;
+  if (req.query.state) state = verifyFacebookOAuthState(req.query.state, { secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me", validateCredentialId: FacebookCredentialStore.isValidId });
+  if (state?.mode) mode = state.mode;
+  const failure = (message) => mode === "popup" ? res.status(400).send(makeFacebookPopupHtml({ status: "error", message, clientUrl: CLIENT_URL })) : res.redirect(`${CLIENT_URL}?facebook_oauth=error`);
+  if (!state) return failure("Meta OAuth state validation failed.");
+  if (req.query.error) return failure(req.query.error_description || "Meta sign-in was cancelled.");
+  if (!req.query.code) return failure("Meta did not return an authorization code.");
+  try {
+    const tokenResponse = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: META_APP_ID, client_secret: META_APP_SECRET, redirect_uri: META_REDIRECT_URI, code: req.query.code }) });
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenData.access_token) throw new Error("Meta token exchange failed.");
+    const profile = await facebookGraphService().me(tokenData.access_token);
+    const previous = state.intent === "reconnect" ? facebookCredentialStore.get(state.credentialId, { includeTokens: true }) : facebookCredentialStore.findByAccountId(profile.id, { includeTokens: true });
+    if (state.intent === "reconnect" && previous?.accountId !== String(profile.id)) return failure("Reconnect must use the same Meta account. Create a new credential for another account.");
+    const id = state.intent === "reconnect" ? state.credentialId : previous?.id || FacebookCredentialStore.generateId();
+    const saved = facebookCredentialStore.save({ id, accountId: profile.id, accountName: profile.name || "Meta account",
+      tokens: { ...(previous?.tokens || {}), userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn: tokenData.expires_in || null, pageAccessTokens: {} } });
+    if (mode === "popup") return res.send(makeFacebookPopupHtml({ status: "connected", message: `${saved.accountName} is connected to Jarvis.`, credentialId: saved.id, clientUrl: CLIENT_URL }));
+    const redirect = new URL(CLIENT_URL); redirect.searchParams.set("facebook_oauth", "connected"); redirect.searchParams.set("facebook_credential_id", saved.id); return res.redirect(redirect.toString());
+  } catch (error) { return failure(error instanceof FacebookGraphError ? error.message : "Meta sign-in could not be completed."); }
+});
+
+function deleteFacebookCredential(req, res) {
+  if (!FacebookCredentialStore.isValidId(req.params.credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
+  if (!facebookCredentialStore.delete(req.params.credentialId)) return res.status(404).json({ error: "Facebook credential not found." });
+  return res.json({ ok: true, id: req.params.credentialId, connected: false, status: "not_connected" });
+}
+app.post("/api/facebook/credentials/:credentialId/disconnect", deleteFacebookCredential);
+app.delete("/api/facebook/credentials/:credentialId", deleteFacebookCredential);
+
+async function withFacebookCredential(req, res, action) {
+  if (containsForbiddenSecretFields(req.body)) return res.status(400).json({ error: "Facebook secrets must not be supplied by the client." });
+  if (!FacebookCredentialStore.isValidId(req.body?.credentialId)) return res.status(400).json({ error: "Select a valid Facebook credential." });
+  const credential = facebookCredentialStore.get(req.body.credentialId, { includeTokens: true });
+  if (!credential?.tokens?.userAccessToken) return res.status(404).json({ error: "Facebook credential was not found or is disconnected." });
+  try { return res.json(await action(facebookGraphService(), credential)); } catch (error) { return publicFacebookError(res, error); }
+}
+app.post("/api/facebook/graph/me", (req, res) => withFacebookCredential(req, res, async (service, credential) => service.me(credential.tokens.userAccessToken)));
+app.post("/api/facebook/graph/pages", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
+  const result = await service.pages(credential.tokens.userAccessToken);
+  facebookCredentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
+    tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } });
+  return { pages: result.pages };
+}));
+app.post("/api/facebook/graph/page", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
+  const pageId = validatePageId(req.body.pageId); const token = credential.tokens.pageAccessTokens?.[pageId] || credential.tokens.userAccessToken;
+  return service.pageMetadata(pageId, token);
+}));
 
 app.get("/api/google/credentials", async (req, res) => {
   try {
@@ -575,6 +667,8 @@ async function startServer() {
   await credentialStore.open();
   executionStore = new ExecutionStore(credentialStore.db);
   executionStore.open();
+  facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET });
+  facebookCredentialStore.open();
   app.listen(PORT, () => {
     console.log("");
     console.log("=================================");
