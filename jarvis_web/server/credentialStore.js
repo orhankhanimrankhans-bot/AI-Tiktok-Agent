@@ -1,7 +1,16 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const sqlite3 = require("sqlite3");
+
+let DatabaseSync;
+try {
+  ({ DatabaseSync } = require("node:sqlite"));
+} catch (error) {
+  throw new Error(
+    "Jarvis credential storage requires a Node.js runtime with node:sqlite support.",
+    { cause: error }
+  );
+}
 
 const PROVIDER = "google-drive";
 const TYPE = "oauth2";
@@ -67,13 +76,7 @@ class CredentialStore {
 
   async open() {
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
-    this.db = await new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(
-        this.dbPath,
-        sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
-        (error) => (error ? reject(error) : resolve(db))
-      );
-    });
+    this.db = new DatabaseSync(this.dbPath);
     await this.run("PRAGMA journal_mode = WAL");
     await this.run("PRAGMA foreign_keys = ON");
     await this.run(`
@@ -94,30 +97,26 @@ class CredentialStore {
   }
 
   run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function onRun(error) {
-        if (error) reject(error);
-        else resolve({ changes: this.changes, lastID: this.lastID });
-      });
+    if (params.length === 0 && /^\s*PRAGMA\b/i.test(sql)) {
+      this.db.exec(sql);
+      return Promise.resolve({ changes: 0, lastID: 0 });
+    }
+    const result = this.db.prepare(sql).run(...params);
+    return Promise.resolve({
+      changes: Number(result.changes),
+      lastID: Number(result.lastInsertRowid),
     });
   }
 
   all(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (error, rows) =>
-        error ? reject(error) : resolve(rows)
-      );
-    });
+    return Promise.resolve(this.db.prepare(sql).all(...params));
   }
 
   getRow(id) {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        "SELECT * FROM google_credentials WHERE id = ?",
-        [id],
-        (error, row) => (error ? reject(error) : resolve(row || null))
-      );
-    });
+    const row = this.db
+      .prepare("SELECT * FROM google_credentials WHERE id = ?")
+      .get(id);
+    return Promise.resolve(row || null);
   }
 
   async list() {
@@ -176,9 +175,8 @@ class CredentialStore {
     if (!this.db) return Promise.resolve();
     const db = this.db;
     this.db = null;
-    return new Promise((resolve, reject) =>
-      db.close((error) => (error ? reject(error) : resolve()))
-    );
+    db.close();
+    return Promise.resolve();
   }
 }
 

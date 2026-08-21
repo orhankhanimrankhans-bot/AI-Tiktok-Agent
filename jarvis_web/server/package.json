@@ -16,7 +16,6 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
-    "googleapis": "^176.0.0",
-    "sqlite3": "^6.0.1"
+    "googleapis": "^176.0.0"
   }
 }
