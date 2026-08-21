@@ -1,0 +1,137 @@
+#root {
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  border: 0;
+  text-align: left;
+}
+
+.privacy-page {
+  min-height: 100vh;
+  color: #dbe8ee;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(24, 126, 157, 0.2), transparent 34rem),
+    linear-gradient(180deg, #0b1115 0%, #0d1216 100%);
+}
+
+.privacy-header {
+  padding: 22px clamp(20px, 6vw, 80px);
+  border-bottom: 1px solid rgba(55, 195, 226, 0.18);
+  background: rgba(7, 16, 22, 0.78);
+}
+
+.privacy-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #29dfff;
+  text-decoration: none;
+}
+
+.privacy-brand strong,
+.privacy-brand small {
+  display: block;
+}
+
+.privacy-brand strong {
+  font-size: 22px;
+  letter-spacing: 2px;
+}
+
+.privacy-brand small {
+  margin-top: 2px;
+  color: #8ba4b0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.privacy-logo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #1ddcff;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: 0 0 14px rgba(31, 217, 255, 0.25);
+}
+
+.privacy-card {
+  width: min(860px, calc(100% - 40px));
+  margin: 46px auto;
+  padding: clamp(28px, 5vw, 58px);
+  border: 1px solid #1b3c49;
+  border-radius: 16px;
+  background: rgba(15, 25, 31, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+}
+
+.privacy-kicker {
+  color: #42e6ff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.privacy-card h1 {
+  margin: 8px 0 4px;
+  color: #f5fbfd;
+  font-size: clamp(34px, 6vw, 52px);
+  line-height: 1.1;
+}
+
+.privacy-updated {
+  margin-bottom: 28px;
+  color: #829aa5;
+  font-size: 14px;
+}
+
+.privacy-card section {
+  margin-top: 30px;
+  padding-top: 28px;
+  border-top: 1px solid rgba(104, 157, 177, 0.18);
+}
+
+.privacy-card h2 {
+  margin: 0 0 10px;
+  color: #ecf8fb;
+  font-size: 21px;
+  font-weight: 750;
+}
+
+.privacy-card p {
+  color: #b5c6ce;
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.privacy-card a {
+  color: #39dff5;
+  overflow-wrap: anywhere;
+}
+
+.privacy-card a:hover,
+.privacy-brand:hover {
+  color: #79edff;
+}
+
+.privacy-footer {
+  padding: 0 20px 34px;
+  color: #718791;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .privacy-header {
+    padding: 16px 20px;
+  }
+
+  .privacy-card {
+    width: min(100% - 24px, 860px);
+    margin: 22px auto;
+    border-radius: 12px;
+  }
+}
