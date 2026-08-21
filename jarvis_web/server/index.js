@@ -579,7 +579,7 @@ async function startServer() {
   });
 }
 
-if (require.main === module) {
+if (require.main === module || process.env.NODE_ENV === "production") {
   startServer().catch((error) => {
     console.error("FATAL ERROR: Jarvis backend startup failed:", error?.message || error);
     process.exit(1);
