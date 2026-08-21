@@ -16,6 +16,7 @@ const PROVIDER = "google-drive";
 const TYPE = "oauth2";
 const CREDENTIAL_ID_PATTERN = /^gcred_[A-Za-z0-9_-]{22}$/;
 const KEY_SALT = "jarvis-web-google-credential-store-v1";
+const ACCOUNT_UNIQUE_INDEX = "idx_google_credentials_provider_account_email";
 
 function deriveEncryptionKey(secret) {
   if (!secret || typeof secret !== "string") {
@@ -93,7 +94,44 @@ class CredentialStore {
         updated_at TEXT NOT NULL
       )
     `);
+    this.migrateCredentialUniqueness();
     return this;
+  }
+
+  migrateCredentialUniqueness() {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec(`
+        DELETE FROM google_credentials
+        WHERE id IN (
+          SELECT id
+          FROM (
+            SELECT
+              id,
+              ROW_NUMBER() OVER (
+                PARTITION BY provider, lower(trim(account_email))
+                ORDER BY updated_at DESC, created_at DESC, id DESC
+              ) AS duplicate_rank
+            FROM google_credentials
+            WHERE trim(account_email) <> ''
+          )
+          WHERE duplicate_rank > 1
+        )
+      `);
+      this.db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ${ACCOUNT_UNIQUE_INDEX}
+        ON google_credentials(provider, lower(trim(account_email)))
+        WHERE trim(account_email) <> ''
+      `);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        // Preserve the migration error that triggered the rollback.
+      }
+      throw error;
+    }
   }
 
   run(sql, params = []) {
@@ -117,6 +155,21 @@ class CredentialStore {
       .prepare("SELECT * FROM google_credentials WHERE id = ?")
       .get(id);
     return Promise.resolve(row || null);
+  }
+
+  async findByAccountEmail(accountEmail, { includeTokens = false } = {}) {
+    const normalizedEmail = String(accountEmail || "").trim().toLowerCase();
+    if (!normalizedEmail) return null;
+    const row = this.db.prepare(`
+      SELECT *
+      FROM google_credentials
+      WHERE provider = ? AND lower(trim(account_email)) = ?
+      LIMIT 1
+    `).get(PROVIDER, normalizedEmail);
+    if (!row) return null;
+    const credential = publicCredential(row);
+    if (includeTokens) credential.tokens = decryptTokens(row, this.key);
+    return credential;
   }
 
   async list() {

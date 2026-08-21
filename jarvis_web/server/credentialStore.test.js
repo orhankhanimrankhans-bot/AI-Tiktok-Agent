@@ -3,13 +3,33 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { DatabaseSync } = require("node:sqlite");
 
-const { CredentialStore } = require("./credentialStore");
+const {
+  CredentialStore,
+  deriveEncryptionKey,
+  encryptTokens,
+} = require("./credentialStore");
+
+const TEST_SECRET = "test-only-secret-with-sufficient-entropy-123456";
+
+function insertRawCredential(db, { id, email, name, tokens, createdAt, updatedAt }) {
+  const encrypted = encryptTokens(tokens, deriveEncryptionKey(TEST_SECRET));
+  db.prepare(`
+    INSERT INTO google_credentials (
+      id, provider, type, account_email, account_name,
+      token_ciphertext, token_iv, token_tag, created_at, updated_at
+    ) VALUES (?, 'google-drive', 'oauth2', ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, email, name, encrypted.ciphertext, encrypted.iv, encrypted.tag,
+    createdAt, updatedAt
+  );
+}
 
 test("encrypted credentials persist across reload and remain independently deletable", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-credentials-"));
   const dbPath = path.join(tempDir, "credentials.sqlite3");
-  const secret = "test-only-secret-with-sufficient-entropy-123456";
+  const secret = TEST_SECRET;
   const firstId = CredentialStore.generateId();
   const secondId = CredentialStore.generateId();
   const firstTokens = { access_token: "first-access-token", refresh_token: "first-refresh-token" };
@@ -53,4 +73,97 @@ test("encrypted credentials persist across reload and remain independently delet
     () => store.get(secondId, { includeTokens: true }),
     /authenticate data/
   );
+});
+
+test("uniqueness migration removes duplicate accounts atomically and keeps the newest", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-credential-migration-"));
+  const dbPath = path.join(tempDir, "credentials.sqlite3");
+  let store = new CredentialStore({ dbPath, encryptionSecret: TEST_SECRET });
+  t.after(async () => {
+    await store.close().catch(() => {});
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  await store.open();
+  await store.close();
+  const legacyDb = new DatabaseSync(dbPath);
+  legacyDb.exec("DROP INDEX idx_google_credentials_provider_account_email");
+  const olderId = CredentialStore.generateId();
+  const newerId = CredentialStore.generateId();
+  insertRawCredential(legacyDb, {
+    id: olderId,
+    email: "Duplicate@Example.com ",
+    name: "Older",
+    tokens: { access_token: "older-token" },
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  insertRawCredential(legacyDb, {
+    id: newerId,
+    email: "duplicate@example.com",
+    name: "Newer",
+    tokens: { access_token: "newer-token" },
+    createdAt: "2026-01-02T00:00:00.000Z",
+    updatedAt: "2026-01-03T00:00:00.000Z",
+  });
+  legacyDb.close();
+
+  store = new CredentialStore({ dbPath, encryptionSecret: TEST_SECRET });
+  await store.open();
+  const credentials = await store.list();
+  assert.equal(credentials.length, 1);
+  assert.equal(credentials[0].id, newerId);
+  assert.equal(
+    (await store.findByAccountEmail(" DUPLICATE@example.com ")).id,
+    newerId
+  );
+  assert.deepEqual(
+    (await store.get(newerId, { includeTokens: true })).tokens,
+    { access_token: "newer-token" }
+  );
+  await assert.rejects(
+    () => store.save({
+      id: CredentialStore.generateId(),
+      accountEmail: " DUPLICATE@example.com ",
+      accountName: "Duplicate",
+      tokens: { access_token: "third-token" },
+    }),
+    /UNIQUE constraint failed/
+  );
+});
+
+test("uniqueness migration rolls duplicate cleanup back when index creation fails", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-credential-rollback-"));
+  const dbPath = path.join(tempDir, "credentials.sqlite3");
+  let store = new CredentialStore({ dbPath, encryptionSecret: TEST_SECRET });
+  t.after(async () => {
+    await store.close().catch(() => {});
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  await store.open();
+  await store.close();
+  const legacyDb = new DatabaseSync(dbPath);
+  legacyDb.exec("DROP INDEX idx_google_credentials_provider_account_email");
+  insertRawCredential(legacyDb, {
+    id: CredentialStore.generateId(), email: "same@example.com", name: "One",
+    tokens: { access_token: "one" }, createdAt: "2026-01-01", updatedAt: "2026-01-01",
+  });
+  insertRawCredential(legacyDb, {
+    id: CredentialStore.generateId(), email: "SAME@example.com", name: "Two",
+    tokens: { access_token: "two" }, createdAt: "2026-01-02", updatedAt: "2026-01-02",
+  });
+  legacyDb.exec("CREATE TABLE idx_google_credentials_provider_account_email (value TEXT)");
+  legacyDb.close();
+
+  store = new CredentialStore({ dbPath, encryptionSecret: TEST_SECRET });
+  await assert.rejects(() => store.open(), /already a table/);
+  await store.close();
+
+  const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
+  const row = verificationDb.prepare(
+    "SELECT count(*) AS count FROM google_credentials"
+  ).get();
+  verificationDb.close();
+  assert.equal(Number(row.count), 2);
 });

@@ -464,12 +464,12 @@ app.get("/api/google/auth/callback", async (req, res) => {
       );
     }
 
+    const previous = verifiedState.intent === "reconnect"
+      ? await credentialStore.get(verifiedState.credentialId, { includeTokens: true })
+      : await credentialStore.findByAccountEmail(profile.email, { includeTokens: true });
     const credentialId = verifiedState.intent === "reconnect"
       ? verifiedState.credentialId
-      : CredentialStore.generateId();
-    const previous = verifiedState.intent === "reconnect"
-      ? await credentialStore.get(credentialId, { includeTokens: true })
-      : null;
+      : previous?.id || CredentialStore.generateId();
     const credential = await credentialStore.save({
       id: credentialId,
       accountEmail: profile.email,
@@ -579,9 +579,13 @@ async function startServer() {
   });
 }
 
-startServer().catch((error) => {
-  console.error("FATAL ERROR: Jarvis backend startup failed:", error?.message || error);
-  process.exit(1);
-});
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error("FATAL ERROR: Jarvis backend startup failed:", error?.message || error);
+    process.exit(1);
+  });
+}
+
+module.exports = { makePopupResultHtml };
 
 

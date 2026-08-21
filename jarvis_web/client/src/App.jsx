@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import {
+  assignCredentialToNode,
+  googleCredentialLabel,
+  selectOAuthCredential,
+} from "./googleCredentialState.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
@@ -1445,7 +1450,7 @@ function GoogleDriveSearchEditor({
                       <option value="">Select credential</option>
                       {config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}
                       {credentials.map((credential) => (
-                        <option key={credential.id} value={credential.id}>{credential.accountEmail || credential.accountName || credential.name || "Google Drive account"}</option>
+                        <option key={credential.id} value={credential.id}>{googleCredentialLabel(credential)}</option>
                       ))}
                       <option value="__create__">
                         + Create new credential
@@ -1888,7 +1893,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
                     <label>Keep</label><select value={config.keep} onChange={(event) => setConfig({ ...config, keep: event.target.value })}><option>First Items</option><option>Last Items</option></select>
                   </> : <>
                     <label>Credential</label>
-                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.accountEmail || credential.accountName || credential.name || "Google Drive account"}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
+                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{googleCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
                     <label>Resource</label><select value={config.resource} disabled><option>File</option></select>
                     <label>Operation</label><select value={config.operation} disabled><option>{config.operation}</option></select>
                     <label>File ID</label><div className="value-mode-switch">{["Fixed", "Expression"].map((mode) => <button key={mode} className={config.fileIdMode === mode ? "active" : ""} onClick={() => setConfig({ ...config, fileIdMode: mode })}>{mode}</button>)}</div>
@@ -2088,6 +2093,7 @@ function App() {
   const [showGoogleCredential, setShowGoogleCredential] = useState(false);
   const [googleCredentials, setGoogleCredentials] = useState([]);
   const [editingGoogleCredentialId, setEditingGoogleCredentialId] = useState(null);
+  const pendingGoogleCredentialNodeId = useRef(null);
   const [credentialToast, setCredentialToast] = useState("");
   const [showFacebookCredential, setShowFacebookCredential] = useState(false);
   const [facebookCredentials, setFacebookCredentials] = useState([]);
@@ -2102,24 +2108,37 @@ function App() {
     }
 
     const data = await response.json();
-    const credentials = Array.isArray(data?.credentials) ? data.credentials : [];
+    let credentials = Array.isArray(data?.credentials) ? data.credentials : [];
+    let selectedCredential = selectOAuthCredential(credentials, credentialId);
+    if (credentialId) {
+      const statusResponse = await fetch(`${API_BASE_URL}/api/google/credentials/${encodeURIComponent(credentialId)}`, {
+        credentials: "include",
+      });
+      if (!statusResponse.ok) {
+        throw new Error(`Connected credential status request failed (${statusResponse.status}).`);
+      }
+      selectedCredential = await statusResponse.json();
+      credentials = [
+        ...credentials.filter((credential) => credential.id !== selectedCredential.id),
+        selectedCredential,
+      ];
+    }
     setGoogleCredentials(credentials.map((credential) => ({
       ...credential,
-      name: credential.accountEmail || credential.accountName || "Google Drive account",
+      name: googleCredentialLabel(credential),
     })));
 
     if (showToast && credentials.length) {
-      const latest = credentials.find((item) => item.id === credentialId) || credentials[credentials.length - 1];
+      const latest = selectedCredential || credentials[credentials.length - 1];
       setCredentialToast(
         latest.accountEmail
           ? `Google Drive connected: ${latest.accountEmail}`
           : "Google Drive account connected"
       );
-      setShowGoogleCredential(true);
       window.setTimeout(() => setCredentialToast(""), 3500);
     }
 
-    return { connected: credentials.length > 0, credentials };
+    return { connected: Boolean(selectedCredential || credentials.length), credentials, selectedCredential };
   };
 
   const startGoogleOAuth = (credentialId = null) => {
@@ -2189,10 +2208,22 @@ function App() {
       if (event.data.status === "connected") {
         try {
           if (!cancelled) {
-            await syncGoogleCredential({ showToast: true, credentialId: event.data.credentialId });
-            if (event.data.credentialId) {
-              setEditingGoogleCredentialId(event.data.credentialId);
+            const credentialId = event.data.credentialId;
+            if (!credentialId) throw new Error("Google OAuth did not return a credential ID.");
+            const result = await syncGoogleCredential({ showToast: true, credentialId });
+            if (!result.selectedCredential) throw new Error("Connected credential was not found.");
+            setEditingGoogleCredentialId(credentialId);
+            const pendingNodeId = pendingGoogleCredentialNodeId.current;
+            if (pendingNodeId) {
+              setCanvasNodes((nodes) => assignCredentialToNode(nodes, pendingNodeId, credentialId));
+              setEditingNode((node) =>
+                node?.id === pendingNodeId
+                  ? assignCredentialToNode([node], pendingNodeId, credentialId)[0]
+                  : node
+              );
+              pendingGoogleCredentialNodeId.current = null;
             }
+            setShowGoogleCredential(true);
           }
         } catch (error) {
           if (!cancelled) {
@@ -2234,6 +2265,11 @@ function App() {
           showToast: oauthResult === "connected",
           credentialId: oauthCredentialId,
         });
+
+        if (oauthResult === "connected" && result.selectedCredential && !cancelled) {
+          setEditingGoogleCredentialId(result.selectedCredential.id);
+          setShowGoogleCredential(true);
+        }
 
         if (oauthResult === "connected" && !result.connected && !cancelled) {
           setCredentialToast(
@@ -2938,10 +2974,11 @@ function App() {
 
       {editingNode?.name === "Search Files and Folders" && (
         <GoogleDriveSearchEditor
+          key={`${editingNode.id}:${editingNode.config?.credentialId || "none"}`}
           node={editingNode}
           previousNode={canvasNodes.find((candidate) => connections.some((connection) => connection.source === candidate.id && connection.target === editingNode.id))}
           credentials={googleCredentials}
-          onCreateCredential={(credentialId = null) => { setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
+          onCreateCredential={(credentialId = null) => { pendingGoogleCredentialNodeId.current = editingNode.id; setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
         />
@@ -2949,11 +2986,12 @@ function App() {
 
       {editingNode && ["Limit", "Download File", "Delete File"].includes(editingNode.name) && (
         <Phase2NodeEditor
+          key={`${editingNode.id}:${editingNode.config?.credentialId || "none"}`}
           node={editingNode}
           kind={editingNode.name === "Limit" ? "limit" : editingNode.name === "Download File" ? "download" : "delete"}
           previousNode={getPreviousNode(editingNode.id)}
           credentials={googleCredentials}
-          onCreateCredential={(credentialId = null) => { setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
+          onCreateCredential={(credentialId = null) => { pendingGoogleCredentialNodeId.current = editingNode.id; setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
         />
