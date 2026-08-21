@@ -63,17 +63,41 @@ function buildDriveQuery({ query, folderId, mimeType }) {
   return clauses.join(" and ");
 }
 
-function googleErrorDetails(error) {
+function sanitizeGoogleMessage(message) {
+  return String(message || "")
+    .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, "Bearer [REDACTED]")
+    .replace(/(access_token|refresh_token|authorization|client_secret|token_ciphertext)\s*[:=]\s*[^\s,;}]+/gi, "$1=[REDACTED]")
+    .slice(0, 500);
+}
+
+function inspectGoogleError(error) {
   const status = Number(error?.response?.status || error?.code || 0);
-  const reason = error?.response?.data?.error?.errors?.[0]?.reason || "";
+  const apiError = error?.response?.data?.error;
+  return {
+    status,
+    apiCode: apiError?.code || status || null,
+    reason: apiError?.errors?.[0]?.reason || error?.errors?.[0]?.reason || "unknown",
+    message: sanitizeGoogleMessage(apiError?.message || error?.message || "Google Drive request failed."),
+  };
+}
+
+function googleErrorDetails(error) {
+  const diagnostic = inspectGoogleError(error);
+  const { status, reason, message } = diagnostic;
   if (status === 401) {
     return new DriveSearchError(401, "invalid_google_credential", "The selected Google credential is expired or invalid. Reconnect it and try again.");
   }
   if (status === 403 && /rateLimit|userRateLimit|quota/i.test(reason)) {
     return new DriveSearchError(429, "google_rate_limit", "Google Drive rate limit reached. Try again shortly.");
   }
+  if (status === 403 && /accessNotConfigured|serviceDisabled|apiDisabled/i.test(`${reason} ${message}`)) {
+    return new DriveSearchError(503, "drive_api_not_enabled", "Google Drive API is not enabled for this Google Cloud project.");
+  }
+  if (status === 403 && /insufficientPermissions|insufficient_scope|insufficient authentication scopes/i.test(`${reason} ${message}`)) {
+    return new DriveSearchError(403, "insufficient_oauth_scopes", "The selected credential lacks the required Google Drive OAuth scope. Reconnect it and grant Drive access.");
+  }
   if (status === 403) {
-    return new DriveSearchError(403, "insufficient_drive_permission", "The selected Google account does not have permission for this Drive search.");
+    return new DriveSearchError(403, "google_drive_forbidden", "Google denied this Drive search. Check account access and Google Cloud policy.");
   }
   if (status === 400) {
     return new DriveSearchError(400, "malformed_drive_search", "Google Drive rejected the search parameters.");
@@ -97,6 +121,7 @@ async function executeDriveSearch({
   credentialStore,
   createOAuthClient,
   createDriveClient,
+  logger = console,
 }) {
   const params = normalizeSearchRequest(request);
   if (!CredentialStore.isValidId(params.credentialId)) {
@@ -139,6 +164,8 @@ async function executeDriveSearch({
       pageToken = response.data?.nextPageToken;
     } while (params.returnAll && pageToken && files.length < maxResults);
   } catch (error) {
+    const diagnostic = inspectGoogleError(error);
+    logger.error("Google Drive API request failed", diagnostic);
     throw googleErrorDetails(error);
   } finally {
     if (refreshedTokens) {
@@ -164,5 +191,7 @@ module.exports = {
   DriveSearchError,
   buildDriveQuery,
   executeDriveSearch,
+  inspectGoogleError,
   normalizeSearchRequest,
+  sanitizeGoogleMessage,
 };

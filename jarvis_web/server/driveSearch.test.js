@@ -6,6 +6,7 @@ const {
   DriveSearchError,
   buildDriveQuery,
   executeDriveSearch,
+  inspectGoogleError,
   normalizeSearchRequest,
 } = require("./driveSearch");
 
@@ -40,6 +41,51 @@ test("name search builds escaped query with folder and mime type filters", () =>
     query,
     "name contains 'Director\\'s \\\\ Report' and trashed = false and 'folder\\'123' in parents and mimeType = 'application/pdf'"
   );
+});
+
+test("Google diagnostics retain reason while redacting token-like values", () => {
+  const diagnostic = inspectGoogleError({
+    response: {
+      status: 403,
+      data: { error: { code: 403, message: "access_token=secret-value", errors: [{ reason: "accessNotConfigured" }] } },
+    },
+  });
+  assert.equal(diagnostic.status, 403);
+  assert.equal(diagnostic.reason, "accessNotConfigured");
+  assert.doesNotMatch(diagnostic.message, /secret-value/);
+});
+
+test("Drive API disabled errors are classified and logged without secrets", async () => {
+  const store = credentialStoreWith({
+    id: CREDENTIAL_ID,
+    accountEmail: "user@example.com",
+    accountName: "User",
+    tokens: { access_token: "stored-secret" },
+  });
+  const logged = [];
+
+  await assert.rejects(
+    () => executeDriveSearch({
+      request: { credentialId: CREDENTIAL_ID, query: "report" },
+      credentialStore: store,
+      createOAuthClient: () => new FakeOAuthClient(),
+      createDriveClient: () => ({ files: { list: async () => {
+        const error = new Error("access_token=leaked-secret");
+        error.response = {
+          status: 403,
+          data: { error: { code: 403, message: error.message, errors: [{ reason: "accessNotConfigured" }] } },
+        };
+        throw error;
+      } } }),
+      logger: { error: (...args) => logged.push(args) },
+    }),
+    (error) => error instanceof DriveSearchError
+      && error.statusCode === 503
+      && error.code === "drive_api_not_enabled"
+  );
+
+  assert.equal(logged[0][1].reason, "accessNotConfigured");
+  assert.doesNotMatch(JSON.stringify(logged), /stored-secret|leaked-secret/);
 });
 
 test("request validation rejects missing credential and clamps limits", () => {
@@ -142,4 +188,27 @@ test("refreshed tokens persist to the same credential ID", async () => {
   assert.equal(store.saved[0].id, CREDENTIAL_ID);
   assert.equal(store.saved[0].tokens.access_token, "new-access");
   assert.equal(store.saved[0].tokens.refresh_token, "keep-refresh");
+});
+
+test("Return All follows pagination while normal limit stops at requested count", async () => {
+  const store = credentialStoreWith({
+    id: CREDENTIAL_ID,
+    accountEmail: "user@example.com",
+    accountName: "User",
+    tokens: { access_token: "test-access" },
+  });
+  let calls = 0;
+  const result = await executeDriveSearch({
+    request: { credentialId: CREDENTIAL_ID, query: "report", returnAll: true },
+    credentialStore: store,
+    createOAuthClient: () => new FakeOAuthClient(),
+    createDriveClient: () => ({ files: { list: async () => {
+      calls += 1;
+      return calls === 1
+        ? { data: { files: [{ id: "one" }], nextPageToken: "next" } }
+        : { data: { files: [{ id: "two" }] } };
+    } } }),
+  });
+  assert.equal(calls, 2);
+  assert.equal(result.count, 2);
 });

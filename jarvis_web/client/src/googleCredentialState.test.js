@@ -38,5 +38,21 @@ test("Drive search request uses the node's selected credential ID", () => {
 
   assert.equal(request.credentialId, "gcred_selected");
   assert.equal(request.query, "Quarterly report");
+  assert.equal(request.folderId, "folder-123");
+  assert.equal(request.mimeType, "application/pdf");
+  assert.equal(request.returnAll, false);
+  assert.equal(request.searchMethod, "Search File/Folder Name");
   assert.equal(request.limit, 25);
+});
+
+test("multiple Google credentials produce separate dropdown labels", () => {
+  const credentials = [
+    { id: "gcred_one", accountEmail: "one@example.com" },
+    { id: "gcred_two", accountEmail: "two@example.com" },
+  ];
+
+  assert.deepEqual(credentials.map(googleCredentialLabel), [
+    "Google Drive - one@example.com",
+    "Google Drive - two@example.com",
+  ]);
 });

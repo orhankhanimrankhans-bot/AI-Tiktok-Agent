@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import DataViewer from "./DataViewer.jsx";
 import {
   assignCredentialToNode,
   buildDriveSearchRequest,
   googleCredentialLabel,
   selectOAuthCredential,
 } from "./googleCredentialState.js";
+import {
+  createScheduleManualOutput,
+  executeUpstreamLinear,
+  executeWithLifecycle,
+} from "./workflowExecution.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
@@ -269,7 +275,8 @@ function ScheduleTriggerEditor({
     createRule(1),
   ]
 );
-  const [output, setOutput] = useState(null);
+  const [output, setOutput] = useState(node.output ?? null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
 const [settings, setSettings] = useState(
   node.config?.settings ?? {
@@ -313,22 +320,22 @@ const [settings, setSettings] = useState(
     );
   };
 
-  const executeTrigger = () => {
-    const now = new Date();
-
-    const result = {
-      success: true,
-      trigger: "schedule",
-      nodeId: node.id,
-      executedAt: now.toISOString(),
-      ruleCount: rules.length,
-      rules: rules.map((rule, index) => ({
-        rule: index + 1,
-        interval: rule.interval,
-      })),
-    };
-
-    setOutput(result);
+  const executeTrigger = async () => {
+    if (isExecuting) return;
+    setIsExecuting(true);
+    const config = { ...node.config, rules, settings };
+    await executeWithLifecycle({
+      node: { ...node, config },
+      input: null,
+      executor: async () => createScheduleManualOutput(config),
+      onTransition: (updatedNode) => {
+        setOutput(updatedNode.status === "running"
+          ? { status: "running", message: "Testing schedule trigger..." }
+          : updatedNode.output);
+        onSaveNode(updatedNode);
+      },
+    });
+    setIsExecuting(false);
   };
 const saveAndClose = () => {
   onSaveNode({
@@ -941,8 +948,8 @@ const saveAndClose = () => {
 
                 <h3>No trigger output</h3>
 
-                <button onClick={executeTrigger}>
-                  Test this trigger
+                <button onClick={executeTrigger} disabled={isExecuting}>
+                  {isExecuting ? "Testing..." : "Test this trigger"}
                 </button>
 
                 <div>
@@ -1247,14 +1254,16 @@ function GoogleDriveSearchEditor({
   onClose,
   onSaveNode,
   previousNode,
+  onExecutePreviousNodes,
   onCreateCredential,
   credentials,
 }) {
   const [activeTab, setActiveTab] = useState("Parameters");
   const [inputTab, setInputTab] = useState("Schema");
   const [outputTab, setOutputTab] = useState("Schema");
-  const [input, setInput] = useState(null);
-  const [output, setOutput] = useState(null);
+  const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
+  const [output, setOutput] = useState(node.output ?? null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   const [config, setConfig] = useState(
     node.config ?? {
@@ -1296,55 +1305,48 @@ function GoogleDriveSearchEditor({
   };
 
   const executeStep = async () => {
+    if (isExecuting) return;
     let request;
     try {
       request = buildDriveSearchRequest(config);
     } catch (error) {
       const validationOutput = { status: "error", message: error.message };
       setOutput(validationOutput);
-      onSaveNode({ ...node, config, output: validationOutput, status: "error" });
+      onSaveNode({ ...node, config, input, output: validationOutput, status: "error", error: error.message, executionFinishedAt: new Date().toISOString() });
       return;
     }
-
-    setOutput({ status: "running", message: "Searching Google Drive..." });
-    onSaveNode({ ...node, config, output: null, status: "running" });
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/google/drive/search`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || data?.message || `Google Drive search failed (${response.status}).`);
-      }
-      const result = Array.isArray(data?.files) ? data.files : [];
-      setOutput(result);
-      onSaveNode({ ...node, config, output: result, status: "success" });
-    } catch (error) {
-      const errorOutput = { status: "error", message: error?.message || "Google Drive search failed." };
-      setOutput(errorOutput);
-      onSaveNode({ ...node, config, output: errorOutput, status: "error" });
-    }
+    setIsExecuting(true);
+    await executeWithLifecycle({
+      node: { ...node, config },
+      input,
+      executor: async () => {
+        const response = await fetch(`${API_BASE_URL}/api/google/drive/search`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || data?.message || `Google Drive search failed (${response.status}).`);
+        return Array.isArray(data?.files) ? data.files : [];
+      },
+      onTransition: (updatedNode) => {
+        setOutput(updatedNode.status === "running"
+          ? { status: "running", message: "Searching Google Drive..." }
+          : updatedNode.output);
+        onSaveNode(updatedNode);
+      },
+    });
+    setIsExecuting(false);
   };
 
-  const executePreviousNodes = () => {
-    const now = new Date();
-    setInput({
-      timestamp: now.toISOString(),
-      "Readable date": now.toLocaleDateString(),
-      "Readable time": now.toLocaleTimeString(),
-      "Day of week": now.toLocaleDateString(undefined, { weekday: "long" }),
-      Year: now.getFullYear(),
-      Month: now.getMonth() + 1,
-      "Day of month": now.getDate(),
-      Hour: now.getHours(),
-      Minute: now.getMinutes(),
-      Second: now.getSeconds(),
-      Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
+  const executePreviousNodes = async () => {
+    try {
+      const previousInput = await onExecutePreviousNodes(node.id);
+      setInput(previousInput);
+    } catch (error) {
+      setInput({ status: "error", message: error?.message || "Upstream execution failed." });
+    }
   };
 
   const saveAndClose = () => {
@@ -1429,11 +1431,12 @@ function GoogleDriveSearchEditor({
                 Settings
               </button>
 
-              <button
-                className="execute-step"
-                onClick={executeStep}
-              >
-                Execute step
+                <button
+                  className="execute-step"
+                  onClick={executeStep}
+                  disabled={isExecuting}
+                >
+                  {isExecuting ? "Running..." : "Execute step"}
               </button>
             </div>
 
@@ -1549,6 +1552,18 @@ function GoogleDriveSearchEditor({
                     }
                     placeholder="Leave empty to search broadly"
                   />
+
+                  <label>MIME Type</label>
+                  <select
+                    value={config.mimeType}
+                    onChange={(e) => updateConfig("mimeType", e.target.value)}
+                  >
+                    <option value="Any">Any</option>
+                    <option value="application/pdf">PDF</option>
+                    <option value="application/vnd.google-apps.folder">Google Drive folder</option>
+                    <option value="application/vnd.google-apps.document">Google Docs document</option>
+                    <option value="application/vnd.google-apps.spreadsheet">Google Sheets spreadsheet</option>
+                  </select>
 
                   <ToggleSetting
                     label="Return All"
@@ -1762,11 +1777,19 @@ function createPhase2Config(nodeId) {
   return null;
 }
 
-function NodeInputPanel({ previousNode, input, onInputChange, allowMock = false }) {
+function NodeInputPanel({ previousNode, input, onInputChange, onExecutePreviousNodes, nodeId, allowMock = false }) {
   const [tab, setTab] = useState("Schema");
 
-  const loadPreviousOutput = () => {
-    if (previousNode?.output != null) onInputChange(previousNode.output);
+  const loadPreviousOutput = async () => {
+    try {
+      if (onExecutePreviousNodes && nodeId) {
+        onInputChange(await onExecutePreviousNodes(nodeId));
+      } else if (previousNode?.output != null) {
+        onInputChange(previousNode.output);
+      }
+    } catch (error) {
+      onInputChange({ status: "error", message: error?.message || "Upstream execution failed." });
+    }
   };
 
   return (
@@ -1840,7 +1863,7 @@ function GenericNodeSettings({ settings, onChange, version }) {
   );
 }
 
-function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCredential, onSaveNode, onClose }) {
+function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onSaveNode, onClose }) {
   const isLimit = kind === "limit";
   const isDownload = kind === "download";
   const defaults = isLimit
@@ -1894,7 +1917,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
           <div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div>
         </header>
         <div className="node-editor-body google-three-column">
-          <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} allowMock={isLimit} />
+          <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} allowMock={isLimit} />
           <section className="node-config-panel google-config-panel">
             <div className="node-editor-tabs">
               {["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}
@@ -2018,70 +2041,7 @@ function ToggleSetting({
 }
 
 function OutputViewer({ output, tab }) {
-  if (tab === "JSON") {
-    return (
-      <pre className="json-output">
-        {JSON.stringify(output, null, 2)}
-      </pre>
-    );
-  }
-
-  if (tab === "Table") {
-    if (Array.isArray(output)) {
-      const columns = [...new Set(output.flatMap((item) => item && typeof item === "object" ? Object.keys(item) : ["value"]))];
-      return (
-        <div className="array-table-wrap"><table className="array-output-table"><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{output.map((item, index) => <tr key={index}>{columns.map((column) => <td key={column}>{String(item && typeof item === "object" ? item[column] ?? "" : item)}</td>)}</tr>)}</tbody></table></div>
-      );
-    }
-    return (
-      <div className="output-table">
-        {Object.entries(output).map(
-          ([key, value]) => (
-            <div
-              className="output-table-row"
-              key={key}
-            >
-              <strong>{key}</strong>
-
-              <span>
-                {typeof value === "object"
-                  ? JSON.stringify(value)
-                  : String(value)}
-              </span>
-            </div>
-          )
-        )}
-      </div>
-    );
-  }
-
-
-  if (Array.isArray(output)) {
-    const sample = output.find((item) => item && typeof item === "object");
-    return (
-      <div className="schema-output">
-        <div><strong>items</strong><span>array ({output.length})</span></div>
-        {sample && Object.entries(sample).map(([key, value]) => <div key={key}><strong>{key}</strong><span>{Array.isArray(value) ? "array" : typeof value}</span></div>)}
-      </div>
-    );
-  }
-
-  return (
-    <div className="schema-output">
-      {Object.entries(output).map(
-        ([key, value]) => (
-          <div key={key}>
-            <strong>{key}</strong>
-            <span>
-              {Array.isArray(value)
-                ? "array"
-                : typeof value}
-            </span>
-          </div>
-        )
-      )}
-    </div>
-  );
+  return <DataViewer value={output} tab={tab} />;
 }
 
 function App() {
@@ -2340,6 +2300,49 @@ function App() {
     );
 
     setEditingNode(updatedNode);
+  };
+
+  const executeRuntimeNode = async (node, input) => executeWithLifecycle({
+    node,
+    input,
+    onTransition: (updatedNode) => {
+      setCanvasNodes((nodes) => nodes.map((item) => item.id === updatedNode.id ? updatedNode : item));
+    },
+    executor: async () => {
+      if (node.name === "Schedule Trigger") {
+        return createScheduleManualOutput(node.config);
+      }
+      if (node.name === "Search Files and Folders") {
+        const request = buildDriveSearchRequest(node.config);
+        const response = await fetch(`${API_BASE_URL}/api/google/drive/search`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || "Google Drive search failed.");
+        return Array.isArray(data?.files) ? data.files : [];
+      }
+      if (node.name === "Limit") {
+        if (!Array.isArray(input)) throw new Error("Limit requires array input.");
+        const count = Math.max(1, Number(node.config?.maxItems) || 1);
+        return node.config?.keep === "Last Items" ? input.slice(-count) : input.slice(0, count);
+      }
+      throw new Error(`${node.name} does not support real execution in Phase 1.`);
+    },
+  });
+
+  const executePreviousNodesFor = async (targetNodeId) => {
+    const result = await executeUpstreamLinear({
+      targetNodeId,
+      nodes: canvasNodes,
+      connections,
+      executeNode: executeRuntimeNode,
+    });
+    setCanvasNodes(result.nodes);
+    setEditingNode((node) => node?.id === targetNodeId ? { ...node, input: result.input } : node);
+    return result.input;
   };
 
   const saveWorkflow = () => {
@@ -2993,6 +2996,7 @@ function App() {
           node={editingNode}
           previousNode={canvasNodes.find((candidate) => connections.some((connection) => connection.source === candidate.id && connection.target === editingNode.id))}
           credentials={googleCredentials}
+          onExecutePreviousNodes={executePreviousNodesFor}
           onCreateCredential={(credentialId = null) => { pendingGoogleCredentialNodeId.current = editingNode.id; setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
@@ -3006,6 +3010,7 @@ function App() {
           kind={editingNode.name === "Limit" ? "limit" : editingNode.name === "Download File" ? "download" : "delete"}
           previousNode={getPreviousNode(editingNode.id)}
           credentials={googleCredentials}
+          onExecutePreviousNodes={executePreviousNodesFor}
           onCreateCredential={(credentialId = null) => { pendingGoogleCredentialNodeId.current = editingNode.id; setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}

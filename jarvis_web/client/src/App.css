@@ -1956,6 +1956,79 @@ button {
 .node-status-indicator.error { background: #ef626b; box-shadow: 0 0 8px #ef626b; }
 .node-status-indicator.not_configured { background: #58b9d4; box-shadow: 0 0 8px #58b9d4; }
 
+/* Phase 1 workflow editor viewport and independent column scrolling. */
+.node-editor-overlay {
+  box-sizing: border-box;
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+.node-editor-window {
+  width: min(96vw, 1540px);
+  height: min(92vh, 920px);
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+}
+
+.node-editor-header,
+.input-header,
+.output-header,
+.node-editor-tabs {
+  flex: 0 0 auto;
+}
+
+.node-editor-body,
+.node-editor-body.google-three-column,
+.node-input-panel,
+.node-config-panel,
+.node-output-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.node-editor-body.google-three-column {
+  grid-template-columns: minmax(240px, .8fr) minmax(340px, 1fr) minmax(280px, .9fr);
+}
+
+.node-config-scroll,
+.input-data-view,
+.node-output-panel > .data-viewer {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.data-viewer {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.data-item-count {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 7px 14px;
+  color: #8feaff;
+  background: #1d2224;
+  border-bottom: 1px solid #353b3e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.schema-row[class*="schema-depth-"] { padding-left: 12px; }
+.schema-row.schema-depth-1 { padding-left: 28px; }
+.schema-row.schema-depth-2 { padding-left: 44px; }
+.schema-row.schema-depth-3 { padding-left: 60px; }
+
+@media (max-width: 1100px) {
+  .node-editor-window { width: calc(100vw - 16px); height: calc(100vh - 16px); }
+  .node-editor-body.google-three-column {
+    grid-template-columns: minmax(220px, .75fr) minmax(320px, 1fr) minmax(250px, .85fr);
+  }
+}
+
 .facebook-mark {
   display: grid;
   place-items: center;
