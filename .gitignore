@@ -18,6 +18,10 @@ audio_test.wav
 *.key
 *.pem
 credentials.json
+*.db
+*.sqlite
+*.sqlite3
+jarvis_web/server/data/
 
 # VS Code
 .vscode/

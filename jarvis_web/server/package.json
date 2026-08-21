@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test credentialStore.test.js",
     "start": "node index.js"
   },
   "keywords": [],
@@ -16,6 +16,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
-    "googleapis": "^176.0.0"
+    "googleapis": "^176.0.0",
+    "sqlite3": "^6.0.1"
   }
 }

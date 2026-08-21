@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
+const { CredentialStore } = require("./credentialStore");
 
 dotenv.config();
 
@@ -51,6 +52,14 @@ if (IS_PRODUCTION && !process.env.CLIENT_URL) {
   process.exit(1);
 }
 
+if (IS_PRODUCTION && !process.env.JARVIS_DB_PATH) {
+  console.error(
+    "FATAL ERROR: JARVIS_DB_PATH is required in production. " +
+      "Configure a persistent writable path outside client/dist."
+  );
+  process.exit(1);
+}
+
 const app = express();
 
 const PORT = Number(process.env.PORT || 3001);
@@ -60,6 +69,12 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GOOGLE_REDIRECT_URI =
   process.env.GOOGLE_REDIRECT_URI ||
   `http://localhost:${PORT}/api/google/auth/callback`;
+const JARVIS_DB_PATH = path.resolve(
+  process.env.JARVIS_DB_PATH || path.join(__dirname, "data", "credentials.sqlite3")
+);
+const CREDENTIAL_ENCRYPTION_SECRET =
+  process.env.CREDENTIAL_ENCRYPTION_SECRET || process.env.SESSION_SECRET ||
+  (IS_PRODUCTION ? "" : "jarvis-dev-session-secret-change-me");
 
 const googleOAuthConfigured = Boolean(
   GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI
@@ -115,9 +130,9 @@ function base64urlEncode(buf) {
 
 // Create a signed OAuth state token.
 // Returns a JWT-like string: base64url(payload).base64url(signature)
-function createSignedOAuthState({ mode, nonce, iat }) {
+function createSignedOAuthState({ mode, nonce, iat, intent, credentialId = null }) {
   // Payload: mode + nonce + issued timestamp
-  const payloadStr = JSON.stringify({ mode, nonce, iat });
+  const payloadStr = JSON.stringify({ mode, nonce, iat, intent, credentialId });
   // HMAC-SHA256 signature of the payload string using SESSION_SECRET
   const hmac = crypto.createHmac("sha256", process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me");
   hmac.update(payloadStr);
@@ -156,22 +171,30 @@ function verifySignedOAuthState(stateToken) {
   }
 
   // Validate required fields
-  if (!payload.mode || !payload.nonce || typeof payload.iat !== "number") return null;
+  if (!["popup", "redirect"].includes(payload.mode)) return null;
+  if (!payload.nonce || typeof payload.iat !== "number") return null;
+  if (!["create", "reconnect"].includes(payload.intent)) return null;
+  if (payload.intent === "reconnect" && !CredentialStore.isValidId(payload.credentialId)) return null;
+  if (payload.intent === "create" && payload.credentialId !== null) return null;
 
   // Check expiration: 10 minutes
   const now = Math.floor(Date.now() / 60000); // minutes
-  if (now - payload.iat > 10) return null; // expired
+  if (payload.iat > now + 1 || now - payload.iat > 10) return null; // invalid/expired
 
   // Verify HMAC-SHA256 signature
   const expectedHmac = crypto.createHmac("sha256", process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me");
   expectedHmac.update(payloadStr);
   const expectedSig = expectedHmac.digest();
-  const expectedSigB64 = base64urlEncode(expectedSig);
+  let providedSig;
+  try {
+    providedSig = Buffer.from(sigB64, "base64url");
+  } catch {
+    return null;
+  }
+  if (providedSig.length !== expectedSig.length ||
+      !crypto.timingSafeEqual(providedSig, expectedSig)) return null;
 
-  // timing-safe compare
-  if (expectedSigB64 !== sigB64) return null;
-
-  return { mode: payload.mode, nonce: payload.nonce, iat: payload.iat };
+  return payload;
 }
 
 function createOAuthClient() {
@@ -184,18 +207,17 @@ function createOAuthClient() {
   );
 }
 
-const GOOGLE_CREDENTIAL_ID = "google_drive_main";
-const googleCredentialStore = new Map();
+const credentialStore = new CredentialStore({
+  dbPath: JARVIS_DB_PATH,
+  encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
+});
 
-function getStoredGoogleCredential() {
-  return googleCredentialStore.get(GOOGLE_CREDENTIAL_ID) || null;
-}
-
-function makePopupResultHtml({ status, message = "" }) {
+function makePopupResultHtml({ status, message = "", credentialId = null }) {
   const payload = JSON.stringify({
     type: "jarvis-google-oauth",
     status,
     message,
+    credentialId,
   }).replace(/</g, "\\u003c");
 
   const targetOrigin = JSON.stringify(new URL(CLIENT_URL).origin);
@@ -263,20 +285,30 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/google/credential/status", (req, res) => {
-  const credential = getStoredGoogleCredential();
-
-  res.json({
-    id: GOOGLE_CREDENTIAL_ID,
-    name: "Google Drive account",
-    connected: Boolean(credential?.tokens?.access_token),
-    status: credential?.tokens?.access_token ? "connected" : "not_connected",
-    accountEmail: credential?.profile?.email || "",
-    accountName: credential?.profile?.name || "",
-  });
+app.get("/api/google/credentials", async (req, res) => {
+  try {
+    return res.json({ credentials: await credentialStore.list() });
+  } catch (error) {
+    console.error("Could not list Google credentials:", error?.message || error);
+    return res.status(500).json({ error: "Could not list Google credentials." });
+  }
 });
 
-app.get("/api/google/auth/start", (req, res) => {
+app.get("/api/google/credentials/:credentialId", async (req, res) => {
+  if (!CredentialStore.isValidId(req.params.credentialId)) {
+    return res.status(400).json({ error: "Invalid credential ID." });
+  }
+  try {
+    const credential = await credentialStore.get(req.params.credentialId);
+    if (!credential) return res.status(404).json({ error: "Credential not found." });
+    return res.json(credential);
+  } catch (error) {
+    console.error("Could not read Google credential:", error?.message || error);
+    return res.status(500).json({ error: "Could not read Google credential." });
+  }
+});
+
+app.get("/api/google/auth/start", async (req, res) => {
   const oauth2Client = createOAuthClient();
 
   if (!oauth2Client) {
@@ -291,10 +323,21 @@ app.get("/api/google/auth/start", (req, res) => {
 
   // Determine mode from query (popup vs redirect)
   const mode = req.query.mode === "popup" ? "popup" : "redirect";
+  const requestedCredentialId = req.query.credentialId || null;
+  const intent = requestedCredentialId ? "reconnect" : "create";
+
+  if (requestedCredentialId && !CredentialStore.isValidId(requestedCredentialId)) {
+    return res.status(400).json({ status: "error", message: "Invalid credential ID." });
+  }
+  if (requestedCredentialId && !(await credentialStore.get(requestedCredentialId))) {
+    return res.status(404).json({ status: "error", message: "Credential not found." });
+  }
 
   // Create a signed state token (survives across Node processes)
   const iat = Math.floor(Date.now() / 60000); // minutes since epoch
-  const stateToken = createSignedOAuthState({ mode, nonce, iat });
+  const stateToken = createSignedOAuthState({
+    mode, nonce, iat, intent, credentialId: requestedCredentialId,
+  });
 
   // Pass the signed state token to Google as the OAuth state parameter
   // We no longer rely on session storage for mode/state recovery.
@@ -338,12 +381,24 @@ app.get("/api/google/auth/callback", async (req, res) => {
   // This makes the OAuth flow survive across different Node processes
   // (e.g., Hostinger/Passenger where the callback may hit a different process).
   let verifiedState = null;
-  let mode = "redirect"; // default fallback
+  const sessionMode = req.session.googleOAuthMode === "popup" ? "popup" : "redirect";
+  let finalMode = sessionMode;
+
+  const sendFailure = (message) => {
+    if (finalMode === "popup") {
+      return res.status(400).send(
+        makePopupResultHtml({ status: "error", message })
+      );
+    }
+    const redirect = new URL(CLIENT_URL);
+    redirect.searchParams.set("google_oauth", "error");
+    return res.redirect(redirect.toString());
+  };
 
   if (req.query.state) {
     verifiedState = verifySignedOAuthState(req.query.state);
     if (verifiedState && verifiedState.mode) {
-      mode = verifiedState.mode; // recover mode from signed token
+      finalMode = verifiedState.mode;
     }
   }
 
@@ -352,9 +407,6 @@ app.get("/api/google/auth/callback", async (req, res) => {
     return sendFailure("OAuth state validation failed.");
   }
 
-  const expectedMode = mode;
-  const expectedNonce = verifiedState.nonce;
-
   // --- CSRF protection: compare the state Google returned with the nonce from our signed token ---
   // Google echoes back the exact state parameter we sent. Since our state is the signed token,
   // we verify it via verifySignedOAuthState above. The nonce provides additional replay protection.
@@ -362,31 +414,9 @@ app.get("/api/google/auth/callback", async (req, res) => {
   // Note: We do NOT compare req.query.state against a separate session stored value,
   // because the signed token itself provides integrity and authenticity (HMAC-SHA256).
 
-  // --- Extract session data (best-effort fallback) ---
-  const sessionMode = req.session.googleOAuthMode || "redirect";
-
-  // Use the mode from the verified signed state token as the primary source
-  // Fall back to session mode if something went wrong with the token
-  const finalMode = verifiedState ? verifiedState.mode : sessionMode;
-
   // --- Clean up session markers ---
   delete req.session.googleOAuthState;
   delete req.session.googleOAuthMode;
-
-  const sendFailure = (message) => {
-    if (finalMode === "popup") {
-      return res.status(400).send(
-        makePopupResultHtml({
-          status: "error",
-          message,
-        })
-      );
-    }
-
-    const redirect = new URL(CLIENT_URL);
-    redirect.searchParams.set("google_oauth", "error");
-    return res.redirect(redirect.toString());
-  };
 
   try {
     if (req.query.error) {
@@ -434,13 +464,17 @@ app.get("/api/google/auth/callback", async (req, res) => {
       );
     }
 
-    googleCredentialStore.set(GOOGLE_CREDENTIAL_ID, {
-      id: GOOGLE_CREDENTIAL_ID,
-      provider: "google-drive",
-      type: "oauth2",
-      tokens,
-      profile,
-      updatedAt: new Date().toISOString(),
+    const credentialId = verifiedState.intent === "reconnect"
+      ? verifiedState.credentialId
+      : CredentialStore.generateId();
+    const previous = verifiedState.intent === "reconnect"
+      ? await credentialStore.get(credentialId, { includeTokens: true })
+      : null;
+    const credential = await credentialStore.save({
+      id: credentialId,
+      accountEmail: profile.email,
+      accountName: profile.name,
+      tokens: { ...(previous?.tokens || {}), ...tokens },
     });
 
     if (finalMode === "popup") {
@@ -450,12 +484,14 @@ app.get("/api/google/auth/callback", async (req, res) => {
           message: profile.email
             ? `${profile.email} is connected to Jarvis.`
             : "Your Google account is connected to Jarvis.",
+          credentialId: credential.id,
         })
       );
     }
 
     const redirect = new URL(CLIENT_URL);
     redirect.searchParams.set("google_oauth", "connected");
+    redirect.searchParams.set("credential_id", credential.id);
     return res.redirect(redirect.toString());
   } catch (error) {
     console.error("Google OAuth callback failed:", error);
@@ -465,10 +501,15 @@ app.get("/api/google/auth/callback", async (req, res) => {
   }
 });
 
-app.post("/api/google/auth/disconnect", async (req, res) => {
-  const credential = getStoredGoogleCredential();
+async function deleteGoogleCredential(req, res) {
+  const { credentialId } = req.params;
+  if (!CredentialStore.isValidId(credentialId)) {
+    return res.status(400).json({ error: "Invalid credential ID." });
+  }
 
   try {
+    const credential = await credentialStore.get(credentialId, { includeTokens: true });
+    if (!credential) return res.status(404).json({ error: "Credential not found." });
     const oauth2Client = createOAuthClient();
 
     if (oauth2Client && credential?.tokens?.access_token) {
@@ -482,12 +523,13 @@ app.post("/api/google/auth/disconnect", async (req, res) => {
       }
     }
 
-    googleCredentialStore.delete(GOOGLE_CREDENTIAL_ID);
+    await credentialStore.delete(credentialId);
 
     return res.json({
       ok: true,
       connected: false,
       status: "not_connected",
+      id: credentialId,
     });
   } catch (error) {
     console.error("Google disconnect failed:", error);
@@ -496,7 +538,10 @@ app.post("/api/google/auth/disconnect", async (req, res) => {
       error: error?.message || "Could not disconnect Google Drive.",
     });
   }
-});
+}
+
+app.post("/api/google/credentials/:credentialId/disconnect", deleteGoogleCredential);
+app.delete("/api/google/credentials/:credentialId", deleteGoogleCredential);
 
 
 // Serve the production React/Vite frontend.
@@ -511,18 +556,32 @@ app.use((req, res, next) => {
 
   return next();
 });
-app.listen(PORT, () => {
-  console.log("");
-  console.log("=================================");
-  console.log(" JARVIS BACKEND");
-  console.log("=================================");
-  console.log(`API: http://localhost:${PORT}`);
-  console.log(`Client: ${CLIENT_URL}`);
-  console.log(
-    `Google OAuth configured: ${googleOAuthConfigured ? "YES" : "NO"}`
-  );
-  console.log("=================================");
-  console.log("");
+async function startServer() {
+  const relativeToClientDist = path.relative(CLIENT_DIST, JARVIS_DB_PATH);
+  if (!relativeToClientDist.startsWith("..") && !path.isAbsolute(relativeToClientDist)) {
+    throw new Error("JARVIS_DB_PATH must not be inside client/dist.");
+  }
+
+  await credentialStore.open();
+  app.listen(PORT, () => {
+    console.log("");
+    console.log("=================================");
+    console.log(" JARVIS BACKEND");
+    console.log("=================================");
+    console.log(`API: http://localhost:${PORT}`);
+    console.log(`Client: ${CLIENT_URL}`);
+    console.log(`Credential database: ${JARVIS_DB_PATH}`);
+    console.log(
+      `Google OAuth configured: ${googleOAuthConfigured ? "YES" : "NO"}`
+    );
+    console.log("=================================");
+    console.log("");
+  });
+}
+
+startServer().catch((error) => {
+  console.error("FATAL ERROR: Jarvis backend startup failed:", error?.message || error);
+  process.exit(1);
 });
 
 

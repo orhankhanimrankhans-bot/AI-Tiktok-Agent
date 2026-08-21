@@ -1094,7 +1094,6 @@ function FacebookProviderBrowser({ onBack, onSelectAction }) {
 function GoogleCredentialModal({
   onClose,
   onSave,
-  onUpdate,
   onDelete,
   onNotify,
   onStartOAuth,
@@ -1126,19 +1125,24 @@ function GoogleCredentialModal({
 
 
   const saveCredential = () => {
+    if (!credential?.id) {
+      onNotify("Connect a Google account before saving this credential");
+      return;
+    }
     const now = new Date().toISOString();
-    onSave({ id: credential?.id ?? "google_drive_main", name: credentialName.trim() || "Google Drive account", provider: "google-drive", type: "oauth2", status, authMode, allowedDomains, visibility, createdAt: credential?.createdAt ?? now, updatedAt: now });
+    onSave({ ...credential, id: credential.id, name: credentialName.trim() || credential.accountEmail || "Google Drive account", authMode, allowedDomains, visibility, updatedAt: now });
   };
 
   const disconnectCredential = async () => {
+    if (!credential?.id) return;
     setConnectionMessage("Disconnecting Google Drive...");
 
     try {
-      await onDisconnect();
-      const updated = { ...(credential ?? {}), id: credential?.id ?? "google_drive_main", name: credentialName.trim() || "Google Drive account", provider: "google-drive", type: "oauth2", status: "not_connected", authMode, allowedDomains, visibility, updatedAt: new Date().toISOString() };
+      await onDisconnect(credential.id);
       setStatus("not_connected");
       setConnectionMessage("Google Drive credential disconnected.");
-      onUpdate(updated, "Google Drive credential disconnected");
+      onNotify("Google Drive credential disconnected");
+      onClose();
     } catch (error) {
       setConnectionMessage(error?.message || "Could not disconnect Google Drive.");
     }
@@ -1164,7 +1168,7 @@ function GoogleCredentialModal({
 
           <div className="credential-modal-actions">
             <button type="button" onClick={saveCredential}>Save</button>
-            <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">⌫</button>
+            {credential?.id && <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">⌫</button>}
             <button type="button" onClick={onClose} aria-label="Close credential modal">×</button>
           </div>
         </header>
@@ -1184,7 +1188,7 @@ function GoogleCredentialModal({
               </select>
             </div>
 
-            {status === "connected" ? <div className="credential-connected"><span>✓</span><strong>Account connected{credential?.accountEmail ? ` · ${credential.accountEmail}` : ""}</strong><div><button type="button" onClick={onStartOAuth}>Switch account</button><button type="button" className="disconnect-button" onClick={disconnectCredential}>Disconnect</button></div></div> : <div className="credential-warning"><span>⚠</span><span>Connect your account to use this credential</span><button type="button" onClick={onStartOAuth}>Sign in with Google</button></div>}
+            {status === "connected" ? <div className="credential-connected"><span>✓</span><strong>Account connected{credential?.accountEmail ? ` · ${credential.accountEmail}` : ""}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnectCredential}>Disconnect</button></div></div> : <div className="credential-warning"><span>⚠</span><span>Connect your account to use this credential</span><button type="button" onClick={() => onStartOAuth(null)}>Sign in with Google</button></div>}
             {connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}
 
             <label htmlFor="google-allowed-domains">Allowed HTTP Request Domains</label>
@@ -1199,10 +1203,10 @@ function GoogleCredentialModal({
             </div>
             </>}
             {activeTab === "Sharing" && <div className="credential-metadata-panel"><h3>Credential visibility</h3><label htmlFor="google-credential-visibility">Visibility</label><select id="google-credential-visibility" value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="private">Private</option><option value="shared">Shared</option></select><p>Private credentials are available only to this Jarvis workspace. Sharing is metadata only until backend permissions are configured.</p></div>}
-            {activeTab === "Details" && <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Credential ID/reference</dt><dd>{credential?.id ?? "google_drive_main"}</dd></div><div><dt>Provider</dt><dd>Google Drive</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{status}</dd></div><div><dt>Created</dt><dd>{credential?.createdAt ?? "Saved when settings are first saved"}</dd></div><div><dt>Updated</dt><dd>{credential?.updatedAt ?? "Not saved yet"}</dd></div></dl></div>}
+            {activeTab === "Details" && <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Credential ID/reference</dt><dd>{credential?.id ?? "Created after Google sign-in"}</dd></div><div><dt>Provider</dt><dd>Google Drive</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{status}</dd></div><div><dt>Created</dt><dd>{credential?.createdAt ?? "Created after Google sign-in"}</dd></div><div><dt>Updated</dt><dd>{credential?.updatedAt ?? "Not saved yet"}</dd></div></dl></div>}
           </section>
         </div>
-        {showDeleteConfirmation && <div className="credential-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-credential-title"><div className="credential-confirm-modal"><h3 id="delete-credential-title">Delete credential?</h3><p>Delete "{credentialName.trim() || "Google Drive account"}"?</p><div><button type="button" onClick={() => setShowDeleteConfirmation(false)}>Cancel</button><button type="button" className="confirm-delete" onClick={() => onDelete(credential?.id ?? "google_drive_main")}>Delete</button></div></div></div>}
+        {showDeleteConfirmation && <div className="credential-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-credential-title"><div className="credential-confirm-modal"><h3 id="delete-credential-title">Delete credential?</h3><p>Delete "{credentialName.trim() || "Google Drive account"}"?</p><div><button type="button" onClick={() => setShowDeleteConfirmation(false)}>Cancel</button><button type="button" className="confirm-delete" onClick={() => onDelete(credential.id)}>Delete</button></div></div></div>}
       </div>
     </div>
   );
@@ -1441,7 +1445,7 @@ function GoogleDriveSearchEditor({
                       <option value="">Select credential</option>
                       {config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}
                       {credentials.map((credential) => (
-                        <option key={credential.id} value={credential.id}>{credential.name}</option>
+                        <option key={credential.id} value={credential.id}>{credential.accountEmail || credential.accountName || credential.name || "Google Drive account"}</option>
                       ))}
                       <option value="__create__">
                         + Create new credential
@@ -1451,7 +1455,7 @@ function GoogleDriveSearchEditor({
                     <button
                       type="button"
                       className="credential-button"
-                      onClick={onCreateCredential}
+                      onClick={() => onCreateCredential(config.credentialId || null)}
                       title="Edit credential"
                     >
                       ✎
@@ -1884,7 +1888,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
                     <label>Keep</label><select value={config.keep} onChange={(event) => setConfig({ ...config, keep: event.target.value })}><option>First Items</option><option>Last Items</option></select>
                   </> : <>
                     <label>Credential</label>
-                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.name}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={onCreateCredential}>✎</button></div>
+                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{credential.accountEmail || credential.accountName || credential.name || "Google Drive account"}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
                     <label>Resource</label><select value={config.resource} disabled><option>File</option></select>
                     <label>Operation</label><select value={config.operation} disabled><option>{config.operation}</option></select>
                     <label>File ID</label><div className="value-mode-switch">{["Fixed", "Expression"].map((mode) => <button key={mode} className={config.fileIdMode === mode ? "active" : ""} onClick={() => setConfig({ ...config, fileIdMode: mode })}>{mode}</button>)}</div>
@@ -2083,12 +2087,13 @@ function App() {
   const [providerBrowser, setProviderBrowser] = useState(null);
   const [showGoogleCredential, setShowGoogleCredential] = useState(false);
   const [googleCredentials, setGoogleCredentials] = useState([]);
+  const [editingGoogleCredentialId, setEditingGoogleCredentialId] = useState(null);
   const [credentialToast, setCredentialToast] = useState("");
   const [showFacebookCredential, setShowFacebookCredential] = useState(false);
   const [facebookCredentials, setFacebookCredentials] = useState([]);
 
-  const syncGoogleCredential = async ({ showToast = false } = {}) => {
-    const response = await fetch(`${API_BASE_URL}/api/google/credential/status`, {
+  const syncGoogleCredential = async ({ showToast = false, credentialId = null } = {}) => {
+    const response = await fetch(`${API_BASE_URL}/api/google/credentials`, {
       credentials: "include",
     });
 
@@ -2097,54 +2102,34 @@ function App() {
     }
 
     const data = await response.json();
-    const connected = Boolean(data?.connected ?? (data?.status === "connected"));
-    const now = new Date().toISOString();
+    const credentials = Array.isArray(data?.credentials) ? data.credentials : [];
+    setGoogleCredentials(credentials.map((credential) => ({
+      ...credential,
+      name: credential.accountEmail || credential.accountName || "Google Drive account",
+    })));
 
-    setGoogleCredentials((current) => {
-      const existing = current.find((item) => item.id === "google_drive_main");
-      const credential = {
-        ...(existing ?? {}),
-        id: data?.id ?? "google_drive_main",
-        name: existing?.name ?? data?.name ?? "Google Drive account",
-        provider: "google-drive",
-        type: "oauth2",
-        status: connected ? "connected" : "not_connected",
-        accountEmail: data?.accountEmail ?? existing?.accountEmail ?? "",
-        accountName: data?.accountName ?? existing?.accountName ?? "",
-        authMode: existing?.authMode ?? "managed_oauth2",
-        allowedDomains: existing?.allowedDomains ?? "none",
-        visibility: existing?.visibility ?? "private",
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-      };
-
-      return [
-        ...current.filter((item) => item.id !== "google_drive_main"),
-        credential,
-      ];
-    });
-
-    if (showToast && connected) {
+    if (showToast && credentials.length) {
+      const latest = credentials.find((item) => item.id === credentialId) || credentials[credentials.length - 1];
       setCredentialToast(
-        data?.accountEmail
-          ? `Google Drive connected: ${data.accountEmail}`
+        latest.accountEmail
+          ? `Google Drive connected: ${latest.accountEmail}`
           : "Google Drive account connected"
       );
       setShowGoogleCredential(true);
       window.setTimeout(() => setCredentialToast(""), 3500);
     }
 
-    return { connected, data };
+    return { connected: credentials.length > 0, credentials };
   };
 
-  const startGoogleOAuth = () => {
+  const startGoogleOAuth = (credentialId = null) => {
     const width = 560;
     const height = 720;
     const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
     const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
 
     const popup = window.open(
-      `${API_BASE_URL}/api/google/auth/start?mode=popup`,
+      `${API_BASE_URL}/api/google/auth/start?mode=popup${credentialId ? `&credentialId=${encodeURIComponent(credentialId)}` : ""}`,
       "jarvis_google_oauth",
       `popup=yes,width=${width},height=${height},left=${Math.round(left)},top=${Math.round(top)},resizable=yes,scrollbars=yes`
     );
@@ -2158,8 +2143,8 @@ function App() {
     popup.focus();
   };
 
-  const disconnectGoogleOAuth = async () => {
-    const response = await fetch(`${API_BASE_URL}/api/google/auth/disconnect`, {
+  const disconnectGoogleOAuth = async (credentialId) => {
+    const response = await fetch(`${API_BASE_URL}/api/google/credentials/${encodeURIComponent(credentialId)}/disconnect`, {
       method: "POST",
       credentials: "include",
     });
@@ -2175,19 +2160,16 @@ function App() {
       throw new Error(message);
     }
 
-    setGoogleCredentials((current) =>
-      current.map((item) =>
-        item.id === "google_drive_main"
-          ? {
-              ...item,
-              status: "not_connected",
-              accountEmail: "",
-              accountName: "",
-              updatedAt: new Date().toISOString(),
-            }
-          : item
-      )
-    );
+    setGoogleCredentials((current) => current.filter((item) => item.id !== credentialId));
+  };
+
+  const deleteGoogleCredential = async (credentialId) => {
+    const response = await fetch(`${API_BASE_URL}/api/google/credentials/${encodeURIComponent(credentialId)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) throw new Error("Could not delete Google Drive credential.");
+    setGoogleCredentials((current) => current.filter((item) => item.id !== credentialId));
   };
 
   useEffect(() => {
@@ -2207,7 +2189,10 @@ function App() {
       if (event.data.status === "connected") {
         try {
           if (!cancelled) {
-            await syncGoogleCredential({ showToast: true });
+            await syncGoogleCredential({ showToast: true, credentialId: event.data.credentialId });
+            if (event.data.credentialId) {
+              setEditingGoogleCredentialId(event.data.credentialId);
+            }
           }
         } catch (error) {
           if (!cancelled) {
@@ -2233,11 +2218,13 @@ function App() {
     // Fallback for a non-popup OAuth callback or a manually opened callback page.
     const params = new URLSearchParams(window.location.search);
     const oauthResult = params.get("google_oauth");
+    const oauthCredentialId = params.get("credential_id");
 
     const clearOAuthQuery = () => {
       if (!oauthResult) return;
       const url = new URL(window.location.href);
       url.searchParams.delete("google_oauth");
+      url.searchParams.delete("credential_id");
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     };
 
@@ -2245,6 +2232,7 @@ function App() {
       try {
         const result = await syncGoogleCredential({
           showToast: oauthResult === "connected",
+          credentialId: oauthCredentialId,
         });
 
         if (oauthResult === "connected" && !result.connected && !cancelled) {
@@ -2953,7 +2941,7 @@ function App() {
           node={editingNode}
           previousNode={canvasNodes.find((candidate) => connections.some((connection) => connection.source === candidate.id && connection.target === editingNode.id))}
           credentials={googleCredentials}
-          onCreateCredential={() => setShowGoogleCredential(true)}
+          onCreateCredential={(credentialId = null) => { setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
         />
@@ -2965,7 +2953,7 @@ function App() {
           kind={editingNode.name === "Limit" ? "limit" : editingNode.name === "Download File" ? "download" : "delete"}
           previousNode={getPreviousNode(editingNode.id)}
           credentials={googleCredentials}
-          onCreateCredential={() => setShowGoogleCredential(true)}
+          onCreateCredential={(credentialId = null) => { setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
         />
@@ -2988,24 +2976,23 @@ function App() {
 
       {showGoogleCredential && (
         <GoogleCredentialModal
-          onClose={() => setShowGoogleCredential(false)}
-          credential={googleCredentials.find((item) => item.id === "google_drive_main")}
+          onClose={() => { setShowGoogleCredential(false); setEditingGoogleCredentialId(null); }}
+          credential={googleCredentials.find((item) => item.id === editingGoogleCredentialId)}
           onSave={(credential) => {
             setGoogleCredentials((current) => [...current.filter((item) => item.id !== credential.id), credential]);
             setCredentialToast("Credential settings saved");
             setShowGoogleCredential(false);
             window.setTimeout(() => setCredentialToast(""), 3000);
           }}
-          onUpdate={(credential, message) => {
-            setGoogleCredentials((current) => [...current.filter((item) => item.id !== credential.id), credential]);
-            setCredentialToast(message);
-            window.setTimeout(() => setCredentialToast(""), 3000);
-          }}
           onDelete={(credentialId) => {
-            setGoogleCredentials((current) => current.filter((item) => item.id !== credentialId));
-            setShowGoogleCredential(false);
-            setCredentialToast("Credential metadata deleted");
-            window.setTimeout(() => setCredentialToast(""), 3000);
+            deleteGoogleCredential(credentialId)
+              .then(() => {
+                setShowGoogleCredential(false);
+                setEditingGoogleCredentialId(null);
+                setCredentialToast("Google Drive credential deleted");
+                window.setTimeout(() => setCredentialToast(""), 3000);
+              })
+              .catch((error) => setCredentialToast(error?.message || "Could not delete credential"));
           }}
           onNotify={(message) => {
             setCredentialToast(message);
