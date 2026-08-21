@@ -7,6 +7,8 @@ const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
 const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
+const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
+const { ExecutionStore } = require("./executionStore");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 
 dotenv.config();
@@ -213,6 +215,8 @@ const credentialStore = new CredentialStore({
   dbPath: JARVIS_DB_PATH,
   encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
 });
+let executionStore;
+const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
   return renderPopupResultHtml({
@@ -278,6 +282,40 @@ app.post("/api/google/drive/search", async (req, res) => {
       error: "Google Drive search could not be completed.",
     });
   }
+});
+
+async function handleDriveFileAction(req, res, action) {
+  try {
+    const result = await action({ request: req.body, credentialStore, createOAuthClient,
+      createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
+      binaryDir: BINARY_DATA_DIR });
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof DriveSearchError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
+    console.error("Google Drive file action failed.");
+    return res.status(500).json({ status: "error", code: "drive_file_action_failed", error: "Google Drive file action failed." });
+  }
+}
+
+app.post("/api/google/drive/download", (req, res) => handleDriveFileAction(req, res, executeDriveDownload));
+app.post("/api/google/drive/delete", (req, res) => handleDriveFileAction(req, res, executeDriveDelete));
+
+app.get("/api/executions", (req, res) => {
+  try { return res.json({ executions: executionStore.list(req.query.limit) }); }
+  catch { return res.status(500).json({ error: "Could not list workflow executions." }); }
+});
+
+app.get("/api/executions/:executionId", (req, res) => {
+  if (!ExecutionStore.isValidId(req.params.executionId)) return res.status(400).json({ error: "Invalid execution ID." });
+  try { const record = executionStore.get(req.params.executionId); return record ? res.json(record) : res.status(404).json({ error: "Execution not found." }); }
+  catch { return res.status(500).json({ error: "Could not read workflow execution." }); }
+});
+
+app.post("/api/executions", (req, res) => {
+  try {
+    if (!req.body?.startedAt || !req.body?.finishedAt) return res.status(400).json({ error: "Execution timestamps are required." });
+    return res.status(201).json(executionStore.save(req.body));
+  } catch { return res.status(500).json({ error: "Could not save workflow execution." }); }
 });
 
 app.get("/api/google/auth/start", async (req, res) => {
@@ -535,6 +573,8 @@ async function startServer() {
   }
 
   await credentialStore.open();
+  executionStore = new ExecutionStore(credentialStore.db);
+  executionStore.open();
   app.listen(PORT, () => {
     console.log("");
     console.log("=================================");

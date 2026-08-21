@@ -1956,6 +1956,27 @@ button {
 .node-status-indicator.error { background: #ef626b; box-shadow: 0 0 8px #ef626b; }
 .node-status-indicator.not_configured { background: #58b9d4; box-shadow: 0 0 8px #58b9d4; }
 
+.workflow-notice {
+  margin: 8px 24px 0;
+  padding: 9px 13px;
+  border: 1px solid #3f565e;
+  border-radius: 6px;
+  color: #dbe8ec;
+  background: #202a2e;
+}
+.workflow-notice.success { border-color: #2e8b5c; color: #82e5ad; }
+.workflow-notice.error { border-color: #9b4248; color: #ff9da3; }
+.workflow-notice.running { border-color: #9a7430; color: #ffd178; }
+
+.execution-history { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; height: calc(100vh - 170px); min-height: 420px; gap: 1px; background: #343b3e; }
+.execution-list, .execution-detail { min-height: 0; overflow: auto; padding: 20px; background: #171b1d; }
+.execution-list > button { display: grid; grid-template-columns: 1fr auto; width: 100%; margin-bottom: 8px; padding: 12px; color: #dbe5e8; text-align: left; background: #242a2d; border: 1px solid #373f42; border-radius: 6px; }
+.execution-list > button.active { border-color: #42d7ef; }
+.execution-list small { grid-column: 1 / -1; margin-top: 6px; color: #8e9a9f; }
+.execution-status.success { color: #62dc96; }
+.execution-status.error { color: #ff7e86; }
+.execution-detail .data-viewer { margin-top: 12px; max-height: calc(100% - 100px); border: 1px solid #343b3e; }
+
 /* Phase 1 workflow editor viewport and independent column scrolling. */
 .node-editor-overlay {
   box-sizing: border-box;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import DataViewer from "./DataViewer.jsx";
+import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import {
   assignCredentialToNode,
   buildDriveSearchRequest,
@@ -13,6 +14,8 @@ import {
   executeWithLifecycle,
   upstreamInputError,
 } from "./workflowExecution.js";
+import { runLinearWorkflow } from "./workflowRunner.js";
+import { normalizeSavedWorkflow } from "./workflowStorage.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
@@ -265,6 +268,7 @@ const createRule = (index) => ({
 function ScheduleTriggerEditor({
   node,
   onClose,
+  onExecuteNode,
   onSaveNode,
 }) {
   const [activeTab, setActiveTab] = useState("Parameters");
@@ -325,17 +329,9 @@ const [settings, setSettings] = useState(
     if (isExecuting) return;
     setIsExecuting(true);
     const config = { ...node.config, rules, settings };
-    await executeWithLifecycle({
-      node: { ...node, config },
-      input: null,
-      executor: async () => createScheduleManualOutput(config),
-      onTransition: (updatedNode) => {
-        setOutput(updatedNode.status === "running"
-          ? { status: "running", message: "Testing schedule trigger..." }
-          : updatedNode.output);
-        onSaveNode(updatedNode);
-      },
-    });
+    const updatedNode = await onExecuteNode({ ...node, config }, null, { triggerMode: "manual" });
+    setOutput(updatedNode.output);
+    onSaveNode(updatedNode);
     setIsExecuting(false);
   };
 const saveAndClose = () => {
@@ -1256,6 +1252,7 @@ function GoogleDriveSearchEditor({
   onSaveNode,
   previousNode,
   onExecutePreviousNodes,
+  onExecuteNode,
   onCreateCredential,
   credentials,
 }) {
@@ -1308,9 +1305,8 @@ function GoogleDriveSearchEditor({
 
   const executeStep = async () => {
     if (isExecuting) return;
-    let request;
     try {
-      request = buildDriveSearchRequest(config);
+      buildDriveSearchRequest(config);
     } catch (error) {
       const validationOutput = { status: "error", message: error.message };
       setOutput(validationOutput);
@@ -1318,27 +1314,9 @@ function GoogleDriveSearchEditor({
       return;
     }
     setIsExecuting(true);
-    await executeWithLifecycle({
-      node: { ...node, config },
-      input,
-      executor: async () => {
-        const response = await fetch(`${API_BASE_URL}/api/google/drive/search`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(request),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || data?.message || `Google Drive search failed (${response.status}).`);
-        return Array.isArray(data?.files) ? data.files : [];
-      },
-      onTransition: (updatedNode) => {
-        setOutput(updatedNode.status === "running"
-          ? { status: "running", message: "Searching Google Drive..." }
-          : updatedNode.output);
-        onSaveNode(updatedNode);
-      },
-    });
+    const updatedNode = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" });
+    setOutput(updatedNode.output);
+    onSaveNode(updatedNode);
     setIsExecuting(false);
   };
 
@@ -1870,7 +1848,7 @@ function GenericNodeSettings({ settings, onChange, version }) {
   );
 }
 
-function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onSaveNode, onClose }) {
+function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
   const isLimit = kind === "limit";
   const isDownload = kind === "download";
   const defaults = isLimit
@@ -1880,35 +1858,18 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
   const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
   const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
   const [output, setOutput] = useState(node.output ?? null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   const updateSetting = (key, value) => setConfig((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
-  const persist = (changes = {}) => onSaveNode({ ...node, config, input, output, status: node.status ?? "idle", ...changes });
 
   const executeStep = async () => {
-    persist({ status: "running", input, output });
-    await Promise.resolve();
-    let result;
-    let status;
-    if (isLimit) {
-      if (!Array.isArray(input)) {
-        result = { status: "error", message: "Limit requires an input array. Execute previous nodes or provide clearly labeled mock input." };
-        status = "error";
-      } else {
-        const count = Math.max(1, Number(config.maxItems) || 1);
-        result = config.keep === "Last Items" ? input.slice(-count) : input.slice(0, count);
-        status = "success";
-      }
-    } else {
-      result = {
-        status: "not_configured",
-        provider: "google-drive",
-        operation: isDownload ? "download-file" : "delete-file",
-        message: "Google Drive backend/credential is not configured",
-      };
-      status = "not_configured";
-    }
-    setOutput(result);
-    onSaveNode({ ...node, config, input, output: result, status });
+    if (isExecuting) return;
+    if (kind === "delete" && config.requireConfirmation && !window.confirm("Permanently delete the selected Google Drive file(s)?")) return;
+    setIsExecuting(true);
+    const executed = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" });
+    setOutput(executed.output);
+    onSaveNode(executed);
+    setIsExecuting(false);
   };
 
   const saveAndClose = () => {
@@ -1928,7 +1889,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
           <section className="node-config-panel google-config-panel">
             <div className="node-editor-tabs">
               {["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}
-              <button className="execute-step" onClick={executeStep}>Execute step</button>
+              <button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button>
             </div>
             <div className="node-config-scroll">
               {activeTab === "Parameters" ? (
@@ -1943,7 +1904,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
                     <label>Operation</label><select value={config.operation} disabled><option>{config.operation}</option></select>
                     <label>File ID</label><div className="value-mode-switch">{["Fixed", "Expression"].map((mode) => <button key={mode} className={config.fileIdMode === mode ? "active" : ""} onClick={() => setConfig({ ...config, fileIdMode: mode })}>{mode}</button>)}</div>
                     <input value={config.fileId} onChange={(event) => setConfig({ ...config, fileId: event.target.value })} placeholder={config.fileIdMode === "Expression" ? "{{ $json.id }}" : "Google Drive file ID"} />
-                    {isDownload ? <><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /><div className="config-section-row"><span>Options</span><button>+</button></div><button className="config-add-button">+ Add option</button></> : <><ToggleSetting label="Require Confirmation" value={config.requireConfirmation} onChange={() => setConfig({ ...config, requireConfirmation: !config.requireConfirmation })} /><div className="destructive-warning">This action can permanently delete a file. Confirmation is required before destructive execution.</div></>}
+                    {isDownload ? <><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /><div className="config-section-row"><span>Options</span><button>+</button></div><button className="config-add-button">+ Add option</button></> : <><ToggleSetting label="Require Confirmation" value={config.requireConfirmation} onChange={() => setConfig({ ...config, requireConfirmation: !config.requireConfirmation })} /><ToggleSetting label="Approved for unattended workflow deletion" value={Boolean(config.approvedForWorkflow)} onChange={() => setConfig({ ...config, approvedForWorkflow: !config.approvedForWorkflow })} /><div className="destructive-warning">This action can permanently delete a file. Confirmation is required before destructive execution.</div></>}
                   </>}
                 </div>
               ) : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version={`${node.name} node version 1.0`} />}
@@ -2051,6 +2012,28 @@ function OutputViewer({ output, tab }) {
   return <DataViewer value={output} tab={tab} />;
 }
 
+function ExecutionHistory({ executions, selected, onSelect }) {
+  const [tab, setTab] = useState("Schema");
+  return <div className="execution-history">
+    <div className="execution-list">
+      <h2>Executions</h2>
+      {!executions.length && <p>No workflow executions yet.</p>}
+      {executions.map((execution) => <button key={execution.executionId} className={selected?.executionId === execution.executionId ? "active" : ""} onClick={() => onSelect(execution.executionId)}>
+        <strong>{execution.executionId.slice(0, 13)}</strong><span className={`execution-status ${execution.status}`}>{execution.status}</span>
+        <small>{new Date(execution.startedAt).toLocaleString()} · {Math.max(0, new Date(execution.finishedAt) - new Date(execution.startedAt))} ms · {execution.triggerMode}</small>
+      </button>)}
+    </div>
+    <div className="execution-detail">
+      {!selected ? <p>Select an execution to inspect it.</p> : <>
+        <h3>{selected.workflowName} · {selected.status}</h3>
+        <p>{selected.startedAt} → {selected.finishedAt}</p>
+        <div className="output-tabs">{["Schema", "Table", "JSON"].map((name) => <button key={name} className={tab === name ? "output-tab-active" : ""} onClick={() => setTab(name)}>{name}</button>)}</div>
+        <DataViewer value={selected.nodes} tab={tab} />
+      </>}
+    </div>
+  </div>;
+}
+
 function App() {
   const [topPage, setTopPage] =
     useState("WORKFLOW");
@@ -2087,6 +2070,10 @@ function App() {
   const [credentialToast, setCredentialToast] = useState("");
   const [showFacebookCredential, setShowFacebookCredential] = useState(false);
   const [facebookCredentials, setFacebookCredentials] = useState([]);
+  const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
+  const [workflowNotice, setWorkflowNotice] = useState(null);
+  const [executions, setExecutions] = useState([]);
+  const [selectedExecution, setSelectedExecution] = useState(null);
 
   const syncGoogleCredential = async ({ showToast = false, credentialId = null } = {}) => {
     const response = await fetch(`${API_BASE_URL}/api/google/credentials`, {
@@ -2295,7 +2282,7 @@ function App() {
       const saved = localStorage.getItem(WORKFLOW_STORAGE_KEY);
       if (!saved) return;
 
-      const workflow = JSON.parse(saved);
+      const workflow = normalizeSavedWorkflow(JSON.parse(saved));
       if (Array.isArray(workflow?.nodes)) {
         setCanvasNodes(workflow.nodes);
       }
@@ -2317,13 +2304,7 @@ function App() {
     setEditingNode(updatedNode);
   };
 
-  const executeRuntimeNode = async (node, input) => executeWithLifecycle({
-    node,
-    input,
-    onTransition: (updatedNode) => {
-      setCanvasNodes((nodes) => nodes.map((item) => item.id === updatedNode.id ? updatedNode : item));
-    },
-    executor: async () => {
+  const executeNodeOperation = async (node, input, context = {}) => {
       if (node.name === "Schedule Trigger") {
         return createScheduleManualOutput(node.config);
       }
@@ -2341,11 +2322,36 @@ function App() {
       }
       if (node.name === "Limit") {
         if (!Array.isArray(input)) throw new Error("Limit requires array input.");
-        const count = Math.max(1, Number(node.config?.maxItems) || 1);
+        const count = Number(node.config?.maxItems);
+        if (!Number.isInteger(count) || count < 1) throw new Error("Limit Max Items must be a positive whole number.");
         return node.config?.keep === "Last Items" ? input.slice(-count) : input.slice(0, count);
       }
-      throw new Error(`${node.name} does not support real execution in Phase 1.`);
+      if (["Download File", "Delete File"].includes(node.name)) {
+        if (!node.config?.credentialId) throw new Error("Select a Google Drive credential before executing.");
+        if (node.name === "Delete File" && context.triggerMode === "workflow" && node.config.requireConfirmation && !node.config.approvedForWorkflow) {
+          throw new Error("Delete File requires explicit approval for unattended workflow execution.");
+        }
+        return executePerItem(input, async (item) => {
+          const fileId = resolveExpression(node.config?.fileId || "", item);
+          const response = await fetch(`${API_BASE_URL}/api/google/drive/${node.name === "Download File" ? "download" : "delete"}`, {
+            method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ credentialId: node.config.credentialId, fileId, binaryProperty: node.config.binaryProperty || "data" }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data?.error || `${node.name} failed.`);
+          return data;
+        });
+      }
+      throw new Error(`${node.name} does not support real execution in Phase 2.`);
+  };
+
+  const executeRuntimeNode = async (node, input, context = {}) => executeWithLifecycle({
+    node,
+    input,
+    onTransition: (updatedNode) => {
+      setCanvasNodes((nodes) => nodes.map((item) => item.id === updatedNode.id ? updatedNode : item));
     },
+    executor: async () => executeNodeOperation(node, input, context),
   });
 
   const executePreviousNodesFor = async (targetNodeId) => {
@@ -2373,6 +2379,62 @@ function App() {
     }
   };
 
+  const loadExecutions = async () => {
+    const response = await fetch(`${API_BASE_URL}/api/executions`, { credentials: "include" });
+    if (!response.ok) throw new Error("Could not load workflow executions.");
+    const data = await response.json();
+    setExecutions(Array.isArray(data.executions) ? data.executions : []);
+  };
+
+  const selectExecution = async (executionId) => {
+    const response = await fetch(`${API_BASE_URL}/api/executions/${encodeURIComponent(executionId)}`, { credentials: "include" });
+    if (!response.ok) throw new Error("Could not load execution details.");
+    setSelectedExecution(await response.json());
+  };
+
+  const runWorkflow = async () => {
+    if (isWorkflowRunning) return;
+    setIsWorkflowRunning(true);
+    setWorkflowNotice({ status: "running", message: "Workflow is running..." });
+    const startedAt = new Date().toISOString();
+    let executionWasPersisted = false;
+    try {
+      const runNodes = canvasNodesRef.current.map((node) => ({ ...node, status: "idle", error: null }));
+      canvasNodesRef.current = runNodes;
+      setCanvasNodes(runNodes);
+      const result = await runLinearWorkflow({
+        nodes: runNodes,
+        connections: connectionsRef.current,
+        executeNode: executeNodeOperation,
+        onNodeTransition: (updatedNode) => setCanvasNodes((nodes) => nodes.map((node) => node.id === updatedNode.id ? updatedNode : node)),
+      });
+      canvasNodesRef.current = result.nodes;
+      setCanvasNodes(result.nodes);
+      const record = { workflowId: "local-workflow", workflowName: "My Workflow", status: result.status,
+        triggerMode: "manual", startedAt, finishedAt: new Date().toISOString(), nodes: result.summaries };
+      const response = await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      if (!response.ok) throw new Error("Workflow ran, but its execution record could not be saved.");
+      executionWasPersisted = true;
+      setWorkflowNotice({ status: result.status, message: result.status === "success" ? "Workflow completed successfully." : result.error });
+      await loadExecutions();
+    } catch (error) {
+      if (!executionWasPersisted) {
+        try {
+          await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId: "local-workflow",
+              workflowName: "My Workflow", status: "error", triggerMode: "manual", startedAt,
+              finishedAt: new Date().toISOString(), nodes: [{ nodeId: "workflow", name: "Workflow validation", status: "error", error: error?.message || "Workflow execution failed." }] }) });
+        } catch {
+          // The visible workflow error remains primary if history persistence is unavailable.
+        }
+      }
+      setWorkflowNotice({ status: "error", message: error?.message || "Workflow execution failed." });
+    } finally {
+      setIsWorkflowRunning(false);
+    }
+  };
+
   const saveWorkflow = () => {
     try {
       const workflow = {
@@ -2388,10 +2450,10 @@ function App() {
         JSON.stringify(workflow)
       );
 
-      window.alert("Workflow saved");
+      setWorkflowNotice({ status: "success", message: "Workflow saved." });
     } catch (error) {
       console.error("Could not save Jarvis workflow:", error);
-      window.alert("Could not save workflow");
+      setWorkflowNotice({ status: "error", message: "Could not save workflow." });
     }
   };
 
@@ -2655,9 +2717,10 @@ function App() {
                         ? "tab-active"
                         : ""
                     }
-                    onClick={() =>
-                      setWorkflowTab(tab)
-                    }
+                    onClick={() => {
+                      setWorkflowTab(tab);
+                      if (tab === "EXECUTIONS") loadExecutions().catch((error) => setWorkflowNotice({ status: "error", message: error.message }));
+                    }}
                   >
                     {tab}
                   </button>
@@ -2665,8 +2728,8 @@ function App() {
               </div>
 
               <div className="workflow-actions">
-                <button className="run-button">
-                  ▶ Run Workflow
+                <button className="run-button" onClick={runWorkflow} disabled={isWorkflowRunning}>
+                  {isWorkflowRunning ? "Running..." : "▶ Run Workflow"}
                 </button>
 
                 <button onClick={saveWorkflow}>Save</button>
@@ -2676,6 +2739,8 @@ function App() {
                 </button>
               </div>
             </div>
+
+            {workflowNotice && <div className={`workflow-notice ${workflowNotice.status}`} role="status">{workflowNotice.message}</div>}
 
             {workflowTab === "EDITOR" && (
               <div className="editor-layout">
@@ -2984,12 +3049,7 @@ function App() {
 
             {workflowTab ===
               "EXECUTIONS" && (
-              <div className="simple-page">
-                <h2>Executions</h2>
-                <p>
-                  No workflow executions yet.
-                </p>
-              </div>
+              <ExecutionHistory executions={executions} selected={selectedExecution} onSelect={(id) => selectExecution(id).catch((error) => setWorkflowNotice({ status: "error", message: error.message }))} />
             )}
 
             {workflowTab ===
@@ -3013,6 +3073,7 @@ function App() {
           "Schedule Trigger" && (
 <ScheduleTriggerEditor
   node={editingNode}
+  onExecuteNode={executeRuntimeNode}
   onSaveNode={updateCanvasNode}
   onClose={() => setEditingNode(null)}
 />
@@ -3025,6 +3086,7 @@ function App() {
           previousNode={canvasNodes.find((candidate) => connections.some((connection) => connection.source === candidate.id && connection.target === editingNode.id))}
           credentials={googleCredentials}
           onExecutePreviousNodes={executePreviousNodesFor}
+          onExecuteNode={executeRuntimeNode}
           onCreateCredential={(credentialId = null) => { pendingGoogleCredentialNodeId.current = editingNode.id; setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
@@ -3039,6 +3101,7 @@ function App() {
           previousNode={getPreviousNode(editingNode.id)}
           credentials={googleCredentials}
           onExecutePreviousNodes={executePreviousNodesFor}
+          onExecuteNode={executeRuntimeNode}
           onCreateCredential={(credentialId = null) => { pendingGoogleCredentialNodeId.current = editingNode.id; setEditingGoogleCredentialId(credentialId); setShowGoogleCredential(true); }}
           onSaveNode={updateCanvasNode}
           onClose={() => setEditingNode(null)}
