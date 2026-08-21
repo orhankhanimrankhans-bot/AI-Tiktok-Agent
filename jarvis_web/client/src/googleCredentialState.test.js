@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   assignCredentialToNode,
+  buildDriveSearchRequest,
   googleCredentialLabel,
   selectOAuthCredential,
 } from "./googleCredentialState.js";
@@ -22,4 +23,20 @@ test("OAuth completion selects the exact returned credential and assigns it to t
   assert.equal(selected.accountEmail, "returned@example.com");
   assert.equal(nodes[0].config.credentialId, "gcred_returned");
   assert.equal(googleCredentialLabel(selected), "Google Drive - returned@example.com");
+});
+
+test("Drive search request uses the node's selected credential ID", () => {
+  const request = buildDriveSearchRequest({
+    credentialId: "gcred_selected",
+    searchMethod: "Search File/Folder Name",
+    query: "Quarterly report",
+    folderId: "folder-123",
+    mimeType: "application/pdf",
+    returnAll: false,
+    limit: 25,
+  });
+
+  assert.equal(request.credentialId, "gcred_selected");
+  assert.equal(request.query, "Quarterly report");
+  assert.equal(request.limit, 25);
 });

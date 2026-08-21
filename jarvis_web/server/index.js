@@ -6,6 +6,8 @@ const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
+const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
+const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 
 dotenv.config();
 
@@ -213,69 +215,12 @@ const credentialStore = new CredentialStore({
 });
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
-  const payload = JSON.stringify({
-    type: "jarvis-google-oauth",
+  return renderPopupResultHtml({
     status,
     message,
     credentialId,
-  }).replace(/</g, "\\u003c");
-
-  const targetOrigin = JSON.stringify(new URL(CLIENT_URL).origin);
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Jarvis Google Connection</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        font-family: Arial, sans-serif;
-        color: #e9f6f8;
-        background: #101719;
-      }
-      .card {
-        width: min(88vw, 420px);
-        padding: 26px;
-        text-align: center;
-        border: 1px solid #35545a;
-        border-radius: 12px;
-        background: #172326;
-      }
-      h2 { margin: 0 0 10px; }
-      p { margin: 0; color: #b9c8cc; line-height: 1.5; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h2>${status === "connected" ? "Google account connected" : "Google sign-in not completed"}</h2>
-      <p>${message || (status === "connected" ? "Returning to Jarvis…" : "You can close this window.")}</p>
-    </div>
-    <script>
-      (function () {
-        const payload = ${payload};
-        const targetOrigin = ${targetOrigin};
-
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(payload, targetOrigin);
-          window.setTimeout(() => window.close(), 450);
-          return;
-        }
-
-        const fallback = new URL(${JSON.stringify(CLIENT_URL)});
-        fallback.searchParams.set(
-          "google_oauth",
-          payload.status === "connected" ? "connected" : "error"
-        );
-        window.location.replace(fallback.toString());
-      })();
-    </script>
-  </body>
-</html>`;
+    clientUrl: CLIENT_URL,
+  });
 }
 
 app.get("/api/health", (req, res) => {
@@ -305,6 +250,33 @@ app.get("/api/google/credentials/:credentialId", async (req, res) => {
   } catch (error) {
     console.error("Could not read Google credential:", error?.message || error);
     return res.status(500).json({ error: "Could not read Google credential." });
+  }
+});
+
+app.post("/api/google/drive/search", async (req, res) => {
+  try {
+    const result = await executeDriveSearch({
+      request: req.body,
+      credentialStore,
+      createOAuthClient,
+      createDriveClient: (oauth2Client) =>
+        google.drive({ version: "v3", auth: oauth2Client }),
+    });
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof DriveSearchError) {
+      return res.status(error.statusCode).json({
+        status: "error",
+        code: error.code,
+        error: error.message,
+      });
+    }
+    console.error("Google Drive search failed with an unexpected server error.");
+    return res.status(500).json({
+      status: "error",
+      code: "drive_search_server_error",
+      error: "Google Drive search could not be completed.",
+    });
   }
 });
 
@@ -585,7 +557,4 @@ if (require.main === module || process.env.NODE_ENV === "production") {
     process.exit(1);
   });
 }
-
-module.exports = { makePopupResultHtml };
-
 

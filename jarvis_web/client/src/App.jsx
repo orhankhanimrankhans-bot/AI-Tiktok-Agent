@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
   assignCredentialToNode,
+  buildDriveSearchRequest,
   googleCredentialLabel,
   selectOAuthCredential,
 } from "./googleCredentialState.js";
@@ -1294,25 +1295,39 @@ function GoogleDriveSearchEditor({
     }));
   };
 
-  const executeStep = () => {
-    setOutput({
-      status: "not_configured",
-      configured: false,
-      provider: "google-drive",
-      operation: "search-files-and-folders",
-      message:
-        "Google Drive is not connected yet. Configure a Google Drive credential before real execution.",
-      request: {
-        resource: config.resource,
-        operation: config.operation,
-        searchMethod: config.searchMethod,
-        query: config.query,
-        folderId: config.folderId,
-        mimeType: config.mimeType,
-        returnAll: config.returnAll,
-        limit: Number(config.limit) || 0,
-      },
-    });
+  const executeStep = async () => {
+    let request;
+    try {
+      request = buildDriveSearchRequest(config);
+    } catch (error) {
+      const validationOutput = { status: "error", message: error.message };
+      setOutput(validationOutput);
+      onSaveNode({ ...node, config, output: validationOutput, status: "error" });
+      return;
+    }
+
+    setOutput({ status: "running", message: "Searching Google Drive..." });
+    onSaveNode({ ...node, config, output: null, status: "running" });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/google/drive/search`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || `Google Drive search failed (${response.status}).`);
+      }
+      const result = Array.isArray(data?.files) ? data.files : [];
+      setOutput(result);
+      onSaveNode({ ...node, config, output: result, status: "success" });
+    } catch (error) {
+      const errorOutput = { status: "error", message: error?.message || "Google Drive search failed." };
+      setOutput(errorOutput);
+      onSaveNode({ ...node, config, output: errorOutput, status: "error" });
+    }
   };
 
   const executePreviousNodes = () => {
