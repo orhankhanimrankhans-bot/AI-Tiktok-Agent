@@ -166,10 +166,10 @@ function verifySignedOAuthState(stateToken) {
   const expectedHmac = crypto.createHmac("sha256", process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me");
   expectedHmac.update(payloadStr);
   const expectedSig = expectedHmac.digest();
-  const sigB64 = base64urlEncode(expectedSig);
+  const expectedSigB64 = base64urlEncode(expectedSig);
 
   // timing-safe compare
-  if (sigB64 !== parts[1]) return null;
+  if (expectedSigB64 !== sigB64) return null;
 
   return { mode: payload.mode, nonce: payload.nonce, iat: payload.iat };
 }
