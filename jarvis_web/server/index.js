@@ -184,6 +184,9 @@ function createOAuthClient() {
   );
 }
 
+const GOOGLE_CREDENTIAL_ID = "google_drive_main";
+const googleCredentialStore = new Map();
+
 function getStoredGoogleCredential() {
   return googleCredentialStore.get(GOOGLE_CREDENTIAL_ID) || null;
 }
