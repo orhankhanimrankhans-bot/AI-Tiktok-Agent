@@ -9,7 +9,7 @@ const { CredentialStore } = require("./credentialStore");
 const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
 const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
-const { FacebookCredentialStore } = require("./facebookCredentialStore");
+const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { containsForbiddenSecretFields, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPopupHtml } = require("./facebookPopup");
@@ -80,7 +80,7 @@ const GOOGLE_REDIRECT_URI =
 const META_APP_ID = process.env.META_APP_ID || "";
 const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const META_REDIRECT_URI = process.env.META_REDIRECT_URI || `http://localhost:${PORT}/api/facebook/auth/callback`;
-const META_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v25.0";
+const META_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v26.0";
 const META_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(META_GRAPH_VERSION_VALUE) ? META_GRAPH_VERSION_VALUE : "";
 const JARVIS_DB_PATH = path.resolve(
   process.env.JARVIS_DB_PATH || path.join(__dirname, "data", "credentials.sqlite3")
@@ -262,6 +262,64 @@ app.get("/api/facebook/credentials/:credentialId", (req, res) => {
   return credential ? res.json(credential) : res.status(404).json({ error: "Facebook credential not found." });
 });
 
+function manualAccessToken(value) {
+  const token = typeof value === "string" ? value.trim() : "";
+  if (token.length < 20 || token.length > 4096 || /\s/.test(token)) {
+    throw new FacebookGraphError(400, "invalid_access_token", "Enter a valid Facebook Page access token.");
+  }
+  return token;
+}
+
+function manualCredentialName(value) {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name || name.length > 120) throw new FacebookGraphError(400, "invalid_credential_name", "Enter a credential name of 120 characters or fewer.");
+  return name;
+}
+
+app.post("/api/facebook/credentials/manual/test", async (req, res) => {
+  try {
+    const result = await facebookGraphService().inspectPageToken(manualAccessToken(req.body?.accessToken));
+    return res.json(result);
+  } catch (error) { return publicFacebookError(res, error); }
+});
+
+app.post("/api/facebook/credentials/manual", async (req, res) => {
+  try {
+    const name = manualCredentialName(req.body?.name); const accessToken = manualAccessToken(req.body?.accessToken);
+    const tested = await facebookGraphService().inspectPageToken(accessToken);
+    const saved = facebookCredentialStore.saveManual({ id: FacebookCredentialStore.generateId(), name, accessToken,
+      pageId: tested.pageId, pageName: tested.pageName, lastTestedAt: new Date().toISOString() });
+    return res.status(201).json(saved);
+  } catch (error) { return publicFacebookError(res, error); }
+});
+
+app.patch("/api/facebook/credentials/:credentialId/manual", async (req, res) => {
+  try {
+    if (!FacebookCredentialStore.isValidId(req.params.credentialId)) throw new FacebookGraphError(400, "invalid_credential_id", "Invalid Facebook credential ID.");
+    const existing = facebookCredentialStore.get(req.params.credentialId);
+    if (!existing) return res.status(404).json({ status: "error", code: "credential_not_found", error: "Facebook credential not found." });
+    if (existing.authMode !== AUTH_MODE_MANUAL) return res.status(409).json({ status: "error", code: "wrong_auth_mode", error: "Only manual Facebook credentials can be updated here." });
+    const name = req.body?.name === undefined ? existing.name : manualCredentialName(req.body.name);
+    let tested = null; let accessToken;
+    if (req.body?.accessToken !== undefined && req.body.accessToken !== "") {
+      accessToken = manualAccessToken(req.body.accessToken); tested = await facebookGraphService().inspectPageToken(accessToken);
+    }
+    const saved = facebookCredentialStore.updateManual({ id: existing.id, name, accessToken,
+      pageId: tested?.pageId, pageName: tested?.pageName, lastTestedAt: tested ? new Date().toISOString() : undefined });
+    return res.json(saved);
+  } catch (error) { return publicFacebookError(res, error); }
+});
+
+app.delete("/api/facebook/credentials/:credentialId/manual", (req, res) => {
+  try {
+    if (!FacebookCredentialStore.isValidId(req.params.credentialId)) throw new FacebookGraphError(400, "invalid_credential_id", "Invalid Facebook credential ID.");
+    const existing = facebookCredentialStore.get(req.params.credentialId);
+    if (!existing) return res.status(404).json({ status: "error", code: "credential_not_found", error: "Facebook credential not found." });
+    if (existing.authMode !== AUTH_MODE_MANUAL) return res.status(409).json({ status: "error", code: "wrong_auth_mode", error: "Only manual Facebook credentials can be deleted here." });
+    facebookCredentialStore.delete(existing.id); return res.json({ ok: true, id: existing.id, connected: false, status: "not_connected" });
+  } catch (error) { return publicFacebookError(res, error); }
+});
+
 app.get("/api/facebook/auth/start", (req, res) => {
   if (!facebookOAuthConfigured) return res.status(503).json({ status: "not_configured", error: "Meta OAuth is not configured." });
   const credentialId = req.query.credentialId || null; const intent = credentialId ? "reconnect" : "create";
@@ -311,18 +369,18 @@ async function withFacebookCredential(req, res, action) {
   if (containsForbiddenSecretFields(req.body)) return res.status(400).json({ error: "Facebook secrets must not be supplied by the client." });
   if (!FacebookCredentialStore.isValidId(req.body?.credentialId)) return res.status(400).json({ error: "Select a valid Facebook credential." });
   const credential = facebookCredentialStore.get(req.body.credentialId, { includeTokens: true });
-  if (!credential?.tokens?.userAccessToken) return res.status(404).json({ error: "Facebook credential was not found or is disconnected." });
+  if (!credential?.tokens?.userAccessToken && !credential?.tokens?.pageAccessToken) return res.status(404).json({ error: "Facebook credential was not found or is disconnected." });
   try { return res.json(await action(facebookGraphService(), credential)); } catch (error) { return publicFacebookError(res, error); }
 }
-app.post("/api/facebook/graph/me", (req, res) => withFacebookCredential(req, res, async (service, credential) => service.me(credential.tokens.userAccessToken)));
+app.post("/api/facebook/graph/me", (req, res) => withFacebookCredential(req, res, async (service, credential) => service.me(credential.tokens.pageAccessToken || credential.tokens.userAccessToken)));
 app.post("/api/facebook/graph/pages", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
-  const result = await service.pages(credential.tokens.userAccessToken);
-  facebookCredentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
+  const result = await service.pages(credential.tokens.pageAccessToken || credential.tokens.userAccessToken);
+  if (credential.authMode !== AUTH_MODE_MANUAL) facebookCredentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
     tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } });
   return { pages: result.pages };
 }));
 app.post("/api/facebook/graph/page", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
-  const pageId = validatePageId(req.body.pageId); const token = credential.tokens.pageAccessTokens?.[pageId] || credential.tokens.userAccessToken;
+  const pageId = validatePageId(req.body.pageId); const token = credential.tokens.pageAccessToken || credential.tokens.pageAccessTokens?.[pageId] || credential.tokens.userAccessToken;
   return service.pageMetadata(pageId, token);
 }));
 

@@ -2364,6 +2364,32 @@ button {
   font-size: 11px;
 }
 
+.facebook-token-credential {
+  width: min(100%, 680px);
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.facebook-token-credential > label { color: #eef2f4; font-size: 12px; font-weight: 700; }
+.secret-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.secret-input-row input { min-height: 42px; padding: 0 12px; color: #f3f6f7; background: #17191a; border: 1px solid #465056; border-radius: 5px; }
+.secret-input-row button,
+.facebook-token-actions button { min-height: 42px; padding: 0 16px; color: #eafcff; background: #23434a; border: 1px solid #3d7b87; border-radius: 5px; }
+.secret-input-row button { min-width: 72px; }
+.facebook-token-actions { display: flex; justify-content: flex-end; }
+.facebook-test-status { min-height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 10px 14px; color: #cad3d7; background: #202426; border: 1px solid #41494d; border-radius: 5px; }
+.facebook-test-status span { font-size: 12px; }
+.facebook-test-status.status-testing { color: #d8f8ff; border-color: #347988; }
+.facebook-test-status.status-success { color: #dfffea; background: #173424; border-color: #377a50; }
+.facebook-test-status.status-failed { color: #ffdfe1; background: #381d20; border-color: #7a3c42; }
+
+@media (max-width: 720px) {
+  .secret-input-row { grid-template-columns: 1fr; }
+  .facebook-token-actions button { width: 100%; }
+}
+
 /* Google credential modal spacing polish. Scoped to avoid changing Meta UI. */
 .google-credential-content {
   min-width: 0;

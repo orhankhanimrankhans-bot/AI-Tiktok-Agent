@@ -3,6 +3,7 @@ import "./App.css";
 import DataViewer from "./DataViewer.jsx";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import { assertSafeFacebookConfig, facebookCredentialLabel, sanitizeFacebookConfig } from "./facebookConfig.js";
+import { deleteManualFacebookCredential, facebookConnectionStatus, safeFacebookCredentialError, saveManualFacebookCredential, testManualFacebookCredential } from "./facebookManualCredential.js";
 import {
   assignCredentialToNode,
   buildDriveSearchRequest,
@@ -1223,29 +1224,82 @@ function GoogleCredentialModal({
   );
 }
 
-function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconnect }) {
+function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconnect, onTestAccessToken, onSaveAccessToken, onDeleteAccessToken }) {
+  const [credentialName, setCredentialName] = useState(credential?.name ?? (credential ? facebookCredentialLabel(credential) : "Facebook Graph account"));
+  const [authMode, setAuthMode] = useState(credential?.authMode === "manual_access_token" ? "manual_access_token" : "managed_oauth2");
+  const [accessToken, setAccessToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [connectionState, setConnectionState] = useState(credential?.connectionStatus ?? "not_tested");
   const [connectionMessage, setConnectionMessage] = useState("");
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const isManual = authMode === "manual_access_token";
+  const isExistingManual = credential?.authMode === "manual_access_token";
+
+  const testAccessToken = async () => {
+    setConnectionState("testing");
+    setConnectionMessage("");
+    try {
+      await onTestAccessToken({ name: credentialName.trim(), accessToken });
+      setConnectionState("success");
+    } catch (error) {
+      setConnectionState("failed");
+      setConnectionMessage(safeFacebookCredentialError(error));
+    }
+  };
+
+  const saveAccessToken = async () => {
+    setConnectionMessage("");
+    try {
+      await onSaveAccessToken({ credentialId: credential?.id ?? null, name: credentialName.trim(), accessToken });
+      setAccessToken("");
+      onClose();
+    } catch (error) {
+      setConnectionState("failed");
+      setConnectionMessage(safeFacebookCredentialError(error));
+    }
+  };
+
+  const deleteAccessToken = async () => {
+    if (!credential?.id) return;
+    try {
+      await onDeleteAccessToken(credential.id);
+      onClose();
+    } catch (error) {
+      setShowDeleteConfirmation(false);
+      setConnectionState("failed");
+      setConnectionMessage(safeFacebookCredentialError(error));
+    }
+  };
+
   const disconnect = async () => {
     if (!credential?.id) return;
     try { setConnectionMessage("Disconnecting Meta account..."); await onDisconnect(credential.id); onClose(); }
     catch (error) { setConnectionMessage(error?.message || "Could not disconnect Meta account."); }
   };
+
   return (
     <div className="credential-modal-overlay">
       <div className="credential-modal">
         <header className="credential-modal-header">
-          <div className="credential-modal-title"><FacebookIcon className="facebook-provider-logo" /><div><strong>{credential ? facebookCredentialLabel(credential) : "Facebook Graph account"}</strong><div className="credential-subtitle">Meta Graph API OAuth2</div></div></div>
-          <div className="credential-modal-actions"><button onClick={onClose}>×</button></div>
+          <div className="credential-modal-title"><FacebookIcon className="facebook-provider-logo" /><div><input aria-label="Credential name" className="credential-name-input" value={credentialName} onChange={(event) => setCredentialName(event.target.value)} /><div className="credential-subtitle">Facebook Graph API credential</div></div></div>
+          <div className="credential-modal-actions">{isManual && <button type="button" onClick={saveAccessToken} disabled={!isExistingManual && !accessToken.trim()}>Save</button>}{isExistingManual && <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">⌫</button>}<button type="button" onClick={onClose} aria-label="Close credential modal">×</button></div>
         </header>
         <div className="credential-modal-body">
-          <aside className="credential-tabs"><button className="credential-tab-active">Connection</button><button>Sharing</button><button>Details</button></aside>
+          <aside className="credential-tabs"><button type="button" className="credential-tab-active">Connection</button><button type="button">Sharing</button><button type="button">Details</button></aside>
           <section className="credential-content">
-            <div className="credential-content-top"><h3>Credential Type</h3><strong>Managed Meta OAuth2</strong></div>
-            {credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}
-            <p>Meta access tokens and Page tokens are encrypted and stored only by the Jarvis backend.</p>
-            {connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}
+            <div className="credential-content-top"><h3>Setup credential</h3><select aria-label="Authentication type" value={authMode} onChange={(event) => { setAuthMode(event.target.value); setAccessToken(""); setConnectionState("not_tested"); setConnectionMessage(""); }} disabled={Boolean(credential)}><option value="managed_oauth2">Managed Meta OAuth2</option><option value="manual_access_token">Access Token</option></select></div>
+            {!isManual && <>{credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button type="button" onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Jarvis backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
+            {isManual && <div className="facebook-token-credential">
+              <label htmlFor="facebook-access-token">Access Token</label>
+              <div className="secret-input-row"><input id="facebook-access-token" type={showToken ? "text" : "password"} autoComplete="off" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); setConnectionState("not_tested"); setConnectionMessage(""); }} placeholder={isExistingManual ? "Enter a new token to replace the saved token" : "Enter a Facebook Graph API access token"} /><button type="button" onClick={() => setShowToken((visible) => !visible)} aria-label={showToken ? "Hide access token" : "Show access token"}>{showToken ? "Hide" : "Show"}</button></div>
+              {isExistingManual && <p className="credential-note">Access token securely stored. The saved token is never sent back to this browser. Enter a new token only to replace it.</p>}
+              <div className={`facebook-test-status status-${connectionState}`} role="status" aria-live="polite"><strong>{facebookConnectionStatus(connectionState)}</strong>{connectionState === "failed" && connectionMessage && <span>{connectionMessage}</span>}</div>
+              <div className="facebook-token-actions"><button type="button" onClick={testAccessToken} disabled={!accessToken.trim() || connectionState === "testing"}>Test Connection</button></div>
+              <p className="credential-note">The token remains only in this modal until it is submitted securely to the Jarvis backend.</p>
+            </div>}
           </section>
         </div>
+        {showDeleteConfirmation && <div className="credential-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-facebook-credential-title"><div className="credential-confirm-modal"><h3 id="delete-facebook-credential-title">Delete credential?</h3><p>Delete "{credentialName.trim() || "Facebook Graph account"}"?</p><div><button type="button" onClick={() => setShowDeleteConfirmation(false)}>Cancel</button><button type="button" className="confirm-delete" onClick={deleteAccessToken}>Delete</button></div></div></div>}
       </div>
     </div>
   );
@@ -3240,6 +3294,28 @@ function App() {
           credential={facebookCredentials.find((item) => item.id === editingFacebookCredentialId)}
           onStartOAuth={startFacebookOAuth}
           onDisconnect={disconnectFacebook}
+          onTestAccessToken={({ accessToken }) => testManualFacebookCredential(fetch, API_BASE_URL, accessToken)}
+          onSaveAccessToken={async (payload) => {
+            const saved = await saveManualFacebookCredential(fetch, API_BASE_URL, payload);
+            await syncFacebookCredentials(saved.id);
+            setEditingFacebookCredentialId(saved.id);
+            const nodeId = pendingFacebookCredentialNodeId.current;
+            if (nodeId) {
+              setCanvasNodes((nodes) => nodes.map((node) => node.id === nodeId ? { ...node, config: { ...node.config, credentialId: saved.id } } : node));
+              setEditingNode((node) => node?.id === nodeId ? { ...node, config: { ...node.config, credentialId: saved.id } } : node);
+              pendingFacebookCredentialNodeId.current = null;
+            }
+            setCredentialToast("Facebook Page credential saved");
+            window.setTimeout(() => setCredentialToast(""), 3000);
+            return saved;
+          }}
+          onDeleteAccessToken={async (credentialId) => {
+            await deleteManualFacebookCredential(fetch, API_BASE_URL, credentialId);
+            setFacebookCredentials((items) => items.filter((item) => item.id !== credentialId));
+            setEditingFacebookCredentialId(null);
+            setCredentialToast("Facebook Page credential deleted");
+            window.setTimeout(() => setCredentialToast(""), 3000);
+          }}
         />
       )}
 
