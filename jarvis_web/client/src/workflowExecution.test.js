@@ -51,6 +51,21 @@ test("manual upstream rerun invalidates the full downstream chain but preserves 
   assert.doesNotMatch(JSON.stringify(refreshed), /access_token|Authorization|video-bytes/);
 });
 
+test("manual rerun invalidates only its fan-out branch tail", () => {
+  const nodes = [
+    { id: "trigger", status: "success", output: { triggered: true } },
+    { id: "a1", status: "success", output: { branch: "a-new" } }, { id: "a2", status: "success", output: { branch: "a-old" } },
+    { id: "b1", status: "success", output: { branch: "b" } }, { id: "b2", status: "success", output: { branch: "b" } },
+  ];
+  const connections = [{ source: "trigger", target: "a1" }, { source: "a1", target: "a2" },
+    { source: "trigger", target: "b1" }, { source: "b1", target: "b2" }];
+  const refreshed = applyManualNodeResult(nodes, connections, nodes[1]);
+  assert.equal(refreshed.find((node) => node.id === "a2").status, "idle");
+  assert.deepEqual(refreshed.find((node) => node.id === "a2").input, { branch: "a-new" });
+  assert.deepEqual(refreshed.find((node) => node.id === "b1").output, { branch: "b" });
+  assert.deepEqual(refreshed.find((node) => node.id === "b2").output, { branch: "b" });
+});
+
 test("previous node output becomes the connected node input", async () => {
   const result = await executeUpstreamLinear({
     targetNodeId: "second",

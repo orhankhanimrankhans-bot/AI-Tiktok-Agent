@@ -21,6 +21,7 @@ import {
   upstreamInputError,
 } from "./workflowExecution.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
+import { isStrictlyLinearWorkflow, runFanOutWorkflow } from "./workflowFanOutRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { CANVAS_APPEARANCE_KEY, CANVAS_COLORS, HEADER_COLORS, clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState,
   fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
@@ -2688,7 +2689,8 @@ function App() {
       const runNodes = canvasNodesRef.current.map((node) => ({ ...node, status: "idle", error: null }));
       canvasNodesRef.current = runNodes;
       setCanvasNodes(runNodes);
-      const result = await runLinearWorkflow({
+      const runner = isStrictlyLinearWorkflow(runNodes, connectionsRef.current) ? runLinearWorkflow : runFanOutWorkflow;
+      const result = await runner({
         nodes: runNodes,
         connections: connectionsRef.current,
         executeNode: executeNodeOperation,
@@ -2699,7 +2701,7 @@ function App() {
       canvasNodesRef.current = result.nodes;
       setCanvasNodes(result.nodes);
       const record = { workflowId: "local-workflow", workflowName: "My Workflow", status: result.status,
-        triggerMode: "manual", startedAt, finishedAt: new Date().toISOString(), nodes: result.summaries };
+        triggerMode: "workflow", startedAt, finishedAt: new Date().toISOString(), nodes: result.summaries };
       const response = await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
       if (!response.ok) throw new Error("Workflow ran, but its execution record could not be saved.");
@@ -2711,7 +2713,7 @@ function App() {
         try {
           await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
             headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId: "local-workflow",
-              workflowName: "My Workflow", status: "error", triggerMode: "manual", startedAt,
+              workflowName: "My Workflow", status: "error", triggerMode: "workflow", startedAt,
               finishedAt: new Date().toISOString(), nodes: [{ nodeId: "workflow", name: "Workflow validation", status: "error", error: error?.message || "Workflow execution failed." }] }) });
         } catch {
           // The visible workflow error remains primary if history persistence is unavailable.
