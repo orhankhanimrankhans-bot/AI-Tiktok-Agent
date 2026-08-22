@@ -107,7 +107,7 @@ async function uploadVideo({ fetchImpl, uploadUrl, token, filePath, size, timeou
   const body = fs.createReadStream(filePath); let response;
   try {
     response = await fetchImpl(url, { method: "POST", redirect: "error", signal: controller.signal, duplex: "half",
-      headers: { Authorization: `OAuth ${token}`, offset: "0", file_size: String(size), "Content-Type": "application/octet-stream" },
+      headers: { Authorization: `OAuth ${token}`, offset: "0", file_size: String(size), "Content-Type": "application/octet-stream", "Content-Length": String(size) },
       body });
   } catch (error) {
     if (error?.name === "AbortError") throw reelError(504, "reel_upload_timeout", "Facebook Reel upload timed out.");

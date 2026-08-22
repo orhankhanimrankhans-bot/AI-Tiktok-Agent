@@ -61,11 +61,14 @@ test("binary references resolve inside the binary store and use actual file size
 });
 
 test("rupload streams bytes with exact headers and never returns secrets", async () => {
-  const dir = fixture(); let seen; try {
+  const dir = fixture(); const filePath = path.join(dir, REF); const actualSize = fs.lstatSync(filePath).size; let seen; try {
     await uploadVideo({ uploadUrl: "https://rupload.facebook.com/video-upload/opaque", token: TOKEN, filePath: path.join(dir, REF), size: 11,
-      fetchImpl: async (url, options) => { const chunks = []; for await (const chunk of options.body) chunks.push(chunk); seen = { url: String(url), options, bytes: Buffer.concat(chunks).toString() }; return response({ success: true }); } });
-    assert.equal(seen.bytes, "video-bytes"); assert.equal(seen.options.headers.Authorization, `OAuth ${TOKEN}`);
-    assert.equal(seen.options.headers.offset, "0"); assert.equal(seen.options.headers.file_size, "11"); assert.equal(seen.options.headers["Content-Type"], "application/octet-stream");
+      fetchImpl: async (url, options) => { let receivedSize = 0; const bodyIsFileStream = options.body instanceof fs.ReadStream;
+        for await (const chunk of options.body) receivedSize += chunk.length;
+        seen = { url: String(url), options, receivedSize, bodyIsFileStream }; return response({ success: true }); } });
+    assert.equal(seen.receivedSize, actualSize); assert.equal(seen.bodyIsFileStream, true); assert.equal(seen.options.headers.Authorization, `OAuth ${TOKEN}`);
+    assert.equal(seen.options.headers.offset, "0"); assert.equal(seen.options.headers.file_size, String(actualSize));
+    assert.equal(seen.options.headers["Content-Length"], String(actualSize)); assert.equal(seen.options.headers["Content-Type"], "application/octet-stream");
     assert.equal(seen.options.redirect, "error"); assert.equal(seen.url.includes(TOKEN), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
