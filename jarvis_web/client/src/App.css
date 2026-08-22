@@ -3169,6 +3169,21 @@ button {
 .jarvis-app .workflow-header { color: var(--jarvis-header-text-color); border-bottom-color: var(--jarvis-header-border-color); }
 .jarvis-app .workflow-title h1 { color: var(--jarvis-header-text-color); }.jarvis-app .workflow-live-status { color: var(--jarvis-status-text-color); }
 .jarvis-app .canvas-viewport .workflow-node { color: var(--jarvis-node-title); background: linear-gradient(145deg, color-mix(in srgb, var(--jarvis-node-background) 88%, white), var(--jarvis-node-background)); border-color: var(--jarvis-node-border); }
+.jarvis-app .canvas-viewport .workflow-node.border-idle { border-color: var(--jarvis-node-border); }
+.jarvis-app .canvas-viewport .workflow-node.border-success {
+  border-color: var(--jarvis-node-border-success);
+  box-shadow: inset 0 1px rgba(255,255,255,.07), inset 0 -1px rgba(0,0,0,.52), 0 0 0 1px color-mix(in srgb, var(--jarvis-node-border-success) 34%, transparent), 0 0 18px color-mix(in srgb, var(--jarvis-node-border-success) 30%, transparent), 0 14px 30px rgba(0,0,0,.34);
+}
+.jarvis-app .canvas-viewport .workflow-node.border-error {
+  border-color: var(--jarvis-node-border-error);
+  box-shadow: inset 0 1px rgba(255,255,255,.07), inset 0 -1px rgba(0,0,0,.52), 0 0 0 1px color-mix(in srgb, var(--jarvis-node-border-error) 36%, transparent), 0 0 18px color-mix(in srgb, var(--jarvis-node-border-error) 32%, transparent), 0 14px 30px rgba(0,0,0,.34);
+}
+.jarvis-app .canvas-viewport .workflow-node.border-disconnected { border-color: var(--jarvis-node-border-disconnected); }
+.jarvis-app .canvas-viewport .workflow-node.border-running {
+  border-color: var(--jarvis-node-border-running);
+  box-shadow: inset 0 1px rgba(255,255,255,.07), inset 0 -1px rgba(0,0,0,.52), 0 0 18px color-mix(in srgb, var(--jarvis-node-border-running) 34%, transparent), 0 14px 30px rgba(0,0,0,.34);
+}
+.jarvis-app .canvas-viewport .workflow-node.selected { outline: 2px solid color-mix(in srgb, var(--jarvis-accent, #27d9f5) 72%, transparent); outline-offset: 2px; }
 .jarvis-app .canvas-viewport .workflow-node-copy strong { color: var(--jarvis-node-title); }.jarvis-app .canvas-viewport .workflow-node-copy small { color: var(--jarvis-node-subtitle); }
 .jarvis-app .canvas-viewport .workflow-node-icon {
   background: linear-gradient(145deg, color-mix(in srgb, var(--jarvis-icon-background) 76%, white), var(--jarvis-icon-background));

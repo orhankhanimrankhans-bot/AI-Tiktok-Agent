@@ -28,7 +28,7 @@ import { isStrictlyLinearWorkflow, runFanOutWorkflow } from "./workflowFanOutRun
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
   clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
-  nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+  nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
@@ -3258,9 +3258,10 @@ function App() {
                       {canvasNodes.map(
                         (node, index) => {
                           const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, openAIConfigured });
+                          const borderState = nodeBorderVisualState(node, isWorkflowRunning, health);
                           return <div
   key={node.id}
-  className={`workflow-node status-${visualNodeStatus(node, isWorkflowRunning)}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
+  className={`workflow-node status-${visualNodeStatus(node, isWorkflowRunning)} border-${borderState}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
   style={{
     left: node.x ?? 140 + index * 210,
     top: node.y ?? 200 + (index % 2) * 100,

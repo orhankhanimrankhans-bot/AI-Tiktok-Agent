@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, connectionVisualState,
-  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 
 test("dragging updates logical node position without zoom jumps", () => {
   const moved = moveNodeFromPointer({ id: "drive", x: 100, y: 80 }, { nodeX: 100, nodeY: 80, pointerX: 200, pointerY: 100 }, { x: 260, y: 140 }, 0.5);
@@ -52,11 +52,25 @@ test("connection health is configuration-derived and independent from execution 
   assert.equal(visualNodeStatus({ status: "success", config: { credentialId: "g-ready" } }, false), "idle");
 });
 
+test("node borders combine execution status and connection health without changing the health light", () => {
+  assert.equal(nodeBorderVisualState({ status: "success" }, false, "connected"), "success");
+  assert.equal(nodeBorderVisualState({ status: "error" }, true, "connected"), "error");
+  assert.equal(nodeBorderVisualState({ status: "failed" }, false, "connected"), "error");
+  assert.equal(nodeBorderVisualState({ status: "idle" }, false, "error"), "error");
+  assert.equal(nodeBorderVisualState({ status: "idle" }, false, "disconnected"), "disconnected");
+  assert.equal(nodeBorderVisualState({ status: "idle" }, false, "connected"), "idle");
+  assert.equal(nodeBorderVisualState({ status: "running" }, true, "connected"), "running");
+  assert.equal(nodeBorderVisualState({ status: "running" }, false, "connected"), "idle");
+});
+
 test("node contrast, LED health colors, and appearance controls remain presentation-only", () => {
   const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
   const safe = safeAppearance({ nodeTitle: "#ffffff", nodeSubtitle: "#ccddee", iconBackground: "#112233", iconTint: "#aabbcc",
+    nodeBorderSuccess: "#00ee77", nodeBorderError: "#ee2233", nodeBorderDisconnected: "#ffffff", nodeBorderRunning: "#22ccff",
     connectedLight: "#00ff88", disconnectedLight: "#ffffff", errorLight: "#ff3344" });
+  assert.equal(safe.nodeBorderSuccess, "#00ee77"); assert.equal(safe.nodeBorderError, "#ee2233");
+  assert.equal(safe.nodeBorderDisconnected, "#ffffff"); assert.equal(safe.nodeBorderRunning, "#22ccff");
   assert.equal(safe.connectedLight, "#00ff88"); assert.equal(safe.disconnectedLight, "#ffffff"); assert.equal(safe.errorLight, "#ff3344");
   assert.match(source, /nodeConnectionHealth\(node/); assert.match(source, /health-\$\{health\}/);
   assert.match(styles, /workflow-node-copy strong[^}]*font-weight: 900/);
@@ -64,6 +78,11 @@ test("node contrast, LED health colors, and appearance controls remain presentat
   assert.match(styles, /health-connected[^}]*--jarvis-connected-light/);
   assert.match(styles, /health-disconnected[^}]*--jarvis-disconnected-light/);
   assert.match(styles, /health-error[^}]*--jarvis-error-light/);
+  assert.match(source, /border-\$\{borderState\}/);
+  assert.match(styles, /border-success[^}]*--jarvis-node-border-success/);
+  assert.match(styles, /border-error[^}]*--jarvis-node-border-error/);
+  assert.match(styles, /border-disconnected[^}]*--jarvis-node-border-disconnected/);
+  assert.match(styles, /border-running[^}]*--jarvis-node-border-running/);
 });
 
 test("canvas markup includes compact node content, provider icon, and connection handles", () => {

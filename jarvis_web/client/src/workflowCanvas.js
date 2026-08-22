@@ -26,7 +26,7 @@ export const APPEARANCE_COLOR_SECTIONS = [
   { id: "canvas", label: "Canvas", fields: [["canvasColor", "Canvas Color A"], ["canvasColorB", "Canvas Color B"]] },
   { id: "header", label: "Workflow Header", fields: [["headerColor", "Background"], ["headerTextColor", "Text"], ["statusTextColor", "Status Text"], ["headerBorderColor", "Border / Accent"]] },
   { id: "sidebar", label: "Sidebar", fields: [["sidebarBackground", "Background"], ["sidebarText", "Text"], ["sidebarActiveText", "Active Text"], ["sidebarIcon", "Icon"], ["sidebarActiveBackground", "Active Background"], ["sidebarBorder", "Border"]] },
-  { id: "nodes", label: "Workflow Nodes", fields: [["nodeBackground", "Background"], ["nodeBorder", "Border"], ["nodeTitle", "Node Title Color"], ["nodeSubtitle", "Node Subtitle Color"], ["iconBackground", "Node Icon Container Background"], ["iconTint", "Generic Icon Tint"], ["connectedLight", "Connected Light Color"], ["disconnectedLight", "Disconnected Light Color"], ["errorLight", "Error Light Color"], ["connectorColor", "Connector"]] },
+  { id: "nodes", label: "Workflow Nodes", fields: [["nodeBackground", "Background"], ["nodeBorder", "Idle Border"], ["nodeBorderSuccess", "Success Border"], ["nodeBorderError", "Error Border"], ["nodeBorderDisconnected", "Disconnected Border"], ["nodeBorderRunning", "Running Border"], ["nodeTitle", "Node Title Color"], ["nodeSubtitle", "Node Subtitle Color"], ["iconBackground", "Node Icon Container Background"], ["iconTint", "Generic Icon Tint"], ["connectedLight", "Connected Light Color"], ["disconnectedLight", "Disconnected Light Color"], ["errorLight", "Error Light Color"], ["connectorColor", "Connector"]] },
   { id: "wires", label: "Wires", fields: [["wireIdle", "Idle"], ["wireRunning", "Running"], ["wireSuccess", "Success"], ["wireError", "Error"]] },
   { id: "controls", label: "Top Controls", fields: [["controlBackground", "Background"], ["controlText", "Text"], ["controlAccent", "Active Accent"], ["controlBorder", "Border"], ["controlHover", "Hover"]] },
   { id: "general", label: "General", fields: [["accentColor", "Primary Accent"], ["secondaryAccent", "Secondary Accent"], ["mainText", "Main Text"], ["mutedText", "Muted Text"], ["panelBackground", "Panel Background"], ["panelBorder", "Panel Border"]] },
@@ -35,7 +35,8 @@ export const APPEARANCE_COLOR_SECTIONS = [
 export const DEFAULT_APPEARANCE = { preset: "jarvis-dark", canvasStyle: "solid", gradientAngle: 135, canvasColor: "#0d1117", canvasColorB: "#102a43",
   headerColor: "#171d22", headerTextColor: "#f4f7f9", statusTextColor: "#9aacb3", headerBorderColor: "#2d424b",
   sidebarBackground: "#101518", sidebarText: "#aebbc1", sidebarActiveText: "#e9fcff", sidebarIcon: "#79dce9", sidebarActiveBackground: "#123442", sidebarBorder: "#24343b",
-  nodeBackground: "#1a2024", nodeBorder: "#52636b", nodeTitle: "#f8fdff", nodeSubtitle: "#bdcbd1", iconBackground: "#182b33", iconTint: "#9af2ff",
+  nodeBackground: "#1a2024", nodeBorder: "#52636b", nodeBorderSuccess: "#3dff91", nodeBorderError: "#ff4d5f", nodeBorderDisconnected: "#ffffff", nodeBorderRunning: "#37d9ee",
+  nodeTitle: "#f8fdff", nodeSubtitle: "#bdcbd1", iconBackground: "#182b33", iconTint: "#9af2ff",
   connectedLight: "#3dff91", disconnectedLight: "#ffffff", errorLight: "#ff4d5f", connectorColor: "#78878e",
   wireIdle: "#647078", wireRunning: "#31d9b0", wireSuccess: "#3aa76d", wireError: "#e45d68",
   controlBackground: "#20282d", controlText: "#e9f9fb", controlAccent: "#37d9ee", controlBorder: "#46545b", controlHover: "#34434a",
@@ -102,6 +103,15 @@ export function nodeConnectionHealth(node = {}, { googleCredentials = [], facebo
   if (node.name === "Limit") return Number(node.config?.maxItems || 1) > 0 ? "connected" : "disconnected";
   if (node.name === "Schedule Trigger") return "connected";
   return "connected";
+}
+
+export function nodeBorderVisualState(node = {}, workflowActive = false, health = "connected") {
+  const status = String(node.status || "idle").toLowerCase();
+  if (status === "error" || status === "failed" || health === "error") return "error";
+  if (workflowActive && status === "running") return "running";
+  if (health === "disconnected") return "disconnected";
+  if (status === "success") return "success";
+  return "idle";
 }
 
 export function connectionVisualState(source, target, workflowActive = true) {
