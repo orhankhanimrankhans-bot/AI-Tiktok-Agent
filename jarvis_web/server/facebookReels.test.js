@@ -4,7 +4,8 @@ const os = require("os");
 const path = require("path");
 const test = require("node:test");
 const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
-const { pageContext, publishPageReel, resolveBinaryReference, uploadVideo, validateUploadUrl, waitForPublished } = require("./facebookReels");
+const { logReelFailure, pageContext, publishPageReel, published, resolveBinaryReference, statusFailureDiagnostic,
+  uploadVideo, validateUploadUrl, waitForPublished } = require("./facebookReels");
 
 const REF = "bin_1234567890123456789012";
 const TOKEN = "page-token-fixture";
@@ -99,4 +100,86 @@ test("upload failures redact token and upload destination", async () => {
       fetchImpl: async (_url, options) => { for await (const _chunk of options.body) { /* consume mocked request */ } return response({ error: { message: `rejected ${TOKEN}` } }, 400); } }),
     (error) => !error.message.includes(TOKEN) && !error.message.includes("rupload") && error.code === "reel_upload_rejected");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("rupload Graph errors expose only allowlisted sanitized diagnostics", async () => {
+  const dir = fixture(); const localPath = path.join(dir, REF); const uploadUrl = "https://rupload.facebook.com/signed/opaque?signature=secret";
+  const longReason = `Use ${TOKEN} at ${uploadUrl} from ${localPath} ${"x".repeat(400)}`;
+  try {
+    await assert.rejects(() => uploadVideo({ uploadUrl, token: TOKEN, filePath: localPath, size: 11,
+      fetchImpl: async (_url, options) => { for await (const _chunk of options.body) { /* consume */ }
+        return response({ success: false, ignored: { raw: "do-not-return" }, error: { code: 6000, error_subcode: 1363019,
+          type: "OAuthException", message: "fallback", error_user_title: "Upload failed", error_user_msg: longReason,
+          is_transient: false, fbtrace_id: "AbC_123-safe", access_token: TOKEN } }, 400); } }), (error) => {
+      assert.equal(error.statusCode, 502); assert.equal(error.code, "reel_upload_rejected");
+      assert.deepEqual(Object.keys(error.diagnostic).sort(), ["isTransient", "metaCode", "metaSubcode", "reason", "reasonCode", "stage", "traceId"].sort());
+      assert.equal(error.diagnostic.stage, "upload"); assert.equal(error.diagnostic.metaCode, 6000);
+      assert.equal(error.diagnostic.metaSubcode, 1363019); assert.equal(error.diagnostic.traceId, "AbC_123-safe");
+      assert.equal(error.diagnostic.isTransient, false); assert.ok(error.diagnostic.reason.length <= 240);
+      const serialized = JSON.stringify(error.diagnostic);
+      assert.doesNotMatch(serialized, /page-token-fixture|rupload\.facebook|signature=|jarvis-reel-|do-not-return|OAuthException|access_token/i);
+      return true;
+    });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("rupload rejection variants retain safe generic diagnostics and HTTP 429", async () => {
+  const cases = [
+    ["success false", response({ success: false })],
+    ["missing success", response({ status: "accepted" })],
+    ["empty body", { ok: true, status: 200, json: async () => { throw new SyntaxError("empty"); } }],
+    ["rate limited", response({ error: { code: 4, message: "Rate limited" } }, 429)],
+  ];
+  for (const [name, mockedResponse] of cases) {
+    const dir = fixture(); try {
+      await assert.rejects(() => uploadVideo({ uploadUrl: "https://rupload.facebook.com/video-upload/opaque", token: TOKEN,
+        filePath: path.join(dir, REF), size: 11, fetchImpl: async (_url, options) => {
+          for await (const _chunk of options.body) { /* consume */ } return mockedResponse;
+        } }), (error) => {
+        assert.equal(error.diagnostic.stage, "upload", name); assert.equal(error.diagnostic.reasonCode, "reel_upload_rejected", name);
+        assert.equal(error.statusCode, name === "rate limited" ? 429 : 502, name);
+        if (name !== "rate limited") assert.equal(error.diagnostic.reason, undefined, name);
+        return true;
+      });
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+});
+
+test("status diagnostics parse uploading, processing, and publishing error arrays", () => {
+  for (const [stage, phase] of [["upload", "uploading_phase"], ["processing", "processing_phase"], ["publishing", "publishing_phase"]]) {
+    const status = { status: { copyright_check_status: "complete", [phase]: { status: "failed",
+      errors: [{ code: 6000, message: `${stage} rejected` }] } } };
+    if (stage === "publishing") status.status[phase].publish_status = "rejected";
+    const diagnostic = statusFailureDiagnostic(status);
+    assert.equal(diagnostic.stage, stage); assert.equal(diagnostic.metaCode, 6000);
+    assert.equal(diagnostic.phaseStatus, "failed"); assert.equal(diagnostic.reason, `${stage} rejected`);
+    if (stage === "publishing") assert.equal(diagnostic.publishStatus, "rejected");
+  }
+});
+
+test("copyright and top-level video failure states are normalized safely", () => {
+  const copyright = statusFailureDiagnostic({ status: { video_status: "error", copyright_check_status: "rejected" } });
+  assert.equal(copyright.stage, "processing"); assert.equal(copyright.copyrightStatus, "rejected");
+  const video = statusFailureDiagnostic({ status: { video_status: "failed" } });
+  assert.equal(video.stage, "processing"); assert.equal(video.phaseStatus, "failed");
+});
+
+test("terminal success does not require optional publish_status", async () => {
+  const status = { status: { video_status: "ready", uploading_phase: { status: "complete" },
+    processing_phase: { status: "complete" }, publishing_phase: { status: "complete" } } };
+  assert.equal(published(status), true);
+  assert.deepEqual(await waitForPublished({ service: { reelStatus: async () => status }, token: TOKEN,
+    videoId: "987654", maxAttempts: 1, sleep: async () => {} }), status.status);
+  assert.equal(published({ status: { video_status: "published" } }), true);
+});
+
+test("known Reel failure produces exactly one sanitized structured log entry", () => {
+  const entries = []; const error = new FacebookGraphError(502, "reel_upload_rejected", "safe", "",
+    { stage: "upload", reasonCode: "reel_upload_rejected", reason: "safe reason", traceId: "trace_123" });
+  assert.equal(logReelFailure(error, (entry) => entries.push(entry)), true); assert.equal(entries.length, 1);
+  const parsed = JSON.parse(entries[0]); assert.deepEqual(parsed, { event: "facebook_reel_failure", stage: "upload",
+    reasonCode: "reel_upload_rejected", reason: "safe reason", traceId: "trace_123" });
+  assert.doesNotMatch(entries[0], /Authorization|rupload|[A-Z]:\\|page-token/i);
+  assert.equal(logReelFailure(new FacebookGraphError(400, "meta_100", "safe"), (entry) => entries.push(entry)), false);
+  assert.equal(entries.length, 1);
 });

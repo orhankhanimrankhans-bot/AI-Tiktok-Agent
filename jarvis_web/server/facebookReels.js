@@ -1,11 +1,52 @@
 const fs = require("fs");
 const path = require("path");
-const { FacebookGraphError } = require("./facebookGraph");
+const { FacebookGraphError, sanitizeMetaMessage } = require("./facebookGraph");
 
 const BINARY_REFERENCE = /^bin_[A-Za-z0-9_-]{22}$/;
 const UPLOAD_HOST = "rupload.facebook.com";
 
-function reelError(statusCode, code, message) { return new FacebookGraphError(statusCode, code, message); }
+const DIAGNOSTIC_STRING_LIMIT = 240;
+const STATUS_STRING_LIMIT = 64;
+
+function safeString(value, limit = DIAGNOSTIC_STRING_LIMIT) {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim(); return text ? text.slice(0, limit) : undefined;
+}
+
+function safeCode(value) {
+  if (Number.isSafeInteger(value)) return value;
+  const text = safeString(value, 32); return text && /^[A-Za-z0-9_.-]+$/.test(text) ? text : undefined;
+}
+
+function safeTraceId(value) {
+  const text = safeString(value, 128); return text && /^[A-Za-z0-9_-]+$/.test(text) ? text : undefined;
+}
+
+function sanitizeDiagnosticReason(value, secrets = []) {
+  const redacted = sanitizeMetaMessage(value, secrets)
+    .replace(/https?:\/\/[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/[A-Za-z]:\\[^\r\n]*/g, "[REDACTED_PATH]")
+    .replace(/\/(?:home|Users|tmp)\/[^\s]*/g, "[REDACTED_PATH]");
+  return safeString(redacted);
+}
+
+function buildDiagnostic(values) {
+  const diagnostic = { stage: values.stage, reasonCode: values.reasonCode };
+  for (const key of ["metaCode", "metaSubcode"]) { const value = safeCode(values[key]); if (value !== undefined) diagnostic[key] = value; }
+  for (const key of ["phaseStatus", "publishStatus", "copyrightStatus"]) { const value = safeString(values[key], STATUS_STRING_LIMIT); if (value) diagnostic[key] = value; }
+  const reason = safeString(values.reason); if (reason) diagnostic.reason = reason;
+  if (typeof values.isTransient === "boolean") diagnostic.isTransient = values.isTransient;
+  const traceId = safeTraceId(values.traceId); if (traceId) diagnostic.traceId = traceId;
+  return diagnostic;
+}
+
+function logReelFailure(error, logger = console.error) {
+  if (!error?.diagnostic) return false;
+  logger(JSON.stringify({ event: "facebook_reel_failure", ...error.diagnostic }));
+  return true;
+}
+
+function reelError(statusCode, code, message, diagnostic = null) { return new FacebookGraphError(statusCode, code, message, "", diagnostic); }
 
 function validateUploadUrl(value) {
   let url; try { url = new URL(String(value || "")); } catch { throw reelError(502, "invalid_upload_url", "Meta returned an invalid Reel upload destination."); }
@@ -70,21 +111,66 @@ async function uploadVideo({ fetchImpl, uploadUrl, token, filePath, size, timeou
     throw reelError(502, "reel_upload_failed", "Facebook rejected or could not receive the Reel upload.");
   } finally { clearTimeout(timer); body.destroy(); }
   let data = {}; try { data = await response.json(); } catch { /* safe failure below */ }
-  if (!response.ok || data.success !== true) throw reelError(response.status === 429 ? 429 : 502, "reel_upload_rejected", "Facebook rejected the Reel video upload.");
+  if (!response.ok || data.success !== true) {
+    const meta = data && typeof data.error === "object" && !Array.isArray(data.error) ? data.error : {};
+    const reasonSource = meta.error_user_msg || meta.message;
+    const reason = reasonSource ? sanitizeDiagnosticReason(reasonSource, [token, uploadUrl, filePath]) : undefined;
+    throw reelError(response.status === 429 ? 429 : 502, "reel_upload_rejected", "Facebook rejected the Reel video upload.",
+      buildDiagnostic({ stage: "upload", reasonCode: "reel_upload_rejected", metaCode: meta.code,
+        metaSubcode: meta.error_subcode, reason, isTransient: meta.is_transient, traceId: meta.fbtrace_id }));
+  }
 }
 
 function phaseValue(status, phase, key = "status") { return String(status?.status?.[phase]?.[key] || "").toLowerCase(); }
-function published(status) { return phaseValue(status, "processing_phase") === "complete" && phaseValue(status, "publishing_phase") === "complete" && phaseValue(status, "publishing_phase", "publish_status") === "published"; }
+function topStatusValue(status, key) {
+  const value = status?.status?.[key];
+  if (typeof value === "string" || typeof value === "number") return String(value).trim().toLowerCase();
+  if (value && typeof value === "object" && !Array.isArray(value) && typeof value.status === "string") return value.status.trim().toLowerCase();
+  return "";
+}
+function published(status) {
+  const processing = phaseValue(status, "processing_phase"); const publishing = phaseValue(status, "publishing_phase");
+  const publishStatus = phaseValue(status, "publishing_phase", "publish_status"); const videoStatus = topStatusValue(status, "video_status");
+  return videoStatus === "published" || (processing === "complete" && publishing === "complete" && (!publishStatus || publishStatus === "published"));
+}
+function phaseError(phase) {
+  const errors = Array.isArray(phase?.errors) ? phase.errors : [];
+  const error = errors.find((item) => item && typeof item === "object" && !Array.isArray(item));
+  if (!error) return null;
+  return { code: safeCode(error.code), message: error.message ? sanitizeDiagnosticReason(error.message) : undefined };
+}
+function statusFailureDiagnostic(response) {
+  const status = response?.status && typeof response.status === "object" ? response.status : {};
+  const copyrightStatus = topStatusValue(response, "copyright_check_status");
+  const videoStatus = topStatusValue(response, "video_status");
+  const phases = [["upload", status.uploading_phase], ["processing", status.processing_phase], ["publishing", status.publishing_phase]];
+  for (const [stage, phase] of phases) {
+    const phaseStatus = typeof phase?.status === "string" ? phase.status.trim().toLowerCase() : "";
+    const error = phaseError(phase);
+    if (error || /failed|error|rejected|blocked/.test(phaseStatus)) {
+      return buildDiagnostic({ stage, reasonCode: "reel_processing_failed", metaCode: error?.code, phaseStatus,
+        publishStatus: stage === "publishing" ? phaseValue(response, "publishing_phase", "publish_status") : undefined,
+        copyrightStatus, reason: error?.message });
+    }
+  }
+  if (/failed|error|rejected|blocked/.test(copyrightStatus)) {
+    return buildDiagnostic({ stage: "processing", reasonCode: "reel_processing_failed", phaseStatus: videoStatus, copyrightStatus });
+  }
+  if (/failed|error|rejected|blocked/.test(videoStatus)) {
+    return buildDiagnostic({ stage: "processing", reasonCode: "reel_processing_failed", phaseStatus: videoStatus, copyrightStatus });
+  }
+  return null;
+}
 function processingFailed(status) {
-  const values = ["uploading_phase", "processing_phase", "publishing_phase"].flatMap((phase) => Object.values(status?.status?.[phase] || {}));
-  return values.some((value) => /failed|error|copyright|rejected/.test(String(value).toLowerCase()));
+  return Boolean(statusFailureDiagnostic(status));
 }
 
 async function waitForPublished({ service, token, videoId, maxAttempts = 20, intervalMs = 3000, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const status = await service.reelStatus(token, videoId);
     if (published(status)) return status.status;
-    if (processingFailed(status)) throw reelError(422, "reel_processing_failed", "Facebook reported that Reel processing or publishing failed.");
+    const diagnostic = statusFailureDiagnostic(status);
+    if (diagnostic) throw reelError(422, "reel_processing_failed", "Facebook reported that Reel processing or publishing failed.", diagnostic);
     if (attempt + 1 < maxAttempts) await sleep(intervalMs);
   }
   throw reelError(504, "reel_processing_timeout", "Facebook Reel processing did not complete before the timeout.");
@@ -108,4 +194,5 @@ async function publishPageReel(options) {
     fileName: file.fileName, status: wait ? "published" : "submitted" };
 }
 
-module.exports = { pageContext, processingFailed, publishPageReel, resolveBinaryReference, uploadVideo, validateUploadUrl, waitForPublished };
+module.exports = { buildDiagnostic, logReelFailure, pageContext, processingFailed, publishPageReel, published,
+  resolveBinaryReference, sanitizeDiagnosticReason, statusFailureDiagnostic, uploadVideo, validateUploadUrl, waitForPublished };

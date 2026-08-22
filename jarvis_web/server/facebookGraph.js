@@ -1,5 +1,7 @@
 class FacebookGraphError extends Error {
-  constructor(statusCode, code, message, permission = "") { super(message); this.statusCode = statusCode; this.code = code; this.permission = permission; }
+  constructor(statusCode, code, message, permission = "", diagnostic = null) {
+    super(message); this.statusCode = statusCode; this.code = code; this.permission = permission; this.diagnostic = diagnostic;
+  }
 }
 const PERMISSIONS = { pages: "pages_show_list", page_metadata: "pages_read_engagement" };
 const FORBIDDEN_SECRET_KEY = /^(authorization|access[_-]?token|page[_-]?access[_-]?token|client[_-]?secret|app[_-]?secret|appsecret_proof|token)$/i;
@@ -11,7 +13,8 @@ function containsForbiddenSecretFields(value) {
 function sanitizeMetaMessage(message, secrets = []) {
   let value = String(message || "Meta Graph API request failed.");
   for (const secret of secrets) if (secret) value = value.split(secret).join("[REDACTED]");
-  return value.replace(/access_token=[^&\s]+/gi, "access_token=[REDACTED]").replace(/Bearer\s+[^\s]+/gi, "Bearer [REDACTED]").slice(0, 600);
+  return value.replace(/access_token=[^&\s]+/gi, "access_token=[REDACTED]")
+    .replace(/(?:Bearer|OAuth)\s+[^\s]+/gi, "Authorization [REDACTED]").slice(0, 600);
 }
 function validateGraphVersion(version) { if (!/^v\d{1,2}\.\d{1,2}$/.test(version)) throw new FacebookGraphError(500, "invalid_graph_version", "Meta Graph API version is not configured safely."); return version; }
 function validatePageId(pageId) { const value = String(pageId || "").trim(); if (!/^\d{3,30}$/.test(value)) throw new FacebookGraphError(400, "invalid_page_id", "Enter a valid numeric Facebook Page ID."); return value; }

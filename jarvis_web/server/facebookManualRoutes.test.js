@@ -28,3 +28,10 @@ test("Reel publishing route resolves credentials and binary references only on t
   assert.match(source, /binaryDir:\s*BINARY_DATA_DIR/);
   assert.doesNotMatch(source, /req\.body\.upload_?url/i);
 });
+
+test("Reel route returns allowlisted diagnostics and logs known failures once", () => {
+  const errorBoundary = source.slice(source.indexOf("function publicFacebookError"), source.indexOf('app.get("/api/facebook/credentials"'));
+  assert.match(errorBoundary, /logReelFailure\(error\)/);
+  assert.match(errorBoundary, /diagnostic:\s*error\.diagnostic/);
+  assert.doesNotMatch(errorBoundary, /error\.response|error\.headers|uploadUrl|filePath|Authorization|accessToken/);
+});

@@ -11,7 +11,7 @@ const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
-const { publishPageReel } = require("./facebookReels");
+const { logReelFailure, publishPageReel } = require("./facebookReels");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
@@ -267,7 +267,11 @@ app.post("/api/ai/prepare-content", async (req, res) => {
 
 function facebookGraphService() { return new FacebookGraphService({ version: META_GRAPH_VERSION }); }
 function publicFacebookError(res, error) {
-  if (error instanceof FacebookGraphError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message, permission: error.permission || undefined });
+  if (error instanceof FacebookGraphError) {
+    logReelFailure(error);
+    return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message,
+      permission: error.permission || undefined, diagnostic: error.diagnostic || undefined });
+  }
   console.error("Facebook operation failed safely.");
   return res.status(500).json({ status: "error", code: "facebook_server_error", error: "Facebook operation could not be completed." });
 }
