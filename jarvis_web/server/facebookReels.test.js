@@ -9,7 +9,9 @@ const { logReelFailure, pageContext, publishPageReel, published, resolveBinaryRe
 
 const REF = "bin_1234567890123456789012";
 const TOKEN = "page-token-fixture";
-function response(data, status = 200) { return { ok: status < 400, status, json: async () => data }; }
+function response(data, status = 200) {
+  return { ok: status < 400, status, json: async () => data, text: async () => JSON.stringify(data) };
+}
 function fixture() { const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-reel-")); fs.writeFileSync(path.join(dir, REF), Buffer.from("video-bytes")); return dir; }
 function request(overrides = {}) { return { credentialId: "fcred_1234567890123456789012", binaryProperty: "data",
   binary: { property: "data", referenceId: REF, size: 999 }, fileName: "clip.mp4", mimeType: "video/mp4",
@@ -112,8 +114,9 @@ test("rupload Graph errors expose only allowlisted sanitized diagnostics", async
           type: "OAuthException", message: "fallback", error_user_title: "Upload failed", error_user_msg: longReason,
           is_transient: false, fbtrace_id: "AbC_123-safe", access_token: TOKEN } }, 400); } }), (error) => {
       assert.equal(error.statusCode, 502); assert.equal(error.code, "reel_upload_rejected");
-      assert.deepEqual(Object.keys(error.diagnostic).sort(), ["isTransient", "metaCode", "metaSubcode", "reason", "reasonCode", "stage", "traceId"].sort());
+      assert.deepEqual(Object.keys(error.diagnostic).sort(), ["httpStatus", "isTransient", "metaCode", "metaSubcode", "reason", "reasonCode", "responseKind", "stage", "traceId"].sort());
       assert.equal(error.diagnostic.stage, "upload"); assert.equal(error.diagnostic.metaCode, 6000);
+      assert.equal(error.diagnostic.httpStatus, 400); assert.equal(error.diagnostic.responseKind, "graph_error");
       assert.equal(error.diagnostic.metaSubcode, 1363019); assert.equal(error.diagnostic.traceId, "AbC_123-safe");
       assert.equal(error.diagnostic.isTransient, false); assert.ok(error.diagnostic.reason.length <= 240);
       const serialized = JSON.stringify(error.diagnostic);
@@ -123,22 +126,24 @@ test("rupload Graph errors expose only allowlisted sanitized diagnostics", async
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("rupload rejection variants retain safe generic diagnostics and HTTP 429", async () => {
+test("rupload rejection diagnostics distinguish all safe response categories", async () => {
   const cases = [
-    ["success false", response({ success: false })],
-    ["missing success", response({ status: "accepted" })],
-    ["empty body", { ok: true, status: 200, json: async () => { throw new SyntaxError("empty"); } }],
-    ["rate limited", response({ error: { code: 4, message: "Rate limited" } }, 429)],
+    ["non-2xx Graph error", response({ error: { code: 4, message: "Rate limited" } }, 429), 429, "graph_error"],
+    ["2xx success false", response({ success: false }), 200, "success_false"],
+    ["2xx missing success", response({ status: "accepted" }), 200, "missing_success"],
+    ["empty response", { ok: true, status: 200, text: async () => "" }, 200, "empty"],
+    ["invalid non-JSON response", { ok: true, status: 200, text: async () => "<html>rejected</html>" }, 200, "non_json"],
   ];
-  for (const [name, mockedResponse] of cases) {
+  for (const [name, mockedResponse, httpStatus, responseKind] of cases) {
     const dir = fixture(); try {
       await assert.rejects(() => uploadVideo({ uploadUrl: "https://rupload.facebook.com/video-upload/opaque", token: TOKEN,
         filePath: path.join(dir, REF), size: 11, fetchImpl: async (_url, options) => {
           for await (const _chunk of options.body) { /* consume */ } return mockedResponse;
         } }), (error) => {
         assert.equal(error.diagnostic.stage, "upload", name); assert.equal(error.diagnostic.reasonCode, "reel_upload_rejected", name);
-        assert.equal(error.statusCode, name === "rate limited" ? 429 : 502, name);
-        if (name !== "rate limited") assert.equal(error.diagnostic.reason, undefined, name);
+        assert.equal(error.diagnostic.httpStatus, httpStatus, name); assert.equal(error.diagnostic.responseKind, responseKind, name);
+        assert.equal(error.statusCode, httpStatus === 429 ? 429 : 502, name);
+        if (responseKind !== "graph_error") assert.equal(error.diagnostic.reason, undefined, name);
         return true;
       });
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }

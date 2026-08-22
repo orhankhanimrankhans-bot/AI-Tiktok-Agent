@@ -152,7 +152,7 @@ test("plain errors remain message-only while structured errors preserve the safe
   assert.deepEqual(plain.output, { status: "error", message: "plain failure" });
 
   const diagnostic = { stage: "upload", reasonCode: "reel_upload_rejected", metaCode: 6000, metaSubcode: 1363019,
-    phaseStatus: "failed", publishStatus: "rejected", copyrightStatus: "complete", reason: "Safe Meta reason",
+    httpStatus: 400, responseKind: "graph_error", phaseStatus: "failed", publishStatus: "rejected", copyrightStatus: "complete", reason: "Safe Meta reason",
     isTransient: false, traceId: "trace_123", unknown: "do-not-copy" };
   const structured = await executeWithLifecycle({ node: { id: "facebook" }, executor: async () => {
     throw createStructuredExecutionError({ message: "Facebook rejected the Reel video upload.", code: "reel_upload_rejected",
@@ -160,7 +160,7 @@ test("plain errors remain message-only while structured errors preserve the safe
   } });
   assert.deepEqual(structured.output, { status: "error", message: "Facebook rejected the Reel video upload.",
     code: "reel_upload_rejected", diagnostic: { stage: "upload", reasonCode: "reel_upload_rejected", metaCode: 6000,
-      metaSubcode: 1363019, phaseStatus: "failed", publishStatus: "rejected", copyrightStatus: "complete",
+      metaSubcode: 1363019, httpStatus: 400, responseKind: "graph_error", phaseStatus: "failed", publishStatus: "rejected", copyrightStatus: "complete",
       reason: "Safe Meta reason", isTransient: false, traceId: "trace_123" } });
   assert.doesNotMatch(JSON.stringify(structured.output), /do-not-copy|never-copy|rawResponse|accessToken/);
 });
@@ -168,6 +168,7 @@ test("plain errors remain message-only while structured errors preserve the safe
 test("structured diagnostics redact credentials, URLs, and internal paths", async () => {
   const unsafe = createStructuredExecutionError({ message: "Rejected", code: "reel_upload_rejected", diagnostic: {
     stage: "upload", reasonCode: "reel_upload_rejected", reason: "Bearer secret-token https://rupload.facebook.com/signed C:\\private\\video.mp4",
+    httpStatus: "200", responseKind: "raw_body",
     traceId: "trace-safe", Authorization: "Bearer never-copy", uploadUrl: "https://never-copy.example", raw: { token: "never-copy" },
   } });
   const failed = await executeWithLifecycle({ node: { id: "facebook" }, executor: async () => { throw unsafe; } });
@@ -175,6 +176,7 @@ test("structured diagnostics redact credentials, URLs, and internal paths", asyn
   assert.match(serialized, /\[REDACTED\]/); assert.match(serialized, /\[REDACTED_URL\]/); assert.match(serialized, /\[REDACTED_PATH\]/);
   assert.match(serialized, /Authorization \[REDACTED\]/);
   assert.doesNotMatch(serialized, /secret-token|rupload\.facebook|C:\\private|never-copy|uploadUrl|raw/);
+  assert.equal(failed.output.diagnostic.httpStatus, undefined); assert.equal(failed.output.diagnostic.responseKind, undefined);
 });
 
 test("Run Workflow keeps safe diagnostics on the failed node", async () => {

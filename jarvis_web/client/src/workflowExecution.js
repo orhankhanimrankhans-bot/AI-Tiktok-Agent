@@ -1,7 +1,8 @@
 export const NODE_STATUSES = ["idle", "running", "success", "error"];
 
 const STRUCTURED_EXECUTION_ERROR = Symbol("structuredExecutionError");
-const DIAGNOSTIC_KEYS = ["stage", "reasonCode", "metaCode", "metaSubcode", "phaseStatus", "publishStatus", "copyrightStatus", "reason", "isTransient", "traceId"];
+const DIAGNOSTIC_KEYS = ["stage", "reasonCode", "metaCode", "metaSubcode", "httpStatus", "responseKind", "phaseStatus", "publishStatus", "copyrightStatus", "reason", "isTransient", "traceId"];
+const UPLOAD_RESPONSE_KINDS = new Set(["graph_error", "success_false", "missing_success", "empty", "non_json"]);
 
 function safeCode(value, limit = 64) {
   if (Number.isSafeInteger(value)) return value;
@@ -28,6 +29,10 @@ export function sanitizeExecutionDiagnostic(value) {
     const item = value[key];
     if (["metaCode", "metaSubcode"].includes(key)) {
       const code = safeCode(item, 32); if (code !== undefined) diagnostic[key] = code;
+    } else if (key === "httpStatus") {
+      if (Number.isInteger(item) && item >= 100 && item <= 599) diagnostic[key] = item;
+    } else if (key === "responseKind") {
+      if (UPLOAD_RESPONSE_KINDS.has(item)) diagnostic[key] = item;
     } else if (key === "isTransient") {
       if (typeof item === "boolean") diagnostic[key] = item;
     } else if (key === "traceId") {

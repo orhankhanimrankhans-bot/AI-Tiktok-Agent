@@ -7,6 +7,7 @@ const UPLOAD_HOST = "rupload.facebook.com";
 
 const DIAGNOSTIC_STRING_LIMIT = 240;
 const STATUS_STRING_LIMIT = 64;
+const UPLOAD_RESPONSE_KINDS = new Set(["graph_error", "success_false", "missing_success", "empty", "non_json"]);
 
 function safeString(value, limit = DIAGNOSTIC_STRING_LIMIT) {
   if (typeof value !== "string") return undefined;
@@ -33,6 +34,8 @@ function sanitizeDiagnosticReason(value, secrets = []) {
 function buildDiagnostic(values) {
   const diagnostic = { stage: values.stage, reasonCode: values.reasonCode };
   for (const key of ["metaCode", "metaSubcode"]) { const value = safeCode(values[key]); if (value !== undefined) diagnostic[key] = value; }
+  if (Number.isInteger(values.httpStatus) && values.httpStatus >= 100 && values.httpStatus <= 599) diagnostic.httpStatus = values.httpStatus;
+  if (UPLOAD_RESPONSE_KINDS.has(values.responseKind)) diagnostic.responseKind = values.responseKind;
   for (const key of ["phaseStatus", "publishStatus", "copyrightStatus"]) { const value = safeString(values[key], STATUS_STRING_LIMIT); if (value) diagnostic[key] = value; }
   const reason = safeString(values.reason); if (reason) diagnostic.reason = reason;
   if (typeof values.isTransient === "boolean") diagnostic.isTransient = values.isTransient;
@@ -110,13 +113,21 @@ async function uploadVideo({ fetchImpl, uploadUrl, token, filePath, size, timeou
     if (error?.name === "AbortError") throw reelError(504, "reel_upload_timeout", "Facebook Reel upload timed out.");
     throw reelError(502, "reel_upload_failed", "Facebook rejected or could not receive the Reel upload.");
   } finally { clearTimeout(timer); body.destroy(); }
-  let data = {}; try { data = await response.json(); } catch { /* safe failure below */ }
-  if (!response.ok || data.success !== true) {
+  let data = {}; let responseKind;
+  try {
+    const responseText = await response.text();
+    if (!responseText.trim()) responseKind = "empty";
+    else {
+      try { data = JSON.parse(responseText); } catch { responseKind = "non_json"; }
+    }
+  } catch { responseKind = "non_json"; }
+  if (!response.ok || data?.success !== true) {
     const meta = data && typeof data.error === "object" && !Array.isArray(data.error) ? data.error : {};
+    if (!responseKind) responseKind = Object.keys(meta).length ? "graph_error" : data?.success === false ? "success_false" : "missing_success";
     const reasonSource = meta.error_user_msg || meta.message;
     const reason = reasonSource ? sanitizeDiagnosticReason(reasonSource, [token, uploadUrl, filePath]) : undefined;
     throw reelError(response.status === 429 ? 429 : 502, "reel_upload_rejected", "Facebook rejected the Reel video upload.",
-      buildDiagnostic({ stage: "upload", reasonCode: "reel_upload_rejected", metaCode: meta.code,
+      buildDiagnostic({ stage: "upload", reasonCode: "reel_upload_rejected", httpStatus: response.status, responseKind, metaCode: meta.code,
         metaSubcode: meta.error_subcode, reason, isTransient: meta.is_transient, traceId: meta.fbtrace_id }));
   }
 }
