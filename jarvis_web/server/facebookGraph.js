@@ -28,7 +28,7 @@ class FacebookGraphService {
   async request(path, token, params = {}, permission = "") {
     if (!/^(me|me\/accounts|\d{3,30})$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
     const url = new URL(`${this.baseUrl}/${path}`); for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    let response; try { response = await this.fetch(url, { headers: { Authorization: `Bearer ${token}` } }); }
+    let response; try { response = await this.fetch(url, { redirect: "error", headers: { Authorization: `Bearer ${token}` } }); }
     catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
     let data = {}; try { data = await response.json(); } catch { /* safe generic error below */ }
     if (!response.ok || data.error) {
@@ -55,6 +55,32 @@ class FacebookGraphService {
     return { pages, pageTokens };
   }
   pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,followers_count,link,picture" }, PERMISSIONS.page_metadata); }
+  async postReelForm(token, params) {
+    const url = new URL(`${this.baseUrl}/me/video_reels`);
+    let response; try { response = await this.fetch(url, { method: "POST", redirect: "error",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(params) }); }
+    catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
+    let data = {}; try { data = await response.json(); } catch { /* safe generic error below */ }
+    if (!response.ok || data.error) {
+      const meta = data.error || {}; const code = String(meta.code || response.status || "unknown");
+      throw new FacebookGraphError(metaErrorStatus(response.status, code), `meta_${code}`, sanitizeMetaMessage(meta.message, [token]));
+    }
+    return data;
+  }
+  async startPageReelUpload(token) {
+    const data = await this.postReelForm(token, { upload_phase: "start" });
+    if (!/^\d{3,30}$/.test(String(data.video_id || "")) || !data.upload_url) {
+      throw new FacebookGraphError(502, "invalid_reel_start_response", "Meta returned an invalid Reel upload session.");
+    }
+    return { videoId: String(data.video_id), uploadUrl: String(data.upload_url) };
+  }
+  finishPageReelUpload(token, { videoId, title = "", description = "" }) {
+    const body = { video_id: validatePageId(videoId), upload_phase: "finish", video_state: "PUBLISHED" };
+    if (title) body.title = title;
+    if (description) body.description = description;
+    return this.postReelForm(token, body);
+  }
+  reelStatus(token, videoId) { return this.request(validatePageId(videoId), token, { fields: "status" }); }
 }
 
 function credentialToken(credential) {

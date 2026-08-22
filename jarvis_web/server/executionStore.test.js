@@ -4,7 +4,12 @@ const { DatabaseSync } = require("node:sqlite");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { ExecutionStore } = require("./executionStore");
+const { ExecutionStore, sanitizeRuntimeData } = require("./executionStore");
+
+test("execution history replaces raw binary bytes with metadata", () => {
+  assert.deepEqual(sanitizeRuntimeData(Buffer.from("video-bytes")), { binary: true, size: 11 });
+  assert.doesNotMatch(JSON.stringify(sanitizeRuntimeData(Buffer.from("video-bytes"))), /video-bytes/);
+});
 
 test("execution history persists and strips OAuth data", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-executions-"));

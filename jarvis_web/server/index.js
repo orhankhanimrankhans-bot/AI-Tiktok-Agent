@@ -11,6 +11,7 @@ const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
+const { publishPageReel } = require("./facebookReels");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
@@ -383,6 +384,9 @@ app.post("/api/facebook/graph/page", (req, res) => withFacebookCredential(req, r
   const pageId = validatePageId(req.body.pageId); const token = credentialPageToken(credential, pageId);
   return service.pageMetadata(pageId, token);
 }));
+app.post("/api/facebook/reels/publish", (req, res) => withFacebookCredential(req, res, (service, credential) => publishPageReel({
+  request: req.body, service, credential, binaryDir: BINARY_DATA_DIR,
+})));
 
 app.get("/api/google/credentials", async (req, res) => {
   try {

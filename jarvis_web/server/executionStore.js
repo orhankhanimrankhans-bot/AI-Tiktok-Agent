@@ -5,6 +5,7 @@ const SECRET_KEYS = /^(access_token|refresh_token|authorization|client_secret|to
 
 function sanitizeRuntimeData(value, depth = 0) {
   if (depth > 8) return "[TRUNCATED]";
+  if (Buffer.isBuffer(value) || ArrayBuffer.isView(value)) return { binary: true, size: value.byteLength };
   if (typeof value === "string") {
     return value
       .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, "[REDACTED]")

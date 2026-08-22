@@ -22,3 +22,9 @@ test("Graph execution routes delegate auth-mode-aware me and Page discovery", ()
   assert.match(source, /executeCredentialPages\(service, credential\)/);
   assert.match(source, /credentialPageToken\(credential, pageId\)/);
 });
+
+test("Reel publishing route resolves credentials and binary references only on the server", () => {
+  assert.match(source, /\/api\/facebook\/reels\/publish[\s\S]{0,300}publishPageReel/);
+  assert.match(source, /binaryDir:\s*BINARY_DATA_DIR/);
+  assert.doesNotMatch(source, /req\.body\.upload_?url/i);
+});

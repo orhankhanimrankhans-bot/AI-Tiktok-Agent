@@ -3,6 +3,7 @@ import "./App.css";
 import DataViewer from "./DataViewer.jsx";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import { assertSafeFacebookConfig, facebookCredentialLabel, sanitizeFacebookConfig } from "./facebookConfig.js";
+import { buildFacebookReelRequest, FACEBOOK_OPERATION_PUBLISH_REEL, FACEBOOK_OPERATION_READ, facebookNodeDefaults } from "./facebookReelConfig.js";
 import { deleteManualFacebookCredential, facebookConnectionStatus, safeFacebookCredentialError, saveManualFacebookCredential, testManualFacebookCredential } from "./facebookManualCredential.js";
 import {
   assignCredentialToNode,
@@ -1817,7 +1818,7 @@ function createPhase2Config(nodeId) {
   if (nodeId === "limit") return { maxItems: 1, keep: "First Items", settings: defaultNodeSettings() };
   if (nodeId === "google-download") return { credentialId: "", resource: "File", operation: "Download", fileIdMode: "Expression", fileId: "{{ $json.id }}", binaryProperty: "data", settings: defaultNodeSettings() };
   if (nodeId === "google-delete") return { credentialId: "", resource: "File", operation: "Delete", fileIdMode: "Expression", fileId: "{{ $json.id }}", requireConfirmation: true, settings: defaultNodeSettings() };
-  if (nodeId === "facebook-graph-api") return { credentialId: "", method: "GET", apiVersion: "", endpoint: "", queryParameters: [], headers: [], bodyParameters: [], sendBinaryData: false, binaryProperty: "data", pageVideo: { pageId: "", description: "", published: false }, settings: defaultNodeSettings() };
+  if (nodeId === "facebook-graph-api") return { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
   return null;
 }
 
@@ -1988,7 +1989,7 @@ function ParameterList({ title, addLabel, items, onChange }) {
 }
 
 function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
-  const defaults = { credentialId: "", method: "GET", apiVersion: "", endpoint: "", queryParameters: [], headers: [], bodyParameters: [], sendBinaryData: false, binaryProperty: "data", pageVideo: { pageId: "", description: "", published: false }, settings: defaultNodeSettings() };
+  const defaults = { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
   const [activeTab, setActiveTab] = useState("Parameters");
   const [config, setConfig] = useState(() => { const safe = sanitizeFacebookConfig(node.config); return { ...defaults, ...safe, pageVideo: { ...defaults.pageVideo, ...safe.pageVideo }, settings: { ...defaults.settings, ...safe.settings } }; });
   const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
@@ -1997,16 +1998,18 @@ function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredenti
   const [isExecuting, setIsExecuting] = useState(false);
   const updateSetting = (key, value) => setConfig((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
   const showPageVideo = config.method === "POST" && config.endpoint.toLowerCase().includes("videos");
+  const publishReel = config.operation === FACEBOOK_OPERATION_PUBLISH_REEL;
 
   const executeStep = async () => {
     let message = "";
     try { assertSafeFacebookConfig(config); } catch (error) { message = error.message; }
-    if (!message && config.method !== "GET") message = "Phase 3A supports read-only Facebook GET operations only";
-    else if (!message && !config.credentialId) message = "Select a connected Facebook credential";
-    else if (!message && config.apiVersion && !/^v\d{1,2}\.\d{1,2}$/.test(config.apiVersion)) message = "Graph API Version must look like v25.0";
-    else if (!message && !config.endpoint.trim()) message = "Endpoint is required";
-    else if (config.sendBinaryData && !config.binaryProperty.trim()) message = "Binary Property is required when Send Binary Data is enabled";
-    else if (showPageVideo && (config.pageVideo.description || config.pageVideo.published) && !config.pageVideo.pageId.trim()) message = "Page ID is required when Facebook Page Video helpers are configured";
+    if (!message && !config.credentialId) message = "Select a connected Facebook credential";
+    else if (!message && publishReel && !config.binaryProperty.trim()) message = "Binary Property is required";
+    else if (!message && !publishReel && config.method !== "GET") message = "Graph API Request supports read-only Facebook GET operations only";
+    else if (!message && !publishReel && config.apiVersion && !/^v\d{1,2}\.\d{1,2}$/.test(config.apiVersion)) message = "Graph API Version must look like v25.0";
+    else if (!message && !publishReel && !config.endpoint.trim()) message = "Endpoint is required";
+    else if (!publishReel && config.sendBinaryData && !config.binaryProperty.trim()) message = "Binary Property is required when Send Binary Data is enabled";
+    else if (!publishReel && showPageVideo && (config.pageVideo.description || config.pageVideo.published) && !config.pageVideo.pageId.trim()) message = "Page ID is required when Facebook Page Video helpers are configured";
     if (message) {
       const result = { status: "error", message };
       setValidationMessage(message); setOutput(result); onSaveNode({ ...node, config, input, output: result, status: "error" }); return;
@@ -2028,7 +2031,14 @@ function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredenti
           <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters facebook-parameters">
             {validationMessage && <div className="field-validation" role="alert">{validationMessage}</div>}
             <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{facebookCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
-            <label>HTTP Method</label><select value={config.method} onChange={(event) => setConfig({ ...config, method: event.target.value })}><option>GET</option><option>POST</option><option>DELETE</option></select>
+            <label>Operation</label><select value={config.operation} onChange={(event) => setConfig({ ...config, operation: event.target.value })}><option>{FACEBOOK_OPERATION_READ}</option><option>{FACEBOOK_OPERATION_PUBLISH_REEL}</option></select>
+            {publishReel && <>
+              <label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} placeholder="data" />
+              <label>Title</label><input value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="Optional; expressions supported" />
+              <label>Description / Caption</label><textarea rows="4" value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="Optional; expressions supported" />
+              <ToggleSetting label="Wait for Processing" value={config.waitForProcessing} onChange={() => setConfig({ ...config, waitForProcessing: !config.waitForProcessing })} />
+            </>}
+            {!publishReel && <><label>HTTP Method</label><select value={config.method} onChange={(event) => setConfig({ ...config, method: event.target.value })}><option>GET</option><option>POST</option><option>DELETE</option></select>
             <label>Graph API Version</label><input value={config.apiVersion} onChange={(event) => setConfig({ ...config, apiVersion: event.target.value })} placeholder="vXX.X" />
             <label>Endpoint / Node</label><input value={config.endpoint} onChange={(event) => setConfig({ ...config, endpoint: event.target.value })} placeholder="me, me/accounts, or a numeric Page ID" /><small>Phase 3A read-only endpoints: me, me/accounts, or a numeric Page ID.</small>
             <ParameterList title="Query Parameters" addLabel="Add Parameter" items={config.queryParameters} onChange={(items) => updateSafeParameters("queryParameters", items)} />
@@ -2036,7 +2046,7 @@ function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredenti
             <ParameterList title="Body Parameters" addLabel="Add Parameter" items={config.bodyParameters} onChange={(items) => updateSafeParameters("bodyParameters", items)} />
             <ToggleSetting label="Send Binary Data" value={config.sendBinaryData} onChange={() => setConfig({ ...config, sendBinaryData: !config.sendBinaryData })} />
             {config.sendBinaryData && <><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /><small>Binary property from a previous node, for example data.</small></>}
-            {showPageVideo && <div className="page-video-helper"><h3>Facebook Page Video</h3><label>Page ID</label><input value={config.pageVideo.pageId} onChange={(event) => updatePageVideo("pageId", event.target.value)} /><label>Caption / Description</label><textarea rows="4" value={config.pageVideo.description} onChange={(event) => updatePageVideo("description", event.target.value)} /><ToggleSetting label="Published" value={config.pageVideo.published} onChange={() => updatePageVideo("published", !config.pageVideo.published)} /><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /></div>}
+            {showPageVideo && <div className="page-video-helper"><h3>Facebook Page Video</h3><label>Page ID</label><input value={config.pageVideo.pageId} onChange={(event) => updatePageVideo("pageId", event.target.value)} /><label>Caption / Description</label><textarea rows="4" value={config.pageVideo.description} onChange={(event) => updatePageVideo("description", event.target.value)} /><ToggleSetting label="Published" value={config.pageVideo.published} onChange={() => updatePageVideo("published", !config.pageVideo.published)} /><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /></div>}</>}
           </div> : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version="Facebook Graph API node version 1.0" />}</div>
         </section>
         <NodeOutputPanel output={output} onExecute={executeStep} />
@@ -2462,8 +2472,16 @@ function App() {
       }
       if (node.name === "Facebook Graph API") {
         assertSafeFacebookConfig(node.config);
-        if (node.config?.method !== "GET") throw new Error("Phase 3A supports read-only Facebook GET operations only.");
         if (!node.config?.credentialId) throw new Error("Select a connected Facebook credential.");
+        if (node.config?.operation === FACEBOOK_OPERATION_PUBLISH_REEL) {
+          return executePerItem(input, async (item) => {
+            const request = buildFacebookReelRequest(node.config, item);
+            const response = await fetch(`${API_BASE_URL}/api/facebook/reels/publish`, { method: "POST", credentials: "include",
+              headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
+            const data = await response.json(); if (!response.ok) throw new Error(data?.error || "Facebook Reel publishing failed."); return data;
+          });
+        }
+        if (node.config?.method !== "GET") throw new Error("Graph API Request supports read-only Facebook GET operations only.");
         const executeRead = async (item) => {
           const endpoint = String(resolveExpression(node.config.endpoint, item)).trim().replace(/^\/+|\/+$/g, "");
           const route = endpoint === "me" ? "me" : endpoint === "me/accounts" ? "pages" : /^\d{3,30}$/.test(endpoint) ? "page" : null;
