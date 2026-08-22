@@ -15,6 +15,7 @@ const { publishPageReel } = require("./facebookReels");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
+const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require("./openaiPrepareContent");
 
 dotenv.config();
 
@@ -83,6 +84,8 @@ const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const META_REDIRECT_URI = process.env.META_REDIRECT_URI || `http://localhost:${PORT}/api/facebook/auth/callback`;
 const META_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v26.0";
 const META_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(META_GRAPH_VERSION_VALUE) ? META_GRAPH_VERSION_VALUE : "";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const JARVIS_DB_PATH = path.resolve(
   process.env.JARVIS_DB_PATH || path.join(__dirname, "data", "credentials.sqlite3")
 );
@@ -96,6 +99,7 @@ const googleOAuthConfigured = Boolean(
   GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI
 );
 const facebookOAuthConfigured = Boolean(META_APP_ID && META_APP_SECRET && META_REDIRECT_URI && META_GRAPH_VERSION);
+const openAIConfigured = Boolean(OPENAI_API_KEY);
 
 app.use(
   cors({
@@ -247,7 +251,18 @@ app.get("/api/health", (req, res) => {
     ok: true,
     googleOAuthConfigured,
     facebookOAuthConfigured,
+    openAIConfigured,
   });
+});
+
+app.post("/api/ai/prepare-content", async (req, res) => {
+  try {
+    return res.json(await prepareContent({ body: req.body, apiKey: OPENAI_API_KEY, model: OPENAI_MODEL }));
+  } catch (error) {
+    if (error instanceof PrepareContentError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
+    console.error("Prepare Content failed safely.");
+    return res.status(500).json({ status: "error", code: "prepare_content_server_error", error: "Prepare Content could not be completed." });
+  }
 });
 
 function facebookGraphService() { return new FacebookGraphService({ version: META_GRAPH_VERSION }); }

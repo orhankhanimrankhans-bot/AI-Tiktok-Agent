@@ -6,7 +6,7 @@ export const FACEBOOK_OPERATION_PUBLISH_REEL = "Publish Reel";
 export function facebookNodeDefaults() {
   return { operation: FACEBOOK_OPERATION_READ, credentialId: "", method: "GET", apiVersion: "", endpoint: "",
     queryParameters: [], headers: [], bodyParameters: [], sendBinaryData: false, binaryProperty: "data",
-    title: "", description: "", waitForProcessing: true, pageVideo: { pageId: "", description: "", published: false } };
+    title: "{{ $json.title }}", description: "{{ $json.socialCaption }}", waitForProcessing: true, pageVideo: { pageId: "", description: "", published: false } };
 }
 
 export function buildFacebookReelRequest(config, item) {

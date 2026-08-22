@@ -20,6 +20,7 @@ import {
 } from "./workflowExecution.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
+import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
@@ -55,6 +56,14 @@ const NODE_LIBRARY = [
     description: "Start a workflow automatically on a schedule",
     type: "TRIGGER",
     icon: "◷",
+  },
+  {
+    id: "prepare-content",
+    provider: "Jarvis AI",
+    name: "Prepare Content",
+    description: "Use OpenAI to Generate Content: title, caption, and hashtags from previous item metadata",
+    type: "ACTION",
+    icon: "AI",
   },
   {
     id: "facebook-graph-api",
@@ -1820,6 +1829,7 @@ function createPhase2Config(nodeId) {
   if (nodeId === "google-download") return { credentialId: "", resource: "File", operation: "Download", fileIdMode: "Expression", fileId: "{{ $json.id }}", binaryProperty: "data", settings: defaultNodeSettings() };
   if (nodeId === "google-delete") return { credentialId: "", resource: "File", operation: "Delete", fileIdMode: "Expression", fileId: "{{ $json.id }}", requireConfirmation: true, settings: defaultNodeSettings() };
   if (nodeId === "facebook-graph-api") return { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
+  if (nodeId === "prepare-content") return { ...prepareContentDefaults(), settings: defaultNodeSettings() };
   return null;
 }
 
@@ -1989,6 +1999,44 @@ function ParameterList({ title, addLabel, items, onChange }) {
   );
 }
 
+function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
+  const defaults = { ...prepareContentDefaults(), settings: defaultNodeSettings() };
+  const [activeTab, setActiveTab] = useState("Parameters");
+  const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
+  const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
+  const [output, setOutput] = useState(node.output ?? null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const updateSetting = (key, value) => setConfig((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+  const executeStep = async () => {
+    if (isExecuting) return;
+    setIsExecuting(true);
+    try { const executed = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" }); setOutput(executed.output); onSaveNode(executed); }
+    finally { setIsExecuting(false); }
+  };
+  const saveAndClose = () => { onSaveNode({ ...node, config, input, output, status: node.status ?? "idle" }); onClose(); };
+  return <div className="node-editor-overlay"><div className="node-editor-window">
+    <header className="node-editor-header"><div className="node-editor-title"><span className="logic-title-icon">AI</span><strong>Prepare Content</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
+    <div className="node-editor-body google-three-column">
+      <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
+      <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
+        <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
+          <div className={openAIConfigured ? "connection-status success" : "connection-status not-tested"}>{openAIConfigured ? "OpenAI configured on server" : "OpenAI not configured on server"}</div>
+          <label>Input Source</label><select value={config.inputSource} disabled><option>Previous Item Metadata</option></select>
+          <label>Filename Expression</label><input value={config.fileName} onChange={(event) => setConfig({ ...config, fileName: event.target.value })} placeholder="{{ $json.fileName }}" />
+          <label>Title Instructions</label><textarea rows="3" value={config.titleInstructions} onChange={(event) => setConfig({ ...config, titleInstructions: event.target.value })} />
+          <label>Caption Instructions</label><textarea rows="4" value={config.captionInstructions} onChange={(event) => setConfig({ ...config, captionInstructions: event.target.value })} />
+          <label>Hashtag Count</label><input type="number" min="1" max="20" value={config.hashtagCount} onChange={(event) => setConfig({ ...config, hashtagCount: Number(event.target.value) })} />
+          <label>Language</label><input value={config.language} onChange={(event) => setConfig({ ...config, language: event.target.value })} />
+          <label>Tone</label><select value={config.tone} onChange={(event) => setConfig({ ...config, tone: event.target.value })}>{PREPARE_CONTENT_TONES.map((tone) => <option key={tone}>{tone}</option>)}</select>
+          <ToggleSetting label="Preserve Input" value={config.preserveInput !== false} onChange={() => setConfig({ ...config, preserveInput: config.preserveInput === false })} />
+          <small>Jarvis generates copy from filename and metadata only. It does not analyze the video.</small>
+        </div> : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version="Prepare Content node version 1.0" />}</div>
+      </section>
+      <NodeOutputPanel output={output} onExecute={executeStep} />
+    </div>
+  </div></div>;
+}
+
 function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
   const defaults = { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
   const [activeTab, setActiveTab] = useState("Parameters");
@@ -2149,6 +2197,16 @@ function App() {
   const [workflowNotice, setWorkflowNotice] = useState(null);
   const [executions, setExecutions] = useState([]);
   const [selectedExecution, setSelectedExecution] = useState(null);
+  const [openAIConfigured, setOpenAIConfigured] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/health`, { credentials: "include" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((health) => { if (!cancelled) setOpenAIConfigured(Boolean(health?.openAIConfigured)); })
+      .catch(() => { if (!cancelled) setOpenAIConfigured(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const syncGoogleCredential = async ({ showToast = false, credentialId = null } = {}) => {
     const response = await fetch(`${API_BASE_URL}/api/google/credentials`, {
@@ -2467,6 +2525,17 @@ function App() {
           const data = await response.json();
           if (!response.ok) throw new Error(data?.error || `${node.name} failed.`);
           return data;
+        });
+      }
+      if (node.name === "Prepare Content") {
+        return executePerItem(input, async (item) => {
+          const response = await fetch(`${API_BASE_URL}/api/ai/prepare-content`, {
+            method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildPrepareContentRequest(node.config, item)),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data?.error || "Prepare Content failed.");
+          return mergePreparedContent(item, data, node.config?.preserveInput !== false);
         });
       }
       if (node.name === "Facebook Graph API") {
@@ -3271,6 +3340,18 @@ function App() {
           previousNode={getPreviousNode(editingNode.id)}
           credentials={facebookCredentials}
           onCreateCredential={(credentialId = null) => { pendingFacebookCredentialNodeId.current = editingNode.id; setEditingFacebookCredentialId(credentialId); setShowFacebookCredential(true); }}
+          onExecutePreviousNodes={executePreviousNodesFor}
+          onExecuteNode={executeRuntimeNode}
+          onSaveNode={updateCanvasNode}
+          onClose={() => setEditingNode(null)}
+        />
+      )}
+
+      {editingNode?.name === "Prepare Content" && (
+        <PrepareContentEditor
+          node={editingNode}
+          previousNode={getPreviousNode(editingNode.id)}
+          openAIConfigured={openAIConfigured}
           onExecutePreviousNodes={executePreviousNodesFor}
           onExecuteNode={executeRuntimeNode}
           onSaveNode={updateCanvasNode}
