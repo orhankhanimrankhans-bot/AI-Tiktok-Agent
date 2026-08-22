@@ -41,8 +41,9 @@ class FacebookGraphService {
     return data;
   }
   me(token) { return this.request("me", token, { fields: "id,name,email" }); }
+  pageIdentity(token) { return this.request("me", token, { fields: "id,name" }); }
   async inspectPageToken(token) {
-    const page = await this.request("me", token, { fields: "id,name" });
+    const page = await this.pageIdentity(token);
     if (!/^\d{3,30}$/.test(String(page.id || "")) || !String(page.name || "").trim()) {
       throw new FacebookGraphError(400, "wrong_token_type", "The access token did not identify a Facebook Page.");
     }
@@ -55,4 +56,30 @@ class FacebookGraphService {
   }
   pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,followers_count,link,picture" }, PERMISSIONS.page_metadata); }
 }
-module.exports = { containsForbiddenSecretFields, FacebookGraphError, FacebookGraphService, sanitizeMetaMessage, validatePageId };
+
+function credentialToken(credential) {
+  const manual = credential?.authMode === "manual_access_token";
+  const token = manual ? credential?.tokens?.pageAccessToken : credential?.tokens?.userAccessToken;
+  if (!token) throw new FacebookGraphError(404, "credential_disconnected", "Facebook credential was not found or is disconnected.");
+  return token;
+}
+
+function executeCredentialMe(service, credential) {
+  const token = credentialToken(credential);
+  return credential.authMode === "manual_access_token" ? service.pageIdentity(token) : service.me(token);
+}
+
+function executeCredentialPages(service, credential) {
+  if (credential?.authMode === "manual_access_token") {
+    throw new FacebookGraphError(400, "unsupported_manual_operation", "Page discovery with me/accounts requires a Managed Meta OAuth credential.");
+  }
+  return service.pages(credentialToken(credential));
+}
+
+function credentialPageToken(credential, pageId) {
+  if (credential?.authMode === "manual_access_token") return credentialToken(credential);
+  return credential?.tokens?.pageAccessTokens?.[pageId] || credentialToken(credential);
+}
+
+module.exports = { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages,
+  FacebookGraphError, FacebookGraphService, sanitizeMetaMessage, validatePageId };

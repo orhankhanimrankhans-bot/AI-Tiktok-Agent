@@ -10,7 +10,7 @@ const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
 const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
-const { containsForbiddenSecretFields, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
+const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
@@ -372,15 +372,15 @@ async function withFacebookCredential(req, res, action) {
   if (!credential?.tokens?.userAccessToken && !credential?.tokens?.pageAccessToken) return res.status(404).json({ error: "Facebook credential was not found or is disconnected." });
   try { return res.json(await action(facebookGraphService(), credential)); } catch (error) { return publicFacebookError(res, error); }
 }
-app.post("/api/facebook/graph/me", (req, res) => withFacebookCredential(req, res, async (service, credential) => service.me(credential.tokens.pageAccessToken || credential.tokens.userAccessToken)));
+app.post("/api/facebook/graph/me", (req, res) => withFacebookCredential(req, res, executeCredentialMe));
 app.post("/api/facebook/graph/pages", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
-  const result = await service.pages(credential.tokens.pageAccessToken || credential.tokens.userAccessToken);
-  if (credential.authMode !== AUTH_MODE_MANUAL) facebookCredentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
+  const result = await executeCredentialPages(service, credential);
+  facebookCredentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
     tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } });
   return { pages: result.pages };
 }));
 app.post("/api/facebook/graph/page", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
-  const pageId = validatePageId(req.body.pageId); const token = credential.tokens.pageAccessToken || credential.tokens.pageAccessTokens?.[pageId] || credential.tokens.userAccessToken;
+  const pageId = validatePageId(req.body.pageId); const token = credentialPageToken(credential, pageId);
   return service.pageMetadata(pageId, token);
 }));
 

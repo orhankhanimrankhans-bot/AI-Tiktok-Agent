@@ -16,3 +16,9 @@ test("manual routes serialize store metadata and never include token values", ()
   assert.match(routeSection, /facebookCredentialStore\.saveManual/);
   assert.match(routeSection, /facebookCredentialStore\.updateManual/);
 });
+
+test("Graph execution routes delegate auth-mode-aware me and Page discovery", () => {
+  assert.match(source, /\/api\/facebook\/graph\/me[^\n]+executeCredentialMe/);
+  assert.match(source, /executeCredentialPages\(service, credential\)/);
+  assert.match(source, /credentialPageToken\(credential, pageId\)/);
+});
