@@ -2,7 +2,6 @@ class FacebookGraphError extends Error {
   constructor(statusCode, code, message, permission = "") { super(message); this.statusCode = statusCode; this.code = code; this.permission = permission; }
 }
 const PERMISSIONS = { pages: "pages_show_list", page_metadata: "pages_read_engagement" };
-const REQUIRED_PUBLISHING_PERMISSIONS = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"];
 const FORBIDDEN_SECRET_KEY = /^(authorization|access[_-]?token|page[_-]?access[_-]?token|client[_-]?secret|app[_-]?secret|appsecret_proof|token)$/i;
 function containsForbiddenSecretFields(value) {
   if (Array.isArray(value)) return value.some(containsForbiddenSecretFields);
@@ -16,11 +15,18 @@ function sanitizeMetaMessage(message, secrets = []) {
 }
 function validateGraphVersion(version) { if (!/^v\d{1,2}\.\d{1,2}$/.test(version)) throw new FacebookGraphError(500, "invalid_graph_version", "Meta Graph API version is not configured safely."); return version; }
 function validatePageId(pageId) { const value = String(pageId || "").trim(); if (!/^\d{3,30}$/.test(value)) throw new FacebookGraphError(400, "invalid_page_id", "Enter a valid numeric Facebook Page ID."); return value; }
+function metaErrorStatus(responseStatus, code) {
+  if (responseStatus === 401 || code === "190") return 401;
+  if (responseStatus === 403) return 403;
+  if (responseStatus === 429) return 429;
+  if (responseStatus === 400 || code === "100") return 400;
+  return 502;
+}
 
 class FacebookGraphService {
   constructor({ version, fetchImpl = fetch }) { this.version = validateGraphVersion(version); this.fetch = fetchImpl; this.baseUrl = `https://graph.facebook.com/${version}`; }
   async request(path, token, params = {}, permission = "") {
-    if (!/^(me|me\/accounts|me\/permissions|\d{3,30})$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
+    if (!/^(me|me\/accounts|\d{3,30})$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
     const url = new URL(`${this.baseUrl}/${path}`); for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     let response; try { response = await this.fetch(url, { headers: { Authorization: `Bearer ${token}` } }); }
     catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
@@ -29,7 +35,7 @@ class FacebookGraphService {
       const meta = data.error || {}; const code = String(meta.code || response.status || "unknown");
       const required = ["10", "200", "299"].includes(code) ? permission : "";
       const prefix = required ? `Permission required: ${required}. ` : "";
-      throw new FacebookGraphError(response.status === 401 ? 401 : response.status === 403 ? 403 : response.status === 429 ? 429 : 502,
+      throw new FacebookGraphError(metaErrorStatus(response.status, code),
         `meta_${code}`, `${prefix}${sanitizeMetaMessage(meta.message, [token])}`, required);
     }
     return data;
@@ -40,12 +46,7 @@ class FacebookGraphService {
     if (!/^\d{3,30}$/.test(String(page.id || "")) || !String(page.name || "").trim()) {
       throw new FacebookGraphError(400, "wrong_token_type", "The access token did not identify a Facebook Page.");
     }
-    const permissionResponse = await this.request("me/permissions", token, {});
-    const granted = new Set((permissionResponse.data || []).filter((item) => item.status === "granted").map((item) => item.permission));
-    const permissions = Object.fromEntries(REQUIRED_PUBLISHING_PERMISSIONS.map((permission) => [permission, granted.has(permission)]));
-    const missing = REQUIRED_PUBLISHING_PERMISSIONS.filter((permission) => !permissions[permission]);
-    if (missing.length) throw new FacebookGraphError(403, "missing_page_permissions", `Required Facebook Page permissions are missing: ${missing.join(", ")}.`, missing[0]);
-    return { ok: true, pageId: String(page.id), pageName: String(page.name), status: "connected", permissions };
+    return { ok: true, pageId: String(page.id), pageName: String(page.name), status: "connected", permissionsVerified: false };
   }
   async pages(token) {
     const data = await this.request("me/accounts", token, { fields: "id,name,category,tasks,access_token", limit: "100" }, PERMISSIONS.pages);
@@ -54,4 +55,4 @@ class FacebookGraphService {
   }
   pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,followers_count,link,picture" }, PERMISSIONS.page_metadata); }
 }
-module.exports = { containsForbiddenSecretFields, FacebookGraphError, FacebookGraphService, REQUIRED_PUBLISHING_PERMISSIONS, sanitizeMetaMessage, validatePageId };
+module.exports = { containsForbiddenSecretFields, FacebookGraphError, FacebookGraphService, sanitizeMetaMessage, validatePageId };

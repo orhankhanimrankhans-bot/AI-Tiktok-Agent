@@ -64,5 +64,6 @@ test("connection states and safe failures render correctly", () => {
   assert.equal(facebookConnectionStatus("success"), "Connection tested successfully");
   assert.equal(facebookConnectionStatus("failed", "Safe message"), "Connection failed: Safe message");
   assert.equal(safeFacebookCredentialError({ status: 401, message: "secret provider response" }), "The token was rejected. Check its permissions and try again.");
+  assert.equal(safeFacebookCredentialError({ status: 400, code: "meta_100" }), "The token or credential details are invalid. Check them and try again.");
   assert.doesNotMatch(safeFacebookCredentialError(new Error("secret provider response")), /secret provider response/);
 });
