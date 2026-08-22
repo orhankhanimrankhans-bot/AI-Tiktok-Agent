@@ -40,6 +40,24 @@ export function upstreamInputError(error) {
   };
 }
 
+export function applyManualNodeResult(nodes, connections, updatedNode) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node.id === updatedNode.id ? updatedNode : node]));
+  const outgoing = new Map(nodes.map((node) => [node.id, []]));
+  for (const connection of connections) if (outgoing.has(connection.source)) outgoing.get(connection.source).push(connection.target);
+  const queue = (outgoing.get(updatedNode.id) || []).map((nodeId) => ({ nodeId, input: updatedNode.output ?? null }));
+  const invalidated = new Set();
+  while (queue.length) {
+    const { nodeId, input } = queue.shift();
+    if (invalidated.has(nodeId) || !nodeMap.has(nodeId)) continue;
+    invalidated.add(nodeId);
+    const node = nodeMap.get(nodeId);
+    nodeMap.set(nodeId, { ...node, input, output: null, error: null, status: "idle",
+      executionStartedAt: null, executionFinishedAt: null });
+    for (const nextId of outgoing.get(nodeId) || []) queue.push({ nodeId: nextId, input: null });
+  }
+  return nodes.map((node) => nodeMap.get(node.id));
+}
+
 export async function executeWithLifecycle({ node, input, executor, onTransition, now = () => new Date() }) {
   const running = runningNode(node, input, now());
   onTransition?.(running);

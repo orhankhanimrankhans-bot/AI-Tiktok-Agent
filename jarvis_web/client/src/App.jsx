@@ -12,6 +12,7 @@ import {
   selectOAuthCredential,
 } from "./googleCredentialState.js";
 import {
+  applyManualNodeResult,
   createScheduleManualOutput,
   executeUpstreamLinear,
   executeWithLifecycle,
@@ -2423,11 +2424,9 @@ function App() {
   }, []);
 
   const updateCanvasNode = (updatedNode) => {
-    setCanvasNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === updatedNode.id ? updatedNode : node
-      )
-    );
+    const nextNodes = canvasNodesRef.current.map((node) => node.id === updatedNode.id ? updatedNode : node);
+    canvasNodesRef.current = nextNodes;
+    setCanvasNodes(nextNodes);
 
     setEditingNode(updatedNode);
   };
@@ -2495,14 +2494,22 @@ function App() {
       throw new Error(`${node.name} does not support real execution in Phase 2.`);
   };
 
-  const executeRuntimeNode = async (node, input, context = {}) => executeWithLifecycle({
-    node,
-    input,
-    onTransition: (updatedNode) => {
-      setCanvasNodes((nodes) => nodes.map((item) => item.id === updatedNode.id ? updatedNode : item));
-    },
-    executor: async () => executeNodeOperation(node, input, context),
-  });
+  const executeRuntimeNode = async (node, input, context = {}) => {
+    const executed = await executeWithLifecycle({
+      node,
+      input,
+      onTransition: (updatedNode) => {
+        setCanvasNodes((nodes) => nodes.map((item) => item.id === updatedNode.id ? updatedNode : item));
+      },
+      executor: async () => executeNodeOperation(node, input, context),
+    });
+    if (context.triggerMode === "manual") {
+      const nextNodes = applyManualNodeResult(canvasNodesRef.current, connectionsRef.current, executed);
+      canvasNodesRef.current = nextNodes;
+      setCanvasNodes(nextNodes);
+    }
+    return executed;
+  };
 
   const executePreviousNodesFor = async (targetNodeId) => {
     try {
