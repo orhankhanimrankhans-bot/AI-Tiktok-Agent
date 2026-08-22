@@ -3,11 +3,13 @@ import test from "node:test";
 
 import {
   applyManualNodeResult,
+  createStructuredExecutionError,
   createScheduleManualOutput,
   executeUpstreamLinear,
   executeWithLifecycle,
   upstreamInputError,
 } from "./workflowExecution.js";
+import { runLinearWorkflow } from "./workflowRunner.js";
 
 const chain = [{ source: "search", target: "limit" }, { source: "limit", target: "download" }, { source: "download", target: "facebook" }];
 
@@ -143,4 +145,47 @@ test("node lifecycle transitions running to error", async () => {
   const result = await executeWithLifecycle({ node: { id: "a" }, executor: async () => { throw new Error("failed"); }, onTransition: (node) => transitions.push(node.status) });
   assert.deepEqual(transitions, ["running", "error"]);
   assert.equal(result.error, "failed");
+});
+
+test("plain errors remain message-only while structured errors preserve the safe allowlist", async () => {
+  const plain = await executeWithLifecycle({ node: { id: "plain" }, executor: async () => { throw new Error("plain failure"); } });
+  assert.deepEqual(plain.output, { status: "error", message: "plain failure" });
+
+  const diagnostic = { stage: "upload", reasonCode: "reel_upload_rejected", metaCode: 6000, metaSubcode: 1363019,
+    phaseStatus: "failed", publishStatus: "rejected", copyrightStatus: "complete", reason: "Safe Meta reason",
+    isTransient: false, traceId: "trace_123", unknown: "do-not-copy" };
+  const structured = await executeWithLifecycle({ node: { id: "facebook" }, executor: async () => {
+    throw createStructuredExecutionError({ message: "Facebook rejected the Reel video upload.", code: "reel_upload_rejected",
+      diagnostic, rawResponse: { secret: true }, accessToken: "never-copy" });
+  } });
+  assert.deepEqual(structured.output, { status: "error", message: "Facebook rejected the Reel video upload.",
+    code: "reel_upload_rejected", diagnostic: { stage: "upload", reasonCode: "reel_upload_rejected", metaCode: 6000,
+      metaSubcode: 1363019, phaseStatus: "failed", publishStatus: "rejected", copyrightStatus: "complete",
+      reason: "Safe Meta reason", isTransient: false, traceId: "trace_123" } });
+  assert.doesNotMatch(JSON.stringify(structured.output), /do-not-copy|never-copy|rawResponse|accessToken/);
+});
+
+test("structured diagnostics redact credentials, URLs, and internal paths", async () => {
+  const unsafe = createStructuredExecutionError({ message: "Rejected", code: "reel_upload_rejected", diagnostic: {
+    stage: "upload", reasonCode: "reel_upload_rejected", reason: "Bearer secret-token https://rupload.facebook.com/signed C:\\private\\video.mp4",
+    traceId: "trace-safe", Authorization: "Bearer never-copy", uploadUrl: "https://never-copy.example", raw: { token: "never-copy" },
+  } });
+  const failed = await executeWithLifecycle({ node: { id: "facebook" }, executor: async () => { throw unsafe; } });
+  const serialized = JSON.stringify(failed.output);
+  assert.match(serialized, /\[REDACTED\]/); assert.match(serialized, /\[REDACTED_URL\]/); assert.match(serialized, /\[REDACTED_PATH\]/);
+  assert.match(serialized, /Authorization \[REDACTED\]/);
+  assert.doesNotMatch(serialized, /secret-token|rupload\.facebook|C:\\private|never-copy|uploadUrl|raw/);
+});
+
+test("Run Workflow keeps safe diagnostics on the failed node", async () => {
+  const result = await runLinearWorkflow({ nodes: [{ id: "schedule", name: "Schedule Trigger" }, { id: "facebook", name: "Facebook Graph API" }],
+    connections: [{ source: "schedule", target: "facebook" }], executeNode: async (node) => {
+      if (node.id === "schedule") return { triggered: true };
+      throw createStructuredExecutionError({ message: "Rejected", code: "reel_upload_rejected",
+        diagnostic: { stage: "upload", reasonCode: "reel_upload_rejected", unknown: "drop" } });
+    } });
+  assert.equal(result.status, "error");
+  assert.deepEqual(result.nodes.find((node) => node.id === "facebook").output,
+    { status: "error", message: "Rejected", code: "reel_upload_rejected",
+      diagnostic: { stage: "upload", reasonCode: "reel_upload_rejected" } });
 });

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { executePerItem } from "./expressionResolver.js";
 import { buildFacebookReelRequest, FACEBOOK_OPERATION_PUBLISH_REEL, facebookNodeDefaults } from "./facebookReelConfig.js";
-import { executeWithLifecycle } from "./workflowExecution.js";
+import { createStructuredExecutionError, executeWithLifecycle } from "./workflowExecution.js";
 
 const item = { fileId: "drive-1", fileName: "clip.mp4", mimeType: "video/mp4", binary: { property: "data", referenceId: "bin_1234567890123456789012", size: 42 } };
 
@@ -29,6 +29,9 @@ test("Facebook editor renders Reel controls and dispatcher uses the Reel endpoin
   assert.match(source, /buildFacebookReelRequest\(node\.config, item\)/);
   assert.match(source, /api\/facebook\/reels\/publish/);
   assert.match(source, /executePerItem\(input/);
+  assert.match(source, /throw createStructuredExecutionError\(\{/);
+  assert.match(source, /code:\s*data\?\.code/); assert.match(source, /diagnostic:\s*data\?\.diagnostic/);
+  assert.doesNotMatch(source, /throw new Error\(data\?\.error \|\| "Facebook Reel publishing failed\."\)/);
 });
 
 test("multiple Reel items execute sequentially with one safe result per input", async () => {
@@ -44,4 +47,18 @@ test("Publish Reel uses shared running, success, and error lifecycle states", as
   const errorStates = []; const failed = await executeWithLifecycle({ node: { id: "facebook", name: "Facebook Graph API" }, input: item,
     executor: async () => { throw new Error("Facebook Reel processing failed."); }, onTransition: (node) => errorStates.push(node.status) });
   assert.deepEqual(errorStates, ["running", "error"]); assert.match(failed.error, /processing failed/i);
+});
+
+test("executePerItem transports a safe structured Reel failure without flattening it", async () => {
+  const structured = createStructuredExecutionError({ message: "Facebook rejected the Reel video upload.", code: "reel_upload_rejected",
+    diagnostic: { stage: "upload", reasonCode: "reel_upload_rejected", metaCode: 6000, unknown: "drop-me" },
+    response: { raw: "never-copy" } });
+  await assert.rejects(() => executePerItem([item], async () => { throw structured; }), (error) => {
+    assert.equal(error, structured); return true;
+  });
+  const failed = await executeWithLifecycle({ node: { id: "facebook" }, input: item,
+    executor: async () => executePerItem([item], async () => { throw structured; }) });
+  assert.deepEqual(failed.output, { status: "error", message: "Facebook rejected the Reel video upload.", code: "reel_upload_rejected",
+    diagnostic: { stage: "upload", reasonCode: "reel_upload_rejected", metaCode: 6000 } });
+  assert.doesNotMatch(JSON.stringify(failed.output), /drop-me|never-copy|raw/);
 });

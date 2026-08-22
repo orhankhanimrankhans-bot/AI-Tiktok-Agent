@@ -1,5 +1,54 @@
 export const NODE_STATUSES = ["idle", "running", "success", "error"];
 
+const STRUCTURED_EXECUTION_ERROR = Symbol("structuredExecutionError");
+const DIAGNOSTIC_KEYS = ["stage", "reasonCode", "metaCode", "metaSubcode", "phaseStatus", "publishStatus", "copyrightStatus", "reason", "isTransient", "traceId"];
+
+function safeCode(value, limit = 64) {
+  if (Number.isSafeInteger(value)) return value;
+  if (typeof value !== "string") return undefined;
+  const text = value.trim(); return text && text.length <= limit && /^[A-Za-z0-9_.-]+$/.test(text) ? text : undefined;
+}
+
+function safeDiagnosticText(value, limit) {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim().slice(0, limit)
+    .replace(/access_token=[^&\s]+/gi, "access_token=[REDACTED]")
+    .replace(/(?:Bearer|OAuth)\s+[^\s]+/gi, "Authorization [REDACTED]")
+    .replace(/(?:sk-|ya29\.|EAA)[A-Za-z0-9._-]{8,}/g, "[REDACTED]")
+    .replace(/https?:\/\/[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/[A-Za-z]:\\[^\r\n]*/g, "[REDACTED_PATH]")
+    .replace(/\/(?:home|Users|tmp)\/[^\s]*/g, "[REDACTED_PATH]");
+  return text || undefined;
+}
+
+export function sanitizeExecutionDiagnostic(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const diagnostic = {};
+  for (const key of DIAGNOSTIC_KEYS) {
+    const item = value[key];
+    if (["metaCode", "metaSubcode"].includes(key)) {
+      const code = safeCode(item, 32); if (code !== undefined) diagnostic[key] = code;
+    } else if (key === "isTransient") {
+      if (typeof item === "boolean") diagnostic[key] = item;
+    } else if (key === "traceId") {
+      const traceId = safeCode(item, 128); if (traceId !== undefined) diagnostic[key] = traceId;
+    } else {
+      const text = safeDiagnosticText(item, key === "reason" ? 240 : 64); if (text) diagnostic[key] = text;
+    }
+  }
+  return Object.keys(diagnostic).length ? diagnostic : undefined;
+}
+
+export function createStructuredExecutionError({ message, code, diagnostic } = {}) {
+  const safeMessage = safeDiagnosticText(message, 600) || "Operation failed.";
+  const output = { status: "error", message: safeMessage };
+  const safeErrorCode = safeCode(code); if (typeof safeErrorCode === "string") output.code = safeErrorCode;
+  const safeDiagnostic = sanitizeExecutionDiagnostic(diagnostic); if (safeDiagnostic) output.diagnostic = safeDiagnostic;
+  const error = new Error(safeMessage);
+  Object.defineProperty(error, STRUCTURED_EXECUTION_ERROR, { value: output });
+  return error;
+}
+
 export function runningNode(node, input, now = new Date()) {
   return {
     ...node,
@@ -24,10 +73,11 @@ export function successfulNode(node, output, now = new Date()) {
 
 export function failedNode(node, error, now = new Date()) {
   const message = error instanceof Error ? error.message : String(error);
+  const structured = error instanceof Error ? error[STRUCTURED_EXECUTION_ERROR] : null;
   return {
     ...node,
     status: "error",
-    output: { status: "error", message },
+    output: structured ? { ...structured } : { status: "error", message },
     error: message,
     executionFinishedAt: now.toISOString(),
   };

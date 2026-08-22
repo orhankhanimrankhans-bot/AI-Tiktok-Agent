@@ -13,6 +13,7 @@ import {
 } from "./googleCredentialState.js";
 import {
   applyManualNodeResult,
+  createStructuredExecutionError,
   createScheduleManualOutput,
   executeUpstreamLinear,
   executeWithLifecycle,
@@ -2546,7 +2547,13 @@ function App() {
             const request = buildFacebookReelRequest(node.config, item);
             const response = await fetch(`${API_BASE_URL}/api/facebook/reels/publish`, { method: "POST", credentials: "include",
               headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
-            const data = await response.json(); if (!response.ok) throw new Error(data?.error || "Facebook Reel publishing failed."); return data;
+            const data = await response.json();
+            if (!response.ok) throw createStructuredExecutionError({
+              message: data?.error || data?.message || "Facebook Reel publishing failed.",
+              code: data?.code,
+              diagnostic: data?.diagnostic,
+            });
+            return data;
           });
         }
         if (node.config?.method !== "GET") throw new Error("Graph API Request supports read-only Facebook GET operations only.");
