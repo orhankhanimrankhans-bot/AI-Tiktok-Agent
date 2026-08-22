@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const test = require("node:test");
-const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
+const { executeDriveDelete, executeDriveDownload, executeDriveMove } = require("./driveFiles");
 const ID = "gcred_1234567890123456789012";
 class Auth extends EventEmitter { setCredentials(tokens) { this.tokens = tokens; } }
 const store = (id = ID) => ({ get: async (value) => value === id ? { id, tokens: { access_token: "secret" } } : null, save: async () => {} });
@@ -24,4 +24,37 @@ test("Drive download stores binary by reference without exposing OAuth data", as
   assert.equal(result.binary.size, 4); assert.equal(fs.readFileSync(path.join(dir, result.binary.referenceId), "utf8"), "file");
   assert.doesNotMatch(JSON.stringify(result), /access_token|secret/);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("Drive move adds Done and removes every original parent without copying or uploading", async () => {
+  let updateRequest; let copyCalls = 0; let createCalls = 0;
+  const result = await executeDriveMove({ request: { credentialId: ID, fileId: "source_file_1", destinationFolderId: "done_folder_1" }, credentialStore: store(),
+    createOAuthClient: () => new Auth(), createDriveClient: () => ({ files: {
+      get: async ({ fileId }) => ({ data: { id: fileId, name: "video.mp4", parents: ["source_folder", "secondary_parent"] } }),
+      update: async (request) => { updateRequest = request; return { data: { id: request.fileId } }; },
+      copy: async () => { copyCalls += 1; }, create: async () => { createCalls += 1; },
+    } }) });
+  assert.deepEqual(result, { success: true, fileId: "source_file_1", fileName: "video.mp4", destinationFolderId: "done_folder_1", status: "moved" });
+  assert.equal(updateRequest.addParents, "done_folder_1"); assert.equal(updateRequest.removeParents, "source_folder,secondary_parent");
+  assert.equal(copyCalls, 0); assert.equal(createCalls, 0); assert.doesNotMatch(JSON.stringify(result), /access_token|Authorization|secret/);
+});
+
+test("Drive move retries transient failures at most three times", async () => {
+  let attempts = 0; const pauses = [];
+  const result = await executeDriveMove({ request: { credentialId: ID, fileId: "source_file_2", destinationFolderId: "done_folder_2" }, credentialStore: store(),
+    sleep: async (ms) => pauses.push(ms), createOAuthClient: () => new Auth(), createDriveClient: () => ({ files: {
+      get: async () => ({ data: { name: "retry.mp4", parents: ["source"] } }), update: async () => {
+        attempts += 1; if (attempts < 3) throw { response: { status: attempts === 1 ? 429 : 503 } };
+      },
+    } }) });
+  assert.equal(result.status, "moved"); assert.equal(attempts, 3); assert.deepEqual(pauses, [100, 200]);
+});
+
+test("Drive move does not retry permanent errors and reports a safe archive failure", async () => {
+  let attempts = 0;
+  await assert.rejects(() => executeDriveMove({ request: { credentialId: ID, fileId: "source_file_3", destinationFolderId: "done_folder_3" }, credentialStore: store(),
+    sleep: async () => {}, createOAuthClient: () => new Auth(), createDriveClient: () => ({ files: {
+      get: async () => ({ data: { name: "failed.mp4", parents: ["source"] } }), update: async () => { attempts += 1; throw { response: { status: 403 }, message: "sensitive upstream detail" }; },
+    } }) }), (error) => error.code === "drive_move_failed" && !/sensitive/i.test(error.message));
+  assert.equal(attempts, 1);
 });

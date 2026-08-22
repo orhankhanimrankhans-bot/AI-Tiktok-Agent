@@ -4,6 +4,7 @@ import test from "node:test";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import { buildFacebookReelRequest, facebookNodeDefaults, FACEBOOK_OPERATION_PUBLISH_REEL } from "./facebookReelConfig.js";
 import { buildPrepareContentRequest, mergePreparedContent, prepareContentDefaults } from "./prepareContentConfig.js";
+import { buildArchiveMoveRequest, preservePublishedSource } from "./postPublishArchive.js";
 import { applyManualNodeResult, createScheduleManualOutput } from "./workflowExecution.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
@@ -81,4 +82,43 @@ test("Execute Step downstream invalidation still resets the complete original li
   assert.equal(updated[0].status, "success"); assert.deepEqual(updated[1].output, [{ id: "new-file" }]);
   for (const node of updated.slice(2)) { assert.equal(node.status, "idle"); assert.equal(node.output, null); }
   assert.deepEqual(updated[2].input, [{ id: "new-file" }]);
+});
+
+test("seven-node production flow archives the exact source only after Facebook publishes", async () => {
+  const archiveNode = { id: "archive", provider: "Google Drive", name: "Move File", x: 1420, y: 120,
+    config: { credentialId: "gcred_production", fileId: "{{ $json.sourceFileId }}", destinationFolderId: "done_folder_id" } };
+  const sevenNodes = [...nodes, archiveNode]; const sevenConnections = sevenNodes.slice(0, -1)
+    .map((node, index) => ({ id: `archive-edge-${index}`, source: node.id, target: sevenNodes[index + 1].id }));
+  const moved = [];
+  const result = await runLinearWorkflow({ nodes: sevenNodes, connections: sevenConnections, executeNode: async (node, input) => {
+    if (node.id === "trigger") return createScheduleManualOutput(node.config);
+    if (node.id === "search") return [{ id: "original_drive_file", name: "original.mp4" }];
+    if (node.id === "limit") return input.slice(0, 1);
+    if (node.id === "download") return [{ fileId: input[0].id, fileName: "original.mp4", mimeType: "video/mp4",
+      binary: { property: "data", referenceId: "bin_1234567890123456789012", size: 12 } }];
+    if (node.id === "prepare") return input.map((item) => ({ ...item, title: "Ready", socialCaption: "Caption" }));
+    if (node.id === "facebook") return input.map((item) => preservePublishedSource({ success: true, status: "published", videoId: "video_1" }, item));
+    const request = buildArchiveMoveRequest(node.config, input[0]); moved.push(request);
+    return [{ success: true, fileId: request.fileId, destinationFolderId: request.destinationFolderId, status: "moved" }];
+  } });
+  assert.equal(result.status, "success"); assert.deepEqual(result.nodes.map((node) => node.status), Array(7).fill("success"));
+  assert.deepEqual(moved, [{ credentialId: "gcred_production", fileId: "original_drive_file", destinationFolderId: "done_folder_id" }]);
+});
+
+test("Facebook failure stops the linear workflow before Move File", async () => {
+  const archiveNode = { id: "archive", name: "Move File", config: { credentialId: "gcred_production",
+    fileId: "{{ $json.sourceFileId }}", destinationFolderId: "done_folder_id" } };
+  const failureNodes = [...nodes, archiveNode]; const failureConnections = failureNodes.slice(0, -1)
+    .map((node, index) => ({ id: `failure-edge-${index}`, source: node.id, target: failureNodes[index + 1].id }));
+  let moveCalls = 0;
+  const result = await runLinearWorkflow({ nodes: failureNodes, connections: failureConnections, executeNode: async (node, input) => {
+    if (node.id === "trigger") return {};
+    if (node.id === "search") return [{ id: "original_drive_file" }];
+    if (node.id === "limit") return input;
+    if (node.id === "download") return [{ fileId: "original_drive_file" }];
+    if (node.id === "prepare") return input;
+    if (node.id === "facebook") throw new Error("Facebook rejected publishing.");
+    moveCalls += 1; return input;
+  } });
+  assert.equal(result.status, "error"); assert.equal(moveCalls, 0); assert.equal(result.nodes.find((node) => node.id === "archive").status, "idle");
 });

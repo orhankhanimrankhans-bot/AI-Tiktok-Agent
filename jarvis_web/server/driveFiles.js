@@ -26,6 +26,39 @@ function validFileId(value) {
   return id;
 }
 
+function transientDriveError(error) {
+  const status = Number(error?.response?.status || error?.code || 0);
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+async function executeDriveMove(options) {
+  const fileId = validFileId(options.request.fileId);
+  const destinationFolderId = validFileId(options.request.destinationFolderId);
+  const selected = await selectedDrive(options); const maxAttempts = 3;
+  try {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const metadata = await selected.drive.files.get({ fileId, fields: "id,name,parents", supportsAllDrives: true });
+        const parents = Array.isArray(metadata.data?.parents) ? metadata.data.parents.map(String) : [];
+        const removeParents = parents.filter((parentId) => parentId !== destinationFolderId);
+        if (!parents.includes(destinationFolderId) || removeParents.length) {
+          const request = { fileId, fields: "id,name,parents", supportsAllDrives: true };
+          if (!parents.includes(destinationFolderId)) request.addParents = destinationFolderId;
+          if (removeParents.length) request.removeParents = removeParents.join(",");
+          await selected.drive.files.update(request);
+        }
+        return { success: true, fileId, fileName: String(metadata.data?.name || ""), destinationFolderId, status: "moved" };
+      } catch (error) {
+        if (!transientDriveError(error) || attempt === maxAttempts) {
+          throw new DriveSearchError(transientDriveError(error) ? 502 : 400, "drive_move_failed",
+            "The source video could not be moved to the configured Google Drive folder.");
+        }
+        await (options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(attempt * 100);
+      }
+    }
+  } finally { await selected.persistRefresh(); }
+}
+
 async function executeDriveDownload(options) {
   const fileId = validFileId(options.request.fileId);
   const property = String(options.request.binaryProperty || "data").trim() || "data";
@@ -52,4 +85,4 @@ async function executeDriveDelete(options) {
   finally { await selected.persistRefresh(); }
 }
 
-module.exports = { executeDriveDelete, executeDriveDownload, validFileId };
+module.exports = { executeDriveDelete, executeDriveDownload, executeDriveMove, validFileId };

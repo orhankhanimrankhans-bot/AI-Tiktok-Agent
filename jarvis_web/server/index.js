@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
 const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
-const { executeDriveDelete, executeDriveDownload } = require("./driveFiles");
+const { executeDriveDelete, executeDriveDownload, executeDriveMove } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
@@ -475,6 +475,7 @@ async function handleDriveFileAction(req, res, action) {
 
 app.post("/api/google/drive/download", (req, res) => handleDriveFileAction(req, res, executeDriveDownload));
 app.post("/api/google/drive/delete", (req, res) => handleDriveFileAction(req, res, executeDriveDelete));
+app.post("/api/google/drive/move", (req, res) => handleDriveFileAction(req, res, executeDriveMove));
 
 app.get("/api/executions", (req, res) => {
   try { return res.json({ executions: executionStore.list(req.query.limit) }); }

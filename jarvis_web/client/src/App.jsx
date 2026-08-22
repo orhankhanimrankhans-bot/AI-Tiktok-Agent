@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import DataViewer from "./DataViewer.jsx";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
+import { ARCHIVE_AFTER_PUBLISH_ERROR, buildArchiveMoveRequest, preservePublishedSource } from "./postPublishArchive.js";
 import { assertSafeFacebookConfig, facebookCredentialLabel, sanitizeFacebookConfig } from "./facebookConfig.js";
 import { buildFacebookReelRequest, FACEBOOK_OPERATION_PUBLISH_REEL, FACEBOOK_OPERATION_READ, facebookNodeDefaults } from "./facebookReelConfig.js";
 import { deleteManualFacebookCredential, facebookConnectionStatus, safeFacebookCredentialError, saveManualFacebookCredential, testManualFacebookCredential } from "./facebookManualCredential.js";
@@ -1850,6 +1851,8 @@ function createPhase2Config(nodeId) {
   if (nodeId === "limit") return { maxItems: 1, keep: "First Items", settings: defaultNodeSettings() };
   if (nodeId === "google-download") return { credentialId: "", resource: "File", operation: "Download", fileIdMode: "Expression", fileId: "{{ $json.id }}", binaryProperty: "data", settings: defaultNodeSettings() };
   if (nodeId === "google-delete") return { credentialId: "", resource: "File", operation: "Delete", fileIdMode: "Expression", fileId: "{{ $json.id }}", requireConfirmation: true, settings: defaultNodeSettings() };
+  if (nodeId === "google-move") return { credentialId: "", resource: "File", operation: "Move", fileIdMode: "Expression",
+    fileId: "{{ $json.sourceFileId }}", destinationFolderId: "", settings: defaultNodeSettings() };
   if (nodeId === "facebook-graph-api") return { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "prepare-content") return { ...prepareContentDefaults(), settings: defaultNodeSettings() };
   return null;
@@ -1944,9 +1947,11 @@ function GenericNodeSettings({ settings, onChange, version }) {
 function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
   const isLimit = kind === "limit";
   const isDownload = kind === "download";
+  const isMove = kind === "move";
   const defaults = isLimit
     ? { maxItems: 1, keep: "First Items", settings: defaultNodeSettings() }
-    : { credentialId: "", resource: "File", operation: isDownload ? "Download" : "Delete", fileIdMode: "Expression", fileId: "{{ $json.id }}", binaryProperty: "data", requireConfirmation: true, settings: defaultNodeSettings() };
+    : { credentialId: "", resource: "File", operation: isDownload ? "Download" : isMove ? "Move" : "Delete", fileIdMode: "Expression",
+      fileId: isMove ? "{{ $json.sourceFileId }}" : "{{ $json.id }}", destinationFolderId: "", binaryProperty: "data", requireConfirmation: true, settings: defaultNodeSettings() };
   const [activeTab, setActiveTab] = useState("Parameters");
   const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
   const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
@@ -1997,7 +2002,9 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
                     <label>Operation</label><select value={config.operation} disabled><option>{config.operation}</option></select>
                     <label>File ID</label><div className="value-mode-switch">{["Fixed", "Expression"].map((mode) => <button key={mode} className={config.fileIdMode === mode ? "active" : ""} onClick={() => setConfig({ ...config, fileIdMode: mode })}>{mode}</button>)}</div>
                     <input value={config.fileId} onChange={(event) => setConfig({ ...config, fileId: event.target.value })} placeholder={config.fileIdMode === "Expression" ? "{{ $json.id }}" : "Google Drive file ID"} />
-                    {isDownload ? <><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /><div className="config-section-row"><span>Options</span><button>+</button></div><button className="config-add-button">+ Add option</button></> : <><ToggleSetting label="Require Confirmation" value={config.requireConfirmation} onChange={() => setConfig({ ...config, requireConfirmation: !config.requireConfirmation })} /><ToggleSetting label="Approved for unattended workflow deletion" value={Boolean(config.approvedForWorkflow)} onChange={() => setConfig({ ...config, approvedForWorkflow: !config.approvedForWorkflow })} /><div className="destructive-warning">This action can permanently delete a file. Confirmation is required before destructive execution.</div></>}
+                    {isDownload ? <><label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} /><div className="config-section-row"><span>Options</span><button>+</button></div><button className="config-add-button">+ Add option</button></>
+                      : isMove ? <><label>Destination Folder ID</label><input value={config.destinationFolderId} onChange={(event) => setConfig({ ...config, destinationFolderId: event.target.value })} placeholder="Google Drive Done folder ID" /><p className="credential-note">Select or create the Done folder once, then paste its exact Google Drive folder ID here.</p></>
+                      : <><ToggleSetting label="Require Confirmation" value={config.requireConfirmation} onChange={() => setConfig({ ...config, requireConfirmation: !config.requireConfirmation })} /><ToggleSetting label="Approved for unattended workflow deletion" value={Boolean(config.approvedForWorkflow)} onChange={() => setConfig({ ...config, approvedForWorkflow: !config.approvedForWorkflow })} /><div className="destructive-warning">This action can permanently delete a file. Confirmation is required before destructive execution.</div></>}
                   </>}
                 </div>
               ) : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version={`${node.name} node version 1.0`} />}
@@ -2552,18 +2559,24 @@ function App() {
         if (!Number.isInteger(count) || count < 1) throw new Error("Limit Max Items must be a positive whole number.");
         return node.config?.keep === "Last Items" ? input.slice(-count) : input.slice(0, count);
       }
-      if (["Download File", "Delete File"].includes(node.name)) {
+      if (["Download File", "Delete File", "Move File"].includes(node.name)) {
         if (!node.config?.credentialId) throw new Error("Select a Google Drive credential before executing.");
         if (node.name === "Delete File" && context.triggerMode === "workflow" && node.config.requireConfirmation && !node.config.approvedForWorkflow) {
           throw new Error("Delete File requires explicit approval for unattended workflow execution.");
         }
         return executePerItem(input, async (item) => {
-          const fileId = resolveExpression(node.config?.fileId || "", item);
-          const response = await fetch(`${API_BASE_URL}/api/google/drive/${node.name === "Download File" ? "download" : "delete"}`, {
+          const moveRequest = node.name === "Move File" ? buildArchiveMoveRequest(node.config, item) : null;
+          const fileId = moveRequest?.fileId || resolveExpression(node.config?.fileId || "", item);
+          const action = node.name === "Download File" ? "download" : node.name === "Move File" ? "move" : "delete";
+          const response = await fetch(`${API_BASE_URL}/api/google/drive/${action}`, {
             method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ credentialId: node.config.credentialId, fileId, binaryProperty: node.config.binaryProperty || "data" }),
+            body: JSON.stringify({ credentialId: node.config.credentialId, fileId, destinationFolderId: moveRequest?.destinationFolderId,
+              binaryProperty: node.config.binaryProperty || "data" }),
           });
           const data = await response.json();
+          if (!response.ok && node.name === "Move File") {
+            throw new Error(ARCHIVE_AFTER_PUBLISH_ERROR);
+          }
           if (!response.ok) throw new Error(data?.error || `${node.name} failed.`);
           return data;
         });
@@ -2593,7 +2606,7 @@ function App() {
               code: data?.code,
               diagnostic: data?.diagnostic,
             });
-            return data;
+            return preservePublishedSource(data, item);
           });
         }
         if (node.config?.method !== "GET") throw new Error("Graph API Request supports read-only Facebook GET operations only.");
@@ -3479,11 +3492,11 @@ function App() {
         />
       )}
 
-      {editingNode && ["Limit", "Download File", "Delete File"].includes(editingNode.name) && (
+      {editingNode && ["Limit", "Download File", "Delete File", "Move File"].includes(editingNode.name) && (
         <Phase2NodeEditor
           key={`${editingNode.id}:${editingNode.config?.credentialId || "none"}`}
           node={editingNode}
-          kind={editingNode.name === "Limit" ? "limit" : editingNode.name === "Download File" ? "download" : "delete"}
+          kind={editingNode.name === "Limit" ? "limit" : editingNode.name === "Download File" ? "download" : editingNode.name === "Move File" ? "move" : "delete"}
           previousNode={getPreviousNode(editingNode.id)}
           credentials={googleCredentials}
           onExecutePreviousNodes={executePreviousNodesFor}
