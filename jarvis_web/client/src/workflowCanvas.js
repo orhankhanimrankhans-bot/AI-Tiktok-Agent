@@ -38,7 +38,12 @@ export function workflowNodeSubtitle(node = {}) {
   return node.config?.operation || node.operation || node.type || "Workflow step";
 }
 
-export function connectionVisualState(source, target) {
+export function visualNodeStatus(node, workflowActive) {
+  return workflowActive ? (node?.status || "idle") : "idle";
+}
+
+export function connectionVisualState(source, target, workflowActive = true) {
+  if (!workflowActive) return "idle";
   if (target?.status === "error") return "error";
   if (source?.status === "success" && target?.status === "running") return "running";
   if (source?.status === "success" && target?.status === "success") return "success";

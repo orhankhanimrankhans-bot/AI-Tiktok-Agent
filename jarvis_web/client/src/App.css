@@ -2451,9 +2451,6 @@ button {
 .workflow-node.selected.status-running,
 .workflow-node.selected.status-success,
 .workflow-node.selected.status-error { border-color: #27d9f5; box-shadow: 0 0 0 2px rgba(39, 217, 245, .3), 0 10px 28px rgba(0, 0, 0, .34); }
-.theme-idle .workflow-node.schedule-trigger-node.status-success { border-color: #52636b; box-shadow: inset 0 1px rgba(255,255,255,.06), inset 0 -1px rgba(0,0,0,.4), 0 12px 28px rgba(0,0,0,.32); }
-.theme-idle .workflow-node.schedule-trigger-node.status-success.selected { border-color: #27d9f5; box-shadow: 0 0 0 2px rgba(39, 217, 245, .3), 0 10px 28px rgba(0, 0, 0, .34); }
-.theme-idle .workflow-node.schedule-trigger-node .node-status-indicator.success { background: #687076; box-shadow: 0 0 0 2px #202326; }
 
 @keyframes workflow-node-running {
   50% { box-shadow: 0 0 0 3px rgba(49, 217, 176, .22), 0 9px 26px rgba(0, 0, 0, .34); }

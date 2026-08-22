@@ -22,7 +22,7 @@ import {
 import { runLinearWorkflow } from "./workflowRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { CANVAS_APPEARANCE_KEY, CANVAS_COLORS, HEADER_COLORS, clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState,
-  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, workflowNodeSubtitle } from "./workflowCanvas.js";
+  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
@@ -2950,7 +2950,7 @@ function App() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
-  const workflowStatus = isWorkflowRunning ? "running" : workflowNotice?.status === "error" ? "error" : workflowNotice?.status === "success" ? "success" : "idle";
+  const workflowStatus = isWorkflowRunning ? "running" : "idle";
 
   return (
     <div className={`jarvis-app theme-${workflowStatus}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}>
@@ -3145,7 +3145,7 @@ function App() {
 
                         if (!source || !target) return null;
 
-                        const edgeState = connectionVisualState(source, target);
+                        const edgeState = connectionVisualState(source, target, isWorkflowRunning);
 
                         return (
                           <g key={connection.id} className={`workflow-connection ${edgeState}${selectedConnectionId === connection.id ? " selected" : ""}`}
@@ -3203,7 +3203,7 @@ function App() {
                         (node, index) => (
                          <div
   key={node.id}
-  className={`workflow-node status-${node.status ?? "idle"}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
+  className={`workflow-node status-${visualNodeStatus(node, isWorkflowRunning)}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
   style={{
     left: node.x ?? 140 + index * 210,
     top: node.y ?? 200 + (index % 2) * 100,
@@ -3243,7 +3243,7 @@ function App() {
 
                             <div className="workflow-node-copy"><strong>{node.name}</strong><small title={workflowNodeSubtitle(node)}>{workflowNodeSubtitle(node)}</small></div>
 
-                            <span className={`node-status-indicator ${node.status ?? "idle"}`} title={`Status: ${node.status ?? "idle"}`} />
+                            <span className={`node-status-indicator ${visualNodeStatus(node, isWorkflowRunning)}`} title={`Visual status: ${visualNodeStatus(node, isWorkflowRunning)}`} />
 
                             <button
                               className="node-port node-output-port"

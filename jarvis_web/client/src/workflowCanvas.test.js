@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, workflowNodeSubtitle } from "./workflowCanvas.js";
+import { connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 
 test("dragging updates logical node position without zoom jumps", () => {
   const moved = moveNodeFromPointer({ id: "drive", x: 100, y: 80 }, { nodeX: 100, nodeY: 80, pointerX: 200, pointerY: 100 }, { x: 260, y: 140 }, 0.5);
@@ -23,6 +23,22 @@ test("edge state follows the exact source and target runtime lifecycle", () => {
   assert.equal(connectionVisualState({ status: "success" }, { status: "idle" }), "idle");
   assert.equal(connectionVisualState({ status: "idle" }, { status: "idle" }), "idle");
   assert.equal(connectionVisualState({ status: "error" }, { status: "idle" }), "idle");
+});
+
+test("idle workflow neutralizes persisted node and edge states without changing runtime data", () => {
+  const persistedSuccess = { status: "success", output: { binary: { referenceId: "bin_preserved" } } };
+  assert.equal(visualNodeStatus(persistedSuccess, false), "idle");
+  assert.equal(connectionVisualState({ status: "success" }, { status: "success" }, false), "idle");
+  assert.equal(persistedSuccess.status, "success");
+  assert.equal(persistedSuccess.output.binary.referenceId, "bin_preserved");
+});
+
+test("active workflow preserves running, success, and error presentation states", () => {
+  assert.equal(visualNodeStatus({ status: "running" }, true), "running");
+  assert.equal(visualNodeStatus({ status: "success" }, true), "success");
+  assert.equal(visualNodeStatus({ status: "error" }, true), "error");
+  assert.equal(connectionVisualState({ status: "success" }, { status: "running" }, true), "running");
+  assert.equal(connectionVisualState({ status: "success" }, { status: "error" }, true), "error");
 });
 
 test("canvas markup includes compact node content, provider icon, and connection handles", () => {
