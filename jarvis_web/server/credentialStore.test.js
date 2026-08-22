@@ -7,14 +7,15 @@ const { DatabaseSync } = require("node:sqlite");
 
 const {
   CredentialStore,
+  decryptTokens,
   deriveEncryptionKey,
   encryptTokens,
 } = require("./credentialStore");
 
 const TEST_SECRET = "test-only-secret-with-sufficient-entropy-123456";
 
-function insertRawCredential(db, { id, email, name, tokens, createdAt, updatedAt }) {
-  const encrypted = encryptTokens(tokens, deriveEncryptionKey(TEST_SECRET));
+function insertRawCredential(db, { id, email, name, tokens, createdAt, updatedAt, secret = TEST_SECRET }) {
+  const encrypted = encryptTokens(tokens, deriveEncryptionKey(secret));
   db.prepare(`
     INSERT INTO google_credentials (
       id, provider, type, account_email, account_name,
@@ -71,8 +72,56 @@ test("encrypted credentials persist across reload and remain independently delet
   );
   await assert.rejects(
     () => store.get(secondId, { includeTokens: true }),
-    /authenticate data/
+    (error) => error.code === "credential_decryption_failed" && !/token|secret|cipher/i.test(error.message)
   );
+});
+
+test("legacy SESSION_SECRET credentials migrate once to the current encryption key", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-key-migration-"));
+  const dbPath = path.join(tempDir, "credentials.sqlite3");
+  const currentSecret = "current-dedicated-encryption-secret-test-only";
+  const legacySecret = "legacy-session-secret-test-only";
+  const tokens = { access_token: "legacy-access-value", refresh_token: "legacy-refresh-value" };
+  const id = CredentialStore.generateId();
+  let store = new CredentialStore({ dbPath, encryptionSecret: currentSecret });
+  t.after(async () => { await store.close().catch(() => {}); fs.rmSync(tempDir, { recursive: true, force: true }); });
+  await store.open(); await store.close();
+  const db = new DatabaseSync(dbPath);
+  insertRawCredential(db, { id, email: "legacy@example.com", name: "Legacy", tokens, secret: legacySecret,
+    createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
+  const before = db.prepare("SELECT * FROM google_credentials WHERE id = ?").get(id); db.close();
+
+  store = new CredentialStore({ dbPath, encryptionSecret: currentSecret, legacyEncryptionSecrets: [legacySecret] });
+  await store.open();
+  const publicRead = await store.get(id);
+  assert.equal(publicRead.id, id); assert.equal(Object.hasOwn(publicRead, "tokens"), false);
+  const migrated = await store.getRow(id);
+  assert.equal(Buffer.from(migrated.token_ciphertext).equals(Buffer.from(before.token_ciphertext)), false);
+  assert.deepEqual(decryptTokens(migrated, deriveEncryptionKey(currentSecret)), tokens);
+  await store.close();
+
+  store = new CredentialStore({ dbPath, encryptionSecret: currentSecret });
+  await store.open();
+  assert.deepEqual((await store.get(id, { includeTokens: true })).tokens, tokens);
+  const afterSecondRead = await store.getRow(id);
+  assert.equal(Buffer.from(afterSecondRead.token_ciphertext).equals(Buffer.from(migrated.token_ciphertext)), true);
+  assert.equal(Buffer.from(afterSecondRead.token_iv).equals(Buffer.from(migrated.token_iv)), true);
+  assert.equal(Buffer.from(afterSecondRead.token_tag).equals(Buffer.from(migrated.token_tag)), true);
+});
+
+test("wrong legacy key and corrupted ciphertext fail with safe errors", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-key-failure-")); const dbPath = path.join(tempDir, "credentials.sqlite3");
+  const id = CredentialStore.generateId(); let store = new CredentialStore({ dbPath, encryptionSecret: "current-key", legacyEncryptionSecrets: ["wrong-legacy-key"] });
+  t.after(async () => { await store.close().catch(() => {}); fs.rmSync(tempDir, { recursive: true, force: true }); });
+  await store.open();
+  insertRawCredential(store.db, { id, email: "failure@example.com", name: "Failure",
+    tokens: { access_token: "must-never-appear", refresh_token: "also-hidden" }, secret: "actual-legacy-key",
+    createdAt: "2026-01-01", updatedAt: "2026-01-01" });
+  await assert.rejects(() => store.get(id, { includeTokens: true }),
+    (error) => error.code === "credential_decryption_failed" && error.message === "Stored credential could not be decrypted.");
+  store.db.prepare("UPDATE google_credentials SET token_tag = ? WHERE id = ?").run(Buffer.alloc(16), id);
+  await assert.rejects(() => store.get(id),
+    (error) => error.code === "credential_decryption_failed" && !/must-never-appear|also-hidden|current-key|legacy/i.test(error.message));
 });
 
 test("uniqueness migration removes duplicate accounts atomically and keeps the newest", async (t) => {

@@ -89,6 +89,8 @@ const JARVIS_DB_PATH = path.resolve(
 const CREDENTIAL_ENCRYPTION_SECRET =
   process.env.CREDENTIAL_ENCRYPTION_SECRET || process.env.SESSION_SECRET ||
   (IS_PRODUCTION ? "" : "jarvis-dev-session-secret-change-me");
+const LEGACY_CREDENTIAL_ENCRYPTION_SECRETS = [process.env.SESSION_SECRET ||
+  (IS_PRODUCTION ? "" : "jarvis-dev-session-secret-change-me")].filter(Boolean);
 
 const googleOAuthConfigured = Boolean(
   GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI
@@ -225,6 +227,7 @@ function createOAuthClient() {
 const credentialStore = new CredentialStore({
   dbPath: JARVIS_DB_PATH,
   encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
+  legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS,
 });
 let executionStore;
 let facebookCredentialStore;
@@ -729,7 +732,8 @@ async function startServer() {
   await credentialStore.open();
   executionStore = new ExecutionStore(credentialStore.db);
   executionStore.open();
-  facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET });
+  facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
+    legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();
   app.listen(PORT, () => {
     console.log("");

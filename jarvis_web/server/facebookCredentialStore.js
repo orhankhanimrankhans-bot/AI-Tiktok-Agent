@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { decryptTokens, deriveEncryptionKey, encryptTokens } = require("./credentialStore");
+const { decryptTokensWithFallback, encryptionKeys, encryptTokens } = require("./credentialStore");
 
 const ID_PATTERN = /^fcred_[A-Za-z0-9_-]{22}$/;
 const AUTH_MODE_OAUTH = "oauth";
@@ -16,7 +16,9 @@ function publicCredential(row) {
 }
 
 class FacebookCredentialStore {
-  constructor({ db, encryptionSecret }) { this.db = db; this.key = deriveEncryptionKey(encryptionSecret); }
+  constructor({ db, encryptionSecret, legacyEncryptionSecrets = [] }) {
+    this.db = db; const keys = encryptionKeys(encryptionSecret, legacyEncryptionSecrets); this.key = keys.currentKey; this.legacyKeys = keys.legacyKeys;
+  }
   static generateId() { return `fcred_${crypto.randomBytes(16).toString("base64url")}`; }
   static isValidId(id) { return typeof id === "string" && ID_PATTERN.test(id); }
   open() {
@@ -38,7 +40,13 @@ class FacebookCredentialStore {
     if (!FacebookCredentialStore.isValidId(id)) return null;
     const row = this.db.prepare("SELECT * FROM facebook_credentials WHERE id = ?").get(id);
     if (!row) return null;
-    const result = publicCredential(row); if (includeTokens) result.tokens = decryptTokens(row, this.key); return result;
+    const result = publicCredential(row); const decrypted = decryptTokensWithFallback(row, this.key, this.legacyKeys);
+    if (decrypted.migrated) {
+      const encrypted = encryptTokens(decrypted.tokens, this.key);
+      this.db.prepare("UPDATE facebook_credentials SET token_ciphertext = ?, token_iv = ?, token_tag = ? WHERE id = ?")
+        .run(encrypted.ciphertext, encrypted.iv, encrypted.tag, row.id);
+    }
+    if (includeTokens) result.tokens = decrypted.tokens; return result;
   }
   findByAccountId(accountId, options = {}) {
     const row = this.db.prepare("SELECT * FROM facebook_credentials WHERE account_id = ? AND auth_mode = ?").get(String(accountId || ""), AUTH_MODE_OAUTH);

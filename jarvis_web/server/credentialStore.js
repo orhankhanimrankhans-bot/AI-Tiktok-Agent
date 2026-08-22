@@ -18,6 +18,10 @@ const CREDENTIAL_ID_PATTERN = /^gcred_[A-Za-z0-9_-]{22}$/;
 const KEY_SALT = "jarvis-web-google-credential-store-v1";
 const ACCOUNT_UNIQUE_INDEX = "idx_google_credentials_provider_account_email";
 
+class CredentialDecryptionError extends Error {
+  constructor() { super("Stored credential could not be decrypted."); this.code = "credential_decryption_failed"; }
+}
+
 function deriveEncryptionKey(secret) {
   if (!secret || typeof secret !== "string") {
     throw new Error("A server-side credential encryption secret is required.");
@@ -45,6 +49,42 @@ function decryptTokens(row, key) {
   return JSON.parse(plaintext.toString("utf8"));
 }
 
+function decryptTokensWithFallback(row, currentKey, legacyKeys = []) {
+  let plaintext;
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", currentKey, row.token_iv);
+    decipher.setAuthTag(row.token_tag);
+    plaintext = Buffer.concat([decipher.update(row.token_ciphertext), decipher.final()]);
+  } catch {
+    // Authenticated current-key decryption failed; legacy keys are attempted below.
+    plaintext = null;
+  }
+  if (plaintext) {
+    try { return { tokens: JSON.parse(plaintext.toString("utf8")), migrated: false }; }
+    catch { throw new CredentialDecryptionError(); }
+  }
+  for (const legacyKey of legacyKeys) {
+    try {
+      const decipher = crypto.createDecipheriv("aes-256-gcm", legacyKey, row.token_iv);
+      decipher.setAuthTag(row.token_tag);
+      plaintext = Buffer.concat([decipher.update(row.token_ciphertext), decipher.final()]);
+      let tokens;
+      try { tokens = JSON.parse(plaintext.toString("utf8")); } catch { throw new CredentialDecryptionError(); }
+      return { tokens, migrated: true };
+    } catch (error) {
+      if (error instanceof CredentialDecryptionError) throw error;
+    }
+  }
+  throw new CredentialDecryptionError();
+}
+
+function encryptionKeys(encryptionSecret, legacyEncryptionSecrets = []) {
+  const currentKey = deriveEncryptionKey(encryptionSecret);
+  const legacyKeys = [...new Set(legacyEncryptionSecrets.filter((secret) => typeof secret === "string" && secret))]
+    .map(deriveEncryptionKey).filter((key) => !key.equals(currentKey));
+  return { currentKey, legacyKeys };
+}
+
 function publicCredential(row) {
   return {
     id: row.id,
@@ -60,10 +100,12 @@ function publicCredential(row) {
 }
 
 class CredentialStore {
-  constructor({ dbPath, encryptionSecret }) {
+  constructor({ dbPath, encryptionSecret, legacyEncryptionSecrets = [] }) {
     if (!dbPath) throw new Error("Credential database path is required.");
     this.dbPath = path.resolve(dbPath);
-    this.key = deriveEncryptionKey(encryptionSecret);
+    const keys = encryptionKeys(encryptionSecret, legacyEncryptionSecrets);
+    this.key = keys.currentKey;
+    this.legacyKeys = keys.legacyKeys;
     this.db = null;
   }
 
@@ -157,6 +199,16 @@ class CredentialStore {
     return Promise.resolve(row || null);
   }
 
+  readTokens(row) {
+    const result = decryptTokensWithFallback(row, this.key, this.legacyKeys);
+    if (result.migrated) {
+      const encrypted = encryptTokens(result.tokens, this.key);
+      this.db.prepare(`UPDATE google_credentials SET token_ciphertext = ?, token_iv = ?, token_tag = ? WHERE id = ?`)
+        .run(encrypted.ciphertext, encrypted.iv, encrypted.tag, row.id);
+    }
+    return result.tokens;
+  }
+
   async findByAccountEmail(accountEmail, { includeTokens = false } = {}) {
     const normalizedEmail = String(accountEmail || "").trim().toLowerCase();
     if (!normalizedEmail) return null;
@@ -167,8 +219,8 @@ class CredentialStore {
       LIMIT 1
     `).get(PROVIDER, normalizedEmail);
     if (!row) return null;
-    const credential = publicCredential(row);
-    if (includeTokens) credential.tokens = decryptTokens(row, this.key);
+    const credential = publicCredential(row); const tokens = this.readTokens(row);
+    if (includeTokens) credential.tokens = tokens;
     return credential;
   }
 
@@ -183,8 +235,8 @@ class CredentialStore {
     if (!CredentialStore.isValidId(id)) return null;
     const row = await this.getRow(id);
     if (!row) return null;
-    const credential = publicCredential(row);
-    if (includeTokens) credential.tokens = decryptTokens(row, this.key);
+    const credential = publicCredential(row); const tokens = this.readTokens(row);
+    if (includeTokens) credential.tokens = tokens;
     return credential;
   }
 
@@ -234,8 +286,11 @@ class CredentialStore {
 }
 
 module.exports = {
+  CredentialDecryptionError,
   CredentialStore,
   decryptTokens,
+  decryptTokensWithFallback,
   deriveEncryptionKey,
+  encryptionKeys,
   encryptTokens,
 };
