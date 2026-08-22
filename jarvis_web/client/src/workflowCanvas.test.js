@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, connectionVisualState,
+  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 
 test("dragging updates logical node position without zoom jumps", () => {
   const moved = moveNodeFromPointer({ id: "drive", x: 100, y: 80 }, { nodeX: 100, nodeY: 80, pointerX: 200, pointerY: 100 }, { x: 260, y: 140 }, 0.5);
@@ -41,6 +42,30 @@ test("active workflow preserves running, success, and error presentation states"
   assert.equal(connectionVisualState({ status: "success" }, { status: "error" }, true), "error");
 });
 
+test("connection health is configuration-derived and independent from execution state", () => {
+  const googleCredentials = [{ id: "g-ready", connected: true }, { id: "g-error", connectionStatus: "error" }];
+  const facebookCredentials = [{ id: "f-ready", status: "connected" }];
+  assert.equal(nodeConnectionHealth({ name: "Google Drive Search", status: "idle", config: { credentialId: "g-ready" } }, { googleCredentials }), "connected");
+  assert.equal(nodeConnectionHealth({ name: "Facebook Graph API", status: "success", config: {} }, { facebookCredentials }), "disconnected");
+  assert.equal(nodeConnectionHealth({ name: "Google Drive Download", status: "idle", config: { credentialId: "g-error" } }, { googleCredentials }), "error");
+  assert.equal(nodeConnectionHealth({ name: "Prepare Content / AI", config: {} }, { openAIConfigured: true }), "connected");
+  assert.equal(visualNodeStatus({ status: "success", config: { credentialId: "g-ready" } }, false), "idle");
+});
+
+test("node contrast, LED health colors, and appearance controls remain presentation-only", () => {
+  const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  const safe = safeAppearance({ nodeTitle: "#ffffff", nodeSubtitle: "#ccddee", iconBackground: "#112233", iconTint: "#aabbcc",
+    connectedLight: "#00ff88", disconnectedLight: "#ffffff", errorLight: "#ff3344" });
+  assert.equal(safe.connectedLight, "#00ff88"); assert.equal(safe.disconnectedLight, "#ffffff"); assert.equal(safe.errorLight, "#ff3344");
+  assert.match(source, /nodeConnectionHealth\(node/); assert.match(source, /health-\$\{health\}/);
+  assert.match(styles, /workflow-node-copy strong[^}]*font-weight: 900/);
+  assert.match(styles, /workflow-node-copy small[^}]*font-weight: 600/);
+  assert.match(styles, /health-connected[^}]*--jarvis-connected-light/);
+  assert.match(styles, /health-disconnected[^}]*--jarvis-disconnected-light/);
+  assert.match(styles, /health-error[^}]*--jarvis-error-light/);
+});
+
 test("canvas markup includes compact node content, provider icon, and connection handles", () => {
   const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
@@ -56,6 +81,15 @@ test("canvas markup includes compact node content, provider icon, and connection
   assert.match(styles, /background-image:\s*none !important/); assert.match(styles, /\.sidebar \{ width: 214px/);
 });
 
+test("all workflow nodes use one square geometry with readable titles and aligned icons", () => {
+  const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.equal(CANVAS_NODE_WIDTH, 148); assert.equal(CANVAS_NODE_HEIGHT, 148);
+  assert.match(styles, /\.canvas-viewport \.workflow-node \{[\s\S]*width: 148px;[\s\S]*height: 148px;/);
+  assert.match(styles, /-webkit-line-clamp: 2/); assert.match(styles, /justify-items: center/);
+  assert.match(source, /trigger-clock-face/); assert.match(source, /className="ai-mark"/); assert.match(source, /className="limit-mark"/);
+});
+
 test("fit viewport zooms out and centers the workflow without changing node coordinates", () => {
   const nodes = [{ x: 100, y: 100 }, { x: 1400, y: 700 }];
   const snapshot = structuredClone(nodes);
@@ -65,9 +99,45 @@ test("fit viewport zooms out and centers the workflow without changing node coor
 });
 
 test("appearance preferences are allowlisted and select readable contrast", () => {
-  assert.deepEqual(safeAppearance({ canvasColor: "red", headerColor: "#fff", viewport: { x: "bad", y: 0, zoom: 99 } }),
-    { canvasColor: "#0d1117", headerColor: "#171d22", viewport: { x: 0, y: 0, zoom: 1 } });
+  const safe = safeAppearance({ canvasColor: "red", headerColor: "#fff", accessToken: "forbidden", viewport: { x: "bad", y: 0, zoom: 99 } });
+  assert.equal(safe.canvasColor, "#0d1117"); assert.equal(safe.headerColor, "#171d22"); assert.deepEqual(safe.viewport, { x: 0, y: 0, zoom: 1 });
+  assert.equal(Object.hasOwn(safe, "accessToken"), false);
   assert.equal(readableForeground("#e8edf2"), "#11181c"); assert.equal(readableForeground("#0d1117"), "#eef7fa");
+});
+
+test("theme system supports presets, custom solid and white-black two-color canvas", () => {
+  assert.deepEqual(THEME_PRESETS.map((preset) => preset.label), ["Jarvis Dark", "Midnight Blue", "Black", "Graphite", "White", "Silver", "Purple", "Blue", "Cyan", "Green", "Red", "Pink"]);
+  const twoColor = safeAppearance({ preset: "custom", canvasStyle: "two-color", canvasColor: "#ffffff", canvasColorB: "#000000",
+    headerColor: "#123456", accentColor: "#00ddee" });
+  assert.equal(canvasBackground(twoColor), "linear-gradient(135deg, #ffffff 0%, #000000 100%)");
+  assert.equal(canvasBackground({ ...twoColor, canvasStyle: "solid" }), "#ffffff");
+  assert.equal(twoColor.headerColor, "#123456"); assert.equal(twoColor.accentColor, "#00ddee");
+});
+
+test("appearance persistence stays separate and contains UI-only theme fields", () => {
+  const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  assert.equal(CANVAS_APPEARANCE_KEY, "jarvis_canvas_appearance_v1");
+  assert.match(source, /localStorage\.setItem\(CANVAS_APPEARANCE_KEY/);
+  assert.match(source, /canvasStyle/); assert.match(source, /APPEARANCE_COLOR_SECTIONS/); assert.match(source, /appearanceCssVariables/);
+  assert.doesNotMatch(JSON.stringify(safeAppearance({ accessToken: "not-allowed", binary: { referenceId: "not-allowed" } })), /accessToken|referenceId/);
+});
+
+test("workflow header is thin and canvas has no dotted background", () => {
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.match(styles, /\.workflow-header \{[\s\S]*min-height: 62px/);
+  assert.match(styles, /\.workflow-canvas \{ background-image: none !important/);
+});
+
+test("dashboard pipeline consumes real workflow state and animates only while running", () => {
+  const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const pipeline = fs.readFileSync(new URL("./CommandPipeline.jsx", import.meta.url), "utf8");
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.match(source, /jarvis-command-center/); assert.match(source, /CommandPipeline graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/); assert.match(pipeline, /pipeline-graph-lines/);
+  assert.match(source, /isWorkflowRunning \? "workflow-running" : "workflow-idle"/);
+  assert.match(pipeline, /workflowActive \? "running" : workflowError \? "error" : "idle"/);
+  assert.match(styles, /\.pipeline-running \.pipeline-route-map path[^}]*animation:/);
+  assert.match(styles, /\.pipeline-running \.core-ring-outer[^}]*animation:/);
+  assert.doesNotMatch(pipeline, /setInterval|setTimeout|requestAnimationFrame/);
 });
 
 test("insert between removes the direct edge and creates two valid edges", () => {

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import AdvancedColorPicker from "./AdvancedColorPicker.jsx";
+import CommandPipeline from "./CommandPipeline.jsx";
 import DataViewer from "./DataViewer.jsx";
+import { buildDashboardGraph } from "./dashboardPipeline.js";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import { ARCHIVE_AFTER_PUBLISH_ERROR, buildArchiveMoveRequest, preservePublishedSource } from "./postPublishArchive.js";
 import { assertSafeFacebookConfig, facebookCredentialLabel, sanitizeFacebookConfig } from "./facebookConfig.js";
@@ -23,8 +26,9 @@ import {
 import { runLinearWorkflow } from "./workflowRunner.js";
 import { isStrictlyLinearWorkflow, runFanOutWorkflow } from "./workflowFanOutRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
-import { CANVAS_APPEARANCE_KEY, CANVAS_COLORS, HEADER_COLORS, clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState,
-  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
+  clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
+  nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
@@ -32,6 +36,11 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ?
 
 function loadCanvasAppearance() {
   try { return safeAppearance(JSON.parse(localStorage.getItem(CANVAS_APPEARANCE_KEY) || "{}")); } catch { return safeAppearance(); }
+}
+
+function AppearanceColorField({ label, value, onOpen, onReset }) {
+  return <div className="appearance-color-field"><span>{label}</span><div><button type="button" className="appearance-color-swatch" style={{ background: value }}
+    onClick={onOpen} aria-label={`Edit ${label}`} /><code>{value.toUpperCase()}</code><button type="button" className="appearance-property-reset" onClick={onReset}>Reset</button></div></div>;
 }
 
 function GoogleDriveIcon({ className = "" }) {
@@ -67,8 +76,13 @@ function NodeProviderIcon({ node }) {
       <path className="trigger-clock-accent" d="M7.2 7.7A13 13 0 0 1 26.8 9M7.2 7.7H12M7.2 7.7v4.8" />
     </svg>
   </span>;
-  if (node.name === "Prepare Content") return <span className="ai-mark" aria-hidden="true">AI</span>;
-  if (node.name === "Limit") return <span className="limit-mark" aria-hidden="true">≡</span>;
+  if (node.name === "Prepare Content") return <span className="ai-mark" aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false">
+    <path d="M16 4.5 19 10l6 .8-4.4 4.3 1 6.1-5.6-2.9-5.6 2.9 1-6.1L7 10.8l6-.8L16 4.5Z" />
+    <circle cx="16" cy="16" r="3.2" /><path d="M16 1.8v3M16 27.2v3M1.8 16h3M27.2 16h3" />
+  </svg></span>;
+  if (node.name === "Limit") return <span className="limit-mark" aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false">
+    <path d="M7 9h18M7 16h13M7 23h8" /><circle cx="25" cy="16" r="2.2" /><circle cx="18" cy="23" r="2.2" />
+  </svg></span>;
   return node.icon;
 }
 
@@ -2215,6 +2229,7 @@ function App() {
   const suppressNodeClickRef = useRef(false);
   const [canvasViewport, setCanvasViewport] = useState(() => loadCanvasAppearance().viewport);
   const [canvasAppearance, setCanvasAppearance] = useState(loadCanvasAppearance);
+  const [colorEditor, setColorEditor] = useState(null);
   const [showAppearance, setShowAppearance] = useState(false);
   const [lastExecutionAt, setLastExecutionAt] = useState(null);
   useEffect(() => {
@@ -2525,6 +2540,17 @@ function App() {
   const updateAppearance = (patch) => {
     setCanvasAppearance((current) => safeAppearance({ ...current, ...patch, viewport: canvasViewport }));
   };
+
+  const applyThemePreset = (preset) => {
+    updateAppearance({ ...preset, preset: preset.id, canvasStyle: "linear-gradient" });
+  };
+
+  const resetAppearanceSection = (section) => updateAppearance(Object.fromEntries(section.fields.map(([key]) => [key, DEFAULT_APPEARANCE[key]])));
+
+  const contrastBackgroundFor = (key) => ({ nodeTitle: canvasAppearance.nodeBackground, nodeSubtitle: canvasAppearance.nodeBackground,
+    headerTextColor: canvasAppearance.headerColor, statusTextColor: canvasAppearance.headerColor, sidebarText: canvasAppearance.sidebarBackground,
+    sidebarActiveText: canvasAppearance.sidebarActiveBackground, controlText: canvasAppearance.controlBackground,
+    mainText: canvasAppearance.panelBackground, mutedText: canvasAppearance.panelBackground }[key] || null);
 
   useEffect(() => {
     localStorage.setItem(CANVAS_APPEARANCE_KEY, JSON.stringify({ ...canvasAppearance, viewport: canvasViewport }));
@@ -2966,9 +2992,11 @@ function App() {
   };
 
   const workflowStatus = isWorkflowRunning ? "running" : "idle";
+  const dashboardGraph = buildDashboardGraph(canvasNodes, connections);
 
   return (
-    <div className={`jarvis-app theme-${workflowStatus}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}>
+    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
+      style={appearanceCssVariables(canvasAppearance)}>
 
       <aside className="sidebar">
 
@@ -3109,7 +3137,7 @@ function App() {
                 <div
                   className="workflow-canvas"
                   ref={workflowCanvasRef}
-                  style={{ backgroundColor: canvasAppearance.canvasColor, color: readableForeground(canvasAppearance.canvasColor) }}
+                  style={{ background: canvasBackground(canvasAppearance), color: readableForeground(canvasAppearance.canvasColor) }}
                   onPointerDown={startCanvasPan}
                   onPointerMove={moveCanvasPan}
                   onPointerUp={endCanvasPan}
@@ -3144,10 +3172,23 @@ function App() {
                     <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow">⌗</button>
                   </div>
                   {showAppearance && <aside className="appearance-popover" onPointerDown={(event) => event.stopPropagation()}>
-                    <div><strong>Canvas</strong><div className="color-palette">{CANVAS_COLORS.map((color) => <button key={color} type="button" aria-label={`Canvas color ${color}`}
-                      className={canvasAppearance.canvasColor === color ? "selected" : ""} style={{ backgroundColor: color }} onClick={() => updateAppearance({ canvasColor: color })} />)}</div></div>
-                    <div><strong>Workflow bar</strong><div className="color-palette">{HEADER_COLORS.map((color) => <button key={color} type="button" aria-label={`Workflow bar color ${color}`}
-                      className={canvasAppearance.headerColor === color ? "selected" : ""} style={{ backgroundColor: color }} onClick={() => updateAppearance({ headerColor: color })} />)}</div></div>
+                    <header><div><span>APPEARANCE</span><strong>Jarvis Theme System</strong></div><button type="button" onClick={() => setShowAppearance(false)} aria-label="Close appearance">×</button></header>
+                    <div><strong>Presets</strong><div className="theme-presets">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button"
+                      className={canvasAppearance.preset === preset.id ? "selected" : ""} onClick={() => applyThemePreset(preset)}>
+                      <span style={{ background: `linear-gradient(135deg, ${preset.canvasColor}, ${preset.canvasColorB})` }} />{preset.label}</button>)}</div></div>
+                    <div><strong>Background Type</strong><div className="appearance-segmented three-way">{[["solid", "Solid"], ["linear-gradient", "Linear"], ["radial-gradient", "Radial"]].map(([value, label]) =>
+                      <button key={value} type="button" className={canvasAppearance.canvasStyle === value ? "selected" : ""} onClick={() => updateAppearance({ canvasStyle: value })}>{label}</button>)}</div></div>
+                    {canvasAppearance.canvasStyle === "linear-gradient" && <label className="gradient-angle"><span>Gradient Angle</span><input type="range" min="0" max="360" value={canvasAppearance.gradientAngle}
+                      onChange={(event) => updateAppearance({ gradientAngle: Number(event.target.value), preset: "custom" })} /><b>{canvasAppearance.gradientAngle}°</b></label>}
+                    <div><strong>Provider Logos</strong><div className="appearance-segmented">{[["original", "Original Brand"], ["monochrome", "Theme Tint"]].map(([value, label]) =>
+                      <button key={value} type="button" className={canvasAppearance.providerLogoMode === value ? "selected" : ""} onClick={() => updateAppearance({ providerLogoMode: value, preset: "custom" })}>{label}</button>)}</div></div>
+                    <div className="appearance-sections">{APPEARANCE_COLOR_SECTIONS.map((section, index) => <details key={section.id} open={index === 0}>
+                      <summary><span>{section.label}</span><button type="button" onClick={(event) => { event.preventDefault(); resetAppearanceSection(section); }}>Reset Section</button></summary>
+                      <div className="appearance-color-fields">{section.fields.map(([key, label]) => <AppearanceColorField key={key} label={label} value={canvasAppearance[key]}
+                        onOpen={() => setColorEditor({ key, label, original: canvasAppearance[key] })}
+                        onReset={() => updateAppearance({ [key]: DEFAULT_APPEARANCE[key], preset: "custom" })} />)}</div>
+                    </details>)}</div>
+                    <button type="button" className="reset-entire-theme" onClick={() => setCanvasAppearance(safeAppearance({ viewport: canvasViewport }))}>Reset Entire Theme</button>
                   </aside>}
 
                   <div className="canvas-viewport" style={{ transform: `translate3d(${canvasViewport.x}px, ${canvasViewport.y}px, 0) scale(${canvasViewport.zoom})` }}>
@@ -3215,8 +3256,9 @@ function App() {
                     <div className="canvas-node-area">
 
                       {canvasNodes.map(
-                        (node, index) => (
-                         <div
+                        (node, index) => {
+                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, openAIConfigured });
+                          return <div
   key={node.id}
   className={`workflow-node status-${visualNodeStatus(node, isWorkflowRunning)}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
   style={{
@@ -3258,7 +3300,7 @@ function App() {
 
                             <div className="workflow-node-copy"><strong>{node.name}</strong><small title={workflowNodeSubtitle(node)}>{workflowNodeSubtitle(node)}</small></div>
 
-                            <span className={`node-status-indicator ${visualNodeStatus(node, isWorkflowRunning)}`} title={`Visual status: ${visualNodeStatus(node, isWorkflowRunning)}`} />
+                            <span className={`node-status-indicator health-${health}`} title={`Connection health: ${health}`} aria-label={`Connection health: ${health}`} />
 
                             <button
                               className="node-port node-output-port"
@@ -3270,8 +3312,8 @@ function App() {
                             >
                               +
                             </button>
-                          </div>
-                        )
+                          </div>;
+                        }
                       )}
 
                     </div>
@@ -3453,13 +3495,25 @@ function App() {
 
           </section>
         ) : topPage === "DASHBOARD" ? (
-          <section className={`dashboard-page ${isWorkflowRunning ? "workflow-running" : "workflow-idle"}`}>
-            <div className="dashboard-hero"><div><span className="eyebrow">JARVIS AUTOMATION</span><h1>Command center</h1>
-              <p>Monitor real workflow activity, connected services, and recent execution health.</p></div>
-              <div className="dashboard-orbit" aria-label={isWorkflowRunning ? "Workflow activity running" : "Workflow activity idle"}><span /><span /><strong>{isWorkflowRunning ? "RUN" : "IDLE"}</strong></div>
+          <section className={`dashboard-page jarvis-command-center ${isWorkflowRunning ? "workflow-running" : "workflow-idle"}`}>
+            <header className="dashboard-heading"><div><span className="eyebrow">ISK · JARVIS AUTOMATION</span><h1>Command Center</h1><p>Live workflow intelligence and automation telemetry.</p></div>
+              <div className={`dashboard-state ${workflowStatus}`}><span />{workflowStatus}</div></header>
+            <CommandPipeline graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
+              healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} />
+            <div className="dashboard-metrics">
+              <aside className="command-panel">
+                <span className="panel-kicker">CONNECTED WORKFLOW</span><strong>{dashboardGraph.nodes.length}</strong><p>Reachable workflow nodes</p>
+                <div className="telemetry-line"><span>Connections</span><b>{dashboardGraph.connections.length}</b></div>
+                <div className="telemetry-line"><span>Schedule triggers</span><b>{dashboardGraph.triggers.length}</b></div>
+                <div className="telemetry-line"><span>Branches</span><b>{dashboardGraph.branches.length}</b></div>
+              </aside>
+              <aside className="command-panel">
+                <span className="panel-kicker">EXECUTION TELEMETRY</span><strong>{workflowStatus}</strong><p>Current workflow state</p>
+                <div className="telemetry-line"><span>Last execution</span><b>{lastExecutionAt ? new Date(lastExecutionAt).toLocaleTimeString() : "—"}</b></div>
+                <div className="telemetry-line"><span>History</span><b>{executions.length}</b></div>
+              </aside>
             </div>
-            <div className="metrics"><div><strong>{canvasNodes.length}</strong><span>Workflow nodes</span></div><div><strong>{connections.length}</strong><span>Connections</span></div>
-              <div><strong>{canvasNodes.filter((node) => node.name === "Schedule Trigger").length}</strong><span>Schedule triggers</span></div><div><strong>{workflowStatus}</strong><span>Current state</span></div></div>
+            <div className="dashboard-status-rail"><span>Runtime linked</span><i /><span>Credentials protected</span><i /><span>Production workflow ready</span></div>
           </section>
         ) : (
           <section className="placeholder-page">
@@ -3468,6 +3522,13 @@ function App() {
         )}
 
       </main>
+
+      {colorEditor && <AdvancedColorPicker key={`${colorEditor.key}-${colorEditor.original}`} label={colorEditor.label} initialColor={colorEditor.original}
+        contrastBackground={contrastBackgroundFor(colorEditor.key)} customColors={canvasAppearance.customColors}
+        onPreview={(color) => updateAppearance({ [colorEditor.key]: color, preset: "custom" })}
+        onConfirm={(color) => { updateAppearance({ [colorEditor.key]: color, preset: "custom" }); setColorEditor(null); }}
+        onCancel={() => { updateAppearance({ [colorEditor.key]: colorEditor.original }); setColorEditor(null); }}
+        onAddCustom={(color) => updateAppearance({ customColors: [...canvasAppearance.customColors, color] })} />}
 
       {editingNode &&
         editingNode.name ===
