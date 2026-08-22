@@ -21,10 +21,16 @@ import {
 } from "./workflowExecution.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
+import { CANVAS_APPEARANCE_KEY, CANVAS_COLORS, HEADER_COLORS, clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState,
+  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, readableForeground, safeAppearance, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
+
+function loadCanvasAppearance() {
+  try { return safeAppearance(JSON.parse(localStorage.getItem(CANVAS_APPEARANCE_KEY) || "{}")); } catch { return safeAppearance(); }
+}
 
 function GoogleDriveIcon({ className = "" }) {
   return (
@@ -47,6 +53,21 @@ function FacebookIcon({ className = "" }) {
       </svg>
     </span>
   );
+}
+
+function NodeProviderIcon({ node }) {
+  if (node.provider === "Google Drive") return <GoogleDriveIcon />;
+  if (node.provider === "Facebook") return <FacebookIcon />;
+  if (node.name === "Schedule Trigger") return <span className="trigger-mark" aria-hidden="true">
+    <svg viewBox="0 0 32 32" focusable="false">
+      <circle className="trigger-clock-face" cx="16" cy="16" r="10.5" />
+      <path className="trigger-clock-hand" d="M16 9.5v7l4.5 2.8" />
+      <path className="trigger-clock-accent" d="M7.2 7.7A13 13 0 0 1 26.8 9M7.2 7.7H12M7.2 7.7v4.8" />
+    </svg>
+  </span>;
+  if (node.name === "Prepare Content") return <span className="ai-mark" aria-hidden="true">AI</span>;
+  if (node.name === "Limit") return <span className="limit-mark" aria-hidden="true">≡</span>;
+  return node.icon;
 }
 
 const NODE_LIBRARY = [
@@ -2176,7 +2197,18 @@ function App() {
     useState(null);
 
   const [connections, setConnections] = useState([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState(null);
+  const [hoveredConnectionId, setHoveredConnectionId] = useState(null);
+  const [insertingConnectionId, setInsertingConnectionId] = useState(null);
   const connectionsRef = useRef(connections);
+  const workflowCanvasRef = useRef(null);
+  const dragStateRef = useRef(null);
+  const panStateRef = useRef(null);
+  const suppressNodeClickRef = useRef(false);
+  const [canvasViewport, setCanvasViewport] = useState(() => loadCanvasAppearance().viewport);
+  const [canvasAppearance, setCanvasAppearance] = useState(loadCanvasAppearance);
+  const [showAppearance, setShowAppearance] = useState(false);
+  const [lastExecutionAt, setLastExecutionAt] = useState(null);
   useEffect(() => {
     canvasNodesRef.current = canvasNodes;
   }, [canvasNodes]);
@@ -2482,6 +2514,14 @@ function App() {
     }
   }, []);
 
+  const updateAppearance = (patch) => {
+    setCanvasAppearance((current) => safeAppearance({ ...current, ...patch, viewport: canvasViewport }));
+  };
+
+  useEffect(() => {
+    localStorage.setItem(CANVAS_APPEARANCE_KEY, JSON.stringify({ ...canvasAppearance, viewport: canvasViewport }));
+  }, [canvasAppearance, canvasViewport]);
+
   const updateCanvasNode = (updatedNode) => {
     const nextNodes = canvasNodesRef.current.map((node) => node.id === updatedNode.id ? updatedNode : node);
     canvasNodesRef.current = nextNodes;
@@ -2639,7 +2679,9 @@ function App() {
         nodes: runNodes,
         connections: connectionsRef.current,
         executeNode: executeNodeOperation,
-        onNodeTransition: (updatedNode) => setCanvasNodes((nodes) => nodes.map((node) => node.id === updatedNode.id ? updatedNode : node)),
+        onNodeTransition: (updatedNode) => setCanvasNodes((nodes) => {
+          const next = nodes.map((node) => node.id === updatedNode.id ? updatedNode : node); canvasNodesRef.current = next; return next;
+        }),
       });
       canvasNodesRef.current = result.nodes;
       setCanvasNodes(result.nodes);
@@ -2665,6 +2707,7 @@ function App() {
       setWorkflowNotice({ status: "error", message: error?.message || "Workflow execution failed." });
     } finally {
       setIsWorkflowRunning(false);
+      setLastExecutionAt(new Date().toISOString());
     }
   };
 
@@ -2815,9 +2858,15 @@ function App() {
             : createPhase2Config(nodeDefinition.id) ?? {},
     };
 
-    setCanvasNodes((nodes) => [...nodes, newNode]);
+    if (insertingConnectionId) {
+      const inserted = insertNodeBetween({ nodes: canvasNodesRef.current, connections: connectionsRef.current, connectionId: insertingConnectionId, node: newNode });
+      canvasNodesRef.current = inserted.nodes; connectionsRef.current = inserted.connections;
+      setCanvasNodes(inserted.nodes); setConnections(inserted.connections); setInsertingConnectionId(null); setHoveredConnectionId(null);
+    } else {
+      setCanvasNodes((nodes) => [...nodes, newNode]);
+    }
 
-    if (connectingFromNodeId) {
+    if (connectingFromNodeId && !insertingConnectionId) {
       setConnections((current) => [
         ...current,
         {
@@ -2830,6 +2879,7 @@ function App() {
 
     setShowNodePicker(false);
     setConnectingFromNodeId(null);
+    setInsertingConnectionId(null);
     setSearch("");
 
     if (nodeDefinition.id === "schedule-trigger") {
@@ -2842,13 +2892,73 @@ function App() {
     return connection ? canvasNodes.find((item) => item.id === connection.source) : null;
   };
 
+  const zoomCanvas = (nextZoom, anchor = null) => {
+    setCanvasViewport((viewport) => {
+      const zoom = clampCanvasZoom(nextZoom);
+      if (!anchor) return { ...viewport, zoom };
+      const logicalX = (anchor.x - viewport.x) / viewport.zoom;
+      const logicalY = (anchor.y - viewport.y) / viewport.zoom;
+      return { x: anchor.x - logicalX * zoom, y: anchor.y - logicalY * zoom, zoom };
+    });
+  };
+
+  const fitWorkflow = () => {
+    const bounds = workflowCanvasRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    setCanvasViewport(fitCanvasViewport(canvasNodesRef.current, bounds.width, bounds.height - 34));
+  };
+
+  const startNodeDrag = (event, node) => {
+    if (event.button !== 0 || event.target.closest("button, input, select, textarea, .node-port")) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStateRef.current = { nodeId: node.id, nodeX: node.x ?? 140, nodeY: node.y ?? 200, pointerX: event.clientX, pointerY: event.clientY, moved: false };
+  };
+
+  const moveNode = (event) => {
+    const drag = dragStateRef.current;
+    if (!drag || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const moved = Math.abs(event.clientX - drag.pointerX) + Math.abs(event.clientY - drag.pointerY) > 3;
+    if (moved) drag.moved = true;
+    const pointer = { x: event.clientX, y: event.clientY };
+    setCanvasNodes((nodes) => nodes.map((node) => node.id === drag.nodeId ? moveNodeFromPointer(node, drag, pointer, canvasViewport.zoom) : node));
+  };
+
+  const endNodeDrag = (event) => {
+    const drag = dragStateRef.current;
+    if (!drag) return;
+    suppressNodeClickRef.current = drag.moved;
+    dragStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const startCanvasPan = (event) => {
+    if (event.button !== 0 || event.target.closest(".workflow-node, button, input, select, textarea")) return;
+    if (!event.target.closest(".workflow-connection-hit-area")) setSelectedConnectionId(null);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panStateRef.current = { pointerX: event.clientX, pointerY: event.clientY, x: canvasViewport.x, y: canvasViewport.y };
+  };
+
+  const moveCanvasPan = (event) => {
+    const pan = panStateRef.current;
+    if (!pan || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    setCanvasViewport((viewport) => ({ ...viewport, x: pan.x + event.clientX - pan.pointerX, y: pan.y + event.clientY - pan.pointerY }));
+  };
+
+  const endCanvasPan = (event) => {
+    if (!panStateRef.current) return;
+    panStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const workflowStatus = isWorkflowRunning ? "running" : workflowNotice?.status === "error" ? "error" : workflowNotice?.status === "success" ? "success" : "idle";
+
   return (
-    <div className="jarvis-app">
+    <div className={`jarvis-app theme-${workflowStatus}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}>
 
       <aside className="sidebar">
 
         <div className="brand">
-          <div className="jarvis-logo">J</div>
+          <div className="jarvis-logo" aria-label="ISK">ISK</div>
 
           <div>
             <div className="brand-name">
@@ -2927,7 +3037,7 @@ function App() {
         {topPage === "WORKFLOW" ? (
           <section className="workflow-page">
 
-            <div className="workflow-header">
+            <div className="workflow-header" style={{ background: canvasAppearance.headerColor, color: readableForeground(canvasAppearance.headerColor) }}>
 
               <div className="workflow-title">
                 <div className="breadcrumb">
@@ -2935,6 +3045,9 @@ function App() {
                 </div>
 
                 <h1>My Workflow</h1>
+                <div className={`workflow-live-status ${workflowStatus}`}><span />{workflowStatus.charAt(0).toUpperCase() + workflowStatus.slice(1)}
+                  {lastExecutionAt && !isWorkflowRunning && <small> · {new Date(lastExecutionAt).toLocaleTimeString()}</small>}
+                </div>
               </div>
 
               <div className="workflow-tabs">
@@ -2961,7 +3074,7 @@ function App() {
               </div>
 
               <div className="workflow-actions">
-                <button className="run-button" onClick={runWorkflow} disabled={isWorkflowRunning}>
+                <button className="run-button" onClick={() => runWorkflow()} disabled={isWorkflowRunning}>
                   {isWorkflowRunning ? "Running..." : "▶ Run Workflow"}
                 </button>
 
@@ -2978,7 +3091,21 @@ function App() {
             {workflowTab === "EDITOR" && (
               <div className="editor-layout">
 
-                <div className="workflow-canvas">
+                <div
+                  className="workflow-canvas"
+                  ref={workflowCanvasRef}
+                  style={{ backgroundColor: canvasAppearance.canvasColor, color: readableForeground(canvasAppearance.canvasColor) }}
+                  onPointerDown={startCanvasPan}
+                  onPointerMove={moveCanvasPan}
+                  onPointerUp={endCanvasPan}
+                  onPointerCancel={endCanvasPan}
+                  onWheel={(event) => {
+                    event.preventDefault();
+                    const bounds = workflowCanvasRef.current?.getBoundingClientRect();
+                    if (!bounds) return;
+                    zoomCanvas(canvasViewport.zoom * (event.deltaY > 0 ? 0.9 : 1.1), { x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+                  }}
+                >
 
                   <div className="canvas-tools">
                     <button
@@ -2995,26 +3122,42 @@ function App() {
                     <button>✦</button>
                   </div>
 
+                  <div className="canvas-command-tools" onPointerDown={(event) => event.stopPropagation()}>
+                    <button type="button" onClick={() => { setInsertingConnectionId(null); setConnectingFromNodeId(null); setShowNodePicker(true); }} title="Add node" aria-label="Add node">+</button>
+                    <button type="button" onClick={() => { setShowNodePicker(true); setTimeout(() => document.querySelector('.node-search')?.focus(), 0); }} title="Search nodes" aria-label="Search nodes">⌕</button>
+                    <button type="button" onClick={() => setShowAppearance((open) => !open)} title="Canvas appearance" aria-label="Canvas appearance">◐</button>
+                    <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow">⌗</button>
+                  </div>
+                  {showAppearance && <aside className="appearance-popover" onPointerDown={(event) => event.stopPropagation()}>
+                    <div><strong>Canvas</strong><div className="color-palette">{CANVAS_COLORS.map((color) => <button key={color} type="button" aria-label={`Canvas color ${color}`}
+                      className={canvasAppearance.canvasColor === color ? "selected" : ""} style={{ backgroundColor: color }} onClick={() => updateAppearance({ canvasColor: color })} />)}</div></div>
+                    <div><strong>Workflow bar</strong><div className="color-palette">{HEADER_COLORS.map((color) => <button key={color} type="button" aria-label={`Workflow bar color ${color}`}
+                      className={canvasAppearance.headerColor === color ? "selected" : ""} style={{ backgroundColor: color }} onClick={() => updateAppearance({ headerColor: color })} />)}</div></div>
+                  </aside>}
+
+                  <div className="canvas-viewport" style={{ transform: `translate3d(${canvasViewport.x}px, ${canvasViewport.y}px, 0) scale(${canvasViewport.zoom})` }}>
                   {canvasNodes.length > 0 && (
-                    <svg className="workflow-connections" aria-hidden="true">
+                    <svg className="workflow-connections" aria-label="Workflow connections">
+                      <defs><marker id="workflow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>
                       {connections.map((connection) => {
                         const source = canvasNodes.find((node) => node.id === connection.source);
                         const target = canvasNodes.find((node) => node.id === connection.target);
 
                         if (!source || !target) return null;
 
-                        const sourceX = (source.x ?? 140) + 120;
-                        const sourceY = (source.y ?? 200) + 55;
-                        const targetX = target.x ?? 140;
-                        const targetY = (target.y ?? 200) + 55;
-                        const curve = Math.max(70, (targetX - sourceX) * 0.45);
+                        const edgeState = connectionVisualState(source, target);
 
                         return (
-                          <path
-                            key={connection.id}
-                            d={`M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${targetX - curve} ${targetY}, ${targetX} ${targetY}`}
-                            className="workflow-connection-path"
-                          />
+                          <g key={connection.id} className={`workflow-connection ${edgeState}${selectedConnectionId === connection.id ? " selected" : ""}`}
+                            onMouseEnter={() => setHoveredConnectionId(connection.id)} onMouseLeave={() => setHoveredConnectionId(null)}>
+                            <path d={connectionPath(source, target)} className="workflow-connection-hit-area" onClick={(event) => { event.stopPropagation(); setSelectedConnectionId(connection.id); }} />
+                            <path d={connectionPath(source, target)} className="workflow-connection-path" markerEnd="url(#workflow-arrow)" />
+                            {edgeState === "running" && <circle className="workflow-edge-pulse" r="4"><animateMotion dur="0.9s" repeatCount="indefinite" path={connectionPath(source, target)} /></circle>}
+                            {hoveredConnectionId === connection.id && (() => { const midpoint = connectionMidpoint(source, target); return <foreignObject x={midpoint.x - 15} y={midpoint.y - 15} width="30" height="30">
+                              <button type="button" className="edge-insert-button" title="Insert node on connection" aria-label="Insert node on connection"
+                                onClick={(event) => { event.stopPropagation(); setInsertingConnectionId(connection.id); setConnectingFromNodeId(null); setProviderBrowser(null); setSearch(""); setShowNodePicker(true); }}>+</button>
+                            </foreignObject>; })()}
+                          </g>
                         );
                       })}
                     </svg>
@@ -3060,15 +3203,21 @@ function App() {
                         (node, index) => (
                          <div
   key={node.id}
-  className="workflow-node"
+  className={`workflow-node status-${node.status ?? "idle"}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
   style={{
-    left: node.x ?? 140 + index * 180,
+    left: node.x ?? 140 + index * 210,
     top: node.y ?? 200 + (index % 2) * 100,
   }}
-  onClick={() => setEditingNode(node)}
+  onPointerDown={(event) => startNodeDrag(event, node)}
+  onPointerMove={moveNode}
+  onPointerUp={endNodeDrag}
+  onPointerCancel={endNodeDrag}
+  onClick={() => { if (suppressNodeClickRef.current) { suppressNodeClickRef.current = false; return; } setEditingNode(node); }}
   role="button"
   tabIndex={0}
+  aria-label={`${node.name}: ${workflowNodeSubtitle(node)}`}
 >
+                            {node.name !== "Schedule Trigger" && <span className="node-port node-input-port" title="Input" aria-hidden="true" />}
                             <button
                               className="node-delete-button"
                               onClick={(event) => {
@@ -3089,21 +3238,15 @@ function App() {
                                   "-"
                                 )}`}
                             >
-                              {node.provider === "Facebook" ? <FacebookIcon /> : node.icon}
+                              <NodeProviderIcon node={node} />
                             </div>
 
-                            <strong>
-                              {node.name}
-                            </strong>
-
-                            <small>
-                              {node.type}
-                            </small>
+                            <div className="workflow-node-copy"><strong>{node.name}</strong><small title={workflowNodeSubtitle(node)}>{workflowNodeSubtitle(node)}</small></div>
 
                             <span className={`node-status-indicator ${node.status ?? "idle"}`} title={`Status: ${node.status ?? "idle"}`} />
 
                             <button
-                              className="node-output-port"
+                              className="node-port node-output-port"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openNextNodePicker(node.id);
@@ -3118,12 +3261,13 @@ function App() {
 
                     </div>
                   )}
+                  </div>
 
-                  <div className="zoom-tools">
-                    <button>⌗</button>
-                    <button>＋</button>
-                    <button>−</button>
-                    <button>↖</button>
+                  <div className="zoom-tools" onPointerDown={(event) => event.stopPropagation()}>
+                    <button type="button" onClick={() => setCanvasViewport({ x: 0, y: 0, zoom: 1 })} title="Reset view" aria-label="Reset canvas view">1:1</button>
+                    <button type="button" onClick={() => zoomCanvas(canvasViewport.zoom + 0.1)} title="Zoom in" aria-label="Zoom in">+</button>
+                    <button type="button" onClick={() => zoomCanvas(canvasViewport.zoom - 0.1)} title="Zoom out" aria-label="Zoom out">−</button>
+                    <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow to screen">↙</button>
                   </div>
 
                   <div className="logs-bar">
@@ -3292,6 +3436,15 @@ function App() {
               </div>
             )}
 
+          </section>
+        ) : topPage === "DASHBOARD" ? (
+          <section className={`dashboard-page ${isWorkflowRunning ? "workflow-running" : "workflow-idle"}`}>
+            <div className="dashboard-hero"><div><span className="eyebrow">JARVIS AUTOMATION</span><h1>Command center</h1>
+              <p>Monitor real workflow activity, connected services, and recent execution health.</p></div>
+              <div className="dashboard-orbit" aria-label={isWorkflowRunning ? "Workflow activity running" : "Workflow activity idle"}><span /><span /><strong>{isWorkflowRunning ? "RUN" : "IDLE"}</strong></div>
+            </div>
+            <div className="metrics"><div><strong>{canvasNodes.length}</strong><span>Workflow nodes</span></div><div><strong>{connections.length}</strong><span>Connections</span></div>
+              <div><strong>{canvasNodes.filter((node) => node.name === "Schedule Trigger").length}</strong><span>Schedule triggers</span></div><div><strong>{workflowStatus}</strong><span>Current state</span></div></div>
           </section>
         ) : (
           <section className="placeholder-page">
