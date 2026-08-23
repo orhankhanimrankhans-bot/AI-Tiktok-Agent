@@ -11,6 +11,8 @@ const { executeDriveDelete } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
 const { createExecutionServices } = require("./executionServices");
 const { createWorkflowExecutor, WorkflowExecutorError } = require("./workflowExecutor");
+const { createWorkflowStore } = require("./workflowStore");
+const { registerWorkflowRoutes } = require("./workflowRoutes");
 const { createFacebookExecutionContext, toLegacyReelResponse } = require("./facebookExecutionContext");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
@@ -91,6 +93,9 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const JARVIS_DB_PATH = path.resolve(
   process.env.JARVIS_DB_PATH || path.join(__dirname, "data", "credentials.sqlite3")
+);
+const WORKFLOW_DB_PATH = path.resolve(
+  process.env.WORKFLOW_DB_PATH || path.join(path.dirname(JARVIS_DB_PATH), "workflows.sqlite3")
 );
 const CREDENTIAL_ENCRYPTION_SECRET =
   process.env.CREDENTIAL_ENCRYPTION_SECRET || process.env.SESSION_SECRET ||
@@ -241,6 +246,7 @@ let facebookCredentialStore;
 let executionServices;
 let facebookExecutionContext;
 let workflowExecutor;
+let workflowStore;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
@@ -774,6 +780,10 @@ async function startServer() {
   if (!relativeToClientDist.startsWith("..") && !path.isAbsolute(relativeToClientDist)) {
     throw new Error("JARVIS_DB_PATH must not be inside client/dist.");
   }
+  const workflowRelativeToClientDist = path.relative(CLIENT_DIST, WORKFLOW_DB_PATH);
+  if (!workflowRelativeToClientDist.startsWith("..") && !path.isAbsolute(workflowRelativeToClientDist)) {
+    throw new Error("WORKFLOW_DB_PATH must not be inside client/dist.");
+  }
 
   await credentialStore.open();
   executionStore = new ExecutionStore(credentialStore.db);
@@ -784,6 +794,8 @@ async function startServer() {
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   executionServices = createExecutionServices({ credentialStore, createOAuthClient, createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }), facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
+  workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
+  registerWorkflowRoutes(app, { workflowStore, logger: console });
   app.listen(PORT, () => {
     console.log("");
     console.log("=================================");
