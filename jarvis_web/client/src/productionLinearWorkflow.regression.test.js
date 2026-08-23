@@ -72,7 +72,7 @@ test("Schedule Trigger Execute Step remains node-only and browser auto-schedulin
   const source = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(source, /onRunTrigger|window\.setInterval|pendingTriggerRunsRef/);
   assert.match(source, /onExecuteNode\(\{ \.\.\.node, config \}, null, \{ triggerMode: "manual" \}\)/);
-  assert.match(source, /isStrictlyLinearWorkflow\(runNodes, connectionsRef\.current\) \? runLinearWorkflow : runFanOutWorkflow/);
+  assert.match(source, /\/api\/workflow-executions\/run/);
   assert.match(source, /triggerMode: "workflow", startedAt/);
 });
 

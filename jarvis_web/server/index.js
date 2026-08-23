@@ -6,11 +6,14 @@ const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
-const { DriveSearchError, executeDriveSearch } = require("./driveSearch");
-const { executeDriveDelete, executeDriveDownload, executeDriveMove } = require("./driveFiles");
+const { DriveSearchError } = require("./driveSearch");
+const { executeDriveDelete } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
+const { createExecutionServices } = require("./executionServices");
+const { createWorkflowExecutor, WorkflowExecutorError } = require("./workflowExecutor");
+const { createFacebookExecutionContext, toLegacyReelResponse } = require("./facebookExecutionContext");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
-const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService, validatePageId } = require("./facebookGraph");
+const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
 const { logReelFailure, publishPageReel } = require("./facebookReels");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPopupHtml } = require("./facebookPopup");
@@ -235,6 +238,9 @@ const credentialStore = new CredentialStore({
 });
 let executionStore;
 let facebookCredentialStore;
+let executionServices;
+let facebookExecutionContext;
+let workflowExecutor;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
@@ -257,7 +263,7 @@ app.get("/api/health", (req, res) => {
 
 app.post("/api/ai/prepare-content", async (req, res) => {
   try {
-    return res.json(await prepareContent({ body: req.body, apiKey: OPENAI_API_KEY, model: OPENAI_MODEL }));
+    return res.json(await executionServices.openAI.prepare({ body: req.body, apiKey: executionServices.openAI.apiKey, model: executionServices.openAI.model }));
   } catch (error) {
     if (error instanceof PrepareContentError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
     console.error("Prepare Content failed safely.");
@@ -268,6 +274,7 @@ app.post("/api/ai/prepare-content", async (req, res) => {
 function facebookGraphService() { return new FacebookGraphService({ version: META_GRAPH_VERSION }); }
 function publicFacebookError(res, error) {
   if (error instanceof FacebookGraphError) {
+    if (error.publicBody) return res.status(error.statusCode).json(error.publicBody);
     logReelFailure(error);
     return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message,
       permission: error.permission || undefined, diagnostic: error.diagnostic || undefined });
@@ -388,27 +395,19 @@ function deleteFacebookCredential(req, res) {
 app.post("/api/facebook/credentials/:credentialId/disconnect", deleteFacebookCredential);
 app.delete("/api/facebook/credentials/:credentialId", deleteFacebookCredential);
 
-async function withFacebookCredential(req, res, action) {
-  if (containsForbiddenSecretFields(req.body)) return res.status(400).json({ error: "Facebook secrets must not be supplied by the client." });
-  if (!FacebookCredentialStore.isValidId(req.body?.credentialId)) return res.status(400).json({ error: "Select a valid Facebook credential." });
-  const credential = facebookCredentialStore.get(req.body.credentialId, { includeTokens: true });
-  if (!credential?.tokens?.userAccessToken && !credential?.tokens?.pageAccessToken) return res.status(404).json({ error: "Facebook credential was not found or is disconnected." });
-  try { return res.json(await action(facebookGraphService(), credential)); } catch (error) { return publicFacebookError(res, error); }
+async function withFacebookGraphRequest(req, res, endpoint) {
+  try {
+    return res.json(await executionServices.facebook.graphRequest({ credentialId: req.body?.credentialId,
+      method: req.method, endpoint, body: req.body, query: req.query }));
+  } catch (error) { return publicFacebookError(res, error); }
 }
-app.post("/api/facebook/graph/me", (req, res) => withFacebookCredential(req, res, executeCredentialMe));
-app.post("/api/facebook/graph/pages", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
-  const result = await executeCredentialPages(service, credential);
-  facebookCredentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
-    tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } });
-  return { pages: result.pages };
-}));
-app.post("/api/facebook/graph/page", (req, res) => withFacebookCredential(req, res, async (service, credential) => {
-  const pageId = validatePageId(req.body.pageId); const token = credentialPageToken(credential, pageId);
-  return service.pageMetadata(pageId, token);
-}));
-app.post("/api/facebook/reels/publish", (req, res) => withFacebookCredential(req, res, (service, credential) => publishPageReel({
-  request: req.body, service, credential, binaryDir: BINARY_DATA_DIR,
-})));
+app.post("/api/facebook/graph/me", (req, res) => withFacebookGraphRequest(req, res, "me"));
+app.post("/api/facebook/graph/pages", (req, res) => withFacebookGraphRequest(req, res, "pages"));
+app.post("/api/facebook/graph/page", (req, res) => withFacebookGraphRequest(req, res, "page"));
+async function publishFacebookReel(req, res) {
+  try { return res.json(toLegacyReelResponse(await executionServices.facebook.publishReel(req.body))); } catch (error) { return publicFacebookError(res, error); }
+}
+app.post("/api/facebook/reels/publish", publishFacebookReel);
 
 app.get("/api/google/credentials", async (req, res) => {
   try {
@@ -435,13 +434,7 @@ app.get("/api/google/credentials/:credentialId", async (req, res) => {
 
 app.post("/api/google/drive/search", async (req, res) => {
   try {
-    const result = await executeDriveSearch({
-      request: req.body,
-      credentialStore,
-      createOAuthClient,
-      createDriveClient: (oauth2Client) =>
-        google.drive({ version: "v3", auth: oauth2Client }),
-    });
+    const result = await executionServices.google.searchFiles(req.body);
     return res.json(result);
   } catch (error) {
     if (error instanceof DriveSearchError) {
@@ -462,9 +455,7 @@ app.post("/api/google/drive/search", async (req, res) => {
 
 async function handleDriveFileAction(req, res, action) {
   try {
-    const result = await action({ request: req.body, credentialStore, createOAuthClient,
-      createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
-      binaryDir: BINARY_DATA_DIR });
+    const result = await action({ request: req.body, ...executionServices.google, binaryDir: executionServices.binary.directory });
     return res.json(result);
   } catch (error) {
     if (error instanceof DriveSearchError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
@@ -473,9 +464,44 @@ async function handleDriveFileAction(req, res, action) {
   }
 }
 
-app.post("/api/google/drive/download", (req, res) => handleDriveFileAction(req, res, executeDriveDownload));
+async function handleDriveDownload(req, res) {
+  try { return res.json(await executionServices.google.downloadFile(req.body)); }
+  catch (error) {
+    if (error instanceof DriveSearchError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
+    console.error("Google Drive file action failed.");
+    return res.status(500).json({ status: "error", code: "drive_file_action_failed", error: "Google Drive file action failed." });
+  }
+}
+app.post("/api/google/drive/download", handleDriveDownload);
 app.post("/api/google/drive/delete", (req, res) => handleDriveFileAction(req, res, executeDriveDelete));
-app.post("/api/google/drive/move", (req, res) => handleDriveFileAction(req, res, executeDriveMove));
+async function handleDriveMove(req, res) {
+  try { return res.json(await executionServices.google.moveFile(req.body)); }
+  catch (error) {
+    if (error instanceof DriveSearchError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
+    console.error("Google Drive file action failed.");
+    return res.status(500).json({ status: "error", code: "drive_file_action_failed", error: "Google Drive file action failed." });
+  }
+}
+app.post("/api/google/drive/move", handleDriveMove);
+
+function containsForbiddenExecutionFields(value) {
+  if (Array.isArray(value)) return value.some(containsForbiddenExecutionFields);
+  if (!value || typeof value !== "object") return false;
+  return Object.entries(value).some(([key, child]) => /^(authorization|access[_-]?token|refresh[_-]?token|page[_-]?access[_-]?token|api[_-]?key|client[_-]?secret|session[_-]?secret|token)$/i.test(key) || containsForbiddenExecutionFields(child));
+}
+
+app.post("/api/workflow-executions/run", async (req, res) => {
+  const body = req.body;
+  if (!body || !Array.isArray(body.nodes) || !Array.isArray(body.connections) || typeof body.workflowId !== "string" || !body.workflowId.trim() || body.nodes.length > 100 || body.connections.length > 200 || body.triggerMode !== "workflow" || containsForbiddenExecutionFields(body)) {
+    return res.status(400).json({ status: "error", code: "invalid_workflow_request", error: "Provide a valid manual workflow definition." });
+  }
+  try { return res.json(await workflowExecutor.execute({ workflowId: body.workflowId, nodes: body.nodes, connections: body.connections, triggerMode: body.triggerMode })); }
+  catch (error) {
+    if (error instanceof WorkflowExecutorError) return res.status(400).json({ status: "error", code: error.code, error: error.message });
+    console.error("Workflow execution failed safely.");
+    return res.status(500).json({ status: "error", code: "workflow_execution_failed", error: "Workflow execution could not be completed." });
+  }
+});
 
 app.get("/api/executions", (req, res) => {
   try { return res.json({ executions: executionStore.list(req.query.limit) }); }
@@ -755,6 +781,9 @@ async function startServer() {
   facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
     legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();
+  facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
+  executionServices = createExecutionServices({ credentialStore, createOAuthClient, createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }), facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
+  workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   app.listen(PORT, () => {
     console.log("");
     console.log("=================================");

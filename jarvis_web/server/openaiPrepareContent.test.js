@@ -40,7 +40,7 @@ test("prompt treats filename as untrusted metadata and does not claim media anal
 test("dedicated route accepts no browser API key and reports server configuration as a boolean", () => {
   const source = fs.readFileSync(require.resolve("./index.js"), "utf8");
   const route = source.slice(source.indexOf('app.post("/api/ai/prepare-content"'), source.indexOf('app.get("/api/facebook/credentials"'));
-  assert.match(route, /prepareContent\(\{ body: req\.body, apiKey: OPENAI_API_KEY, model: OPENAI_MODEL \}\)/);
+  assert.match(route, /executionServices\.openAI\.prepare\(\{ body: req\.body, apiKey: executionServices\.openAI\.apiKey, model: executionServices\.openAI\.model \}\)/);
   assert.doesNotMatch(route, /req\.body\.(apiKey|token|authorization)/i);
   assert.match(source, /openAIConfigured/);
 });

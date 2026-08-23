@@ -23,8 +23,6 @@ import {
   executeWithLifecycle,
   upstreamInputError,
 } from "./workflowExecution.js";
-import { runLinearWorkflow } from "./workflowRunner.js";
-import { isStrictlyLinearWorkflow, runFanOutWorkflow } from "./workflowFanOutRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
   canvasPointFromClient, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
@@ -2716,24 +2714,27 @@ function App() {
       const runNodes = canvasNodesRef.current.map((node) => ({ ...node, status: "idle", error: null }));
       canvasNodesRef.current = runNodes;
       setCanvasNodes(runNodes);
-      const runner = isStrictlyLinearWorkflow(runNodes, connectionsRef.current) ? runLinearWorkflow : runFanOutWorkflow;
-      const result = await runner({
-        nodes: runNodes,
-        connections: connectionsRef.current,
-        executeNode: executeNodeOperation,
-        onNodeTransition: (updatedNode) => setCanvasNodes((nodes) => {
-          const next = nodes.map((node) => node.id === updatedNode.id ? updatedNode : node); canvasNodesRef.current = next; return next;
-        }),
+      const serverNodes = runNodes.map(({ id, name, config }) => ({ id, name, config }));
+      const serverConnections = connectionsRef.current.map(({ source, target }) => ({ source, target }));
+      const executionResponse = await fetch(`${API_BASE_URL}/api/workflow-executions/run`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId: "local-workflow", nodes: serverNodes, connections: serverConnections, triggerMode: "workflow" }) });
+      const result = await executionResponse.json().catch(() => null);
+      if (!executionResponse.ok) throw new Error(result?.error || "Workflow execution could not be completed.");
+      if (!result || !["success", "error"].includes(result.status) || !Array.isArray(result.nodes) || !Array.isArray(result.branches)) throw new Error("Workflow execution returned an invalid safe result.");
+      const summaries = new Map(result.nodes.map((summary) => [summary.nodeId, summary]));
+      const completedNodes = runNodes.map((node) => {
+        const summary = summaries.get(node.id);
+        return summary ? { ...node, status: summary.status, output: summary.output ?? node.output, error: summary.error || null } : node;
       });
-      canvasNodesRef.current = result.nodes;
-      setCanvasNodes(result.nodes);
+      canvasNodesRef.current = completedNodes;
+      setCanvasNodes(completedNodes);
       const record = { workflowId: "local-workflow", workflowName: "My Workflow", status: result.status,
-        triggerMode: "workflow", startedAt, finishedAt: new Date().toISOString(), nodes: result.summaries };
+        triggerMode: "workflow", startedAt: result.startedAt || startedAt, finishedAt: result.completedAt || new Date().toISOString(), nodes: result.nodes };
       const response = await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
       if (!response.ok) throw new Error("Workflow ran, but its execution record could not be saved.");
       executionWasPersisted = true;
-      setWorkflowNotice({ status: result.status, message: result.status === "success" ? "Workflow completed successfully." : result.error });
+      setWorkflowNotice({ status: result.status, message: result.status === "success" ? "Workflow completed successfully." : result.error || "Workflow execution completed with errors." });
       await loadExecutions();
     } catch (error) {
       if (!executionWasPersisted) {
