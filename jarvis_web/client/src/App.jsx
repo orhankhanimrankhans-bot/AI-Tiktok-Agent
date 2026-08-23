@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import AdvancedColorPicker from "./AdvancedColorPicker.jsx";
+import WorkflowManager from "./WorkflowManager.jsx";
+import { getWorkflow, updateWorkflow } from "./workflowApi.js";
+import { definitionFingerprint, editorDefinition, validateStoredWorkflow } from "./workflowEditorBinding.js";
 import JarvisDashboard from "./JarvisDashboard.jsx";
 import DataViewer from "./DataViewer.jsx";
 import { buildDashboardGraph } from "./dashboardPipeline.js";
@@ -2203,6 +2206,13 @@ function App() {
 
   const [workflowTab, setWorkflowTab] =
     useState("EDITOR");
+  const [showWorkflowManager, setShowWorkflowManager] = useState(false);
+  const [selectedManagedWorkflowId, setSelectedManagedWorkflowId] = useState(null);
+  const [editorWorkflowSource, setEditorWorkflowSource] = useState("local");
+  const [activeServerWorkflow, setActiveServerWorkflow] = useState(null);
+  const [pendingOpenWorkflowId, setPendingOpenWorkflowId] = useState(null);
+  const [openingWorkflowId, setOpeningWorkflowId] = useState(null);
+  const [workflowManagerRefreshKey, setWorkflowManagerRefreshKey] = useState(0);
 
   const [showNodePicker, setShowNodePicker] =
     useState(false);
@@ -2212,6 +2222,7 @@ function App() {
   const [canvasNodes, setCanvasNodes] =
     useState([]);
   const canvasNodesRef = useRef(canvasNodes);
+  const editorDefinitionBaselineRef = useRef(definitionFingerprint([], []));
 
   const [editingNode, setEditingNode] =
     useState(null);
@@ -2531,6 +2542,7 @@ function App() {
       if (Array.isArray(workflow?.connections)) {
         setConnections(workflow.connections);
       }
+      editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections);
     } catch (error) {
       console.error("Could not load saved Jarvis workflow:", error);
     }
@@ -2704,6 +2716,26 @@ function App() {
     setSelectedExecution(await response.json());
   };
 
+  const hasUnsavedEditorChanges = () => definitionFingerprint(canvasNodesRef.current, connectionsRef.current) !== editorDefinitionBaselineRef.current;
+
+  const openServerWorkflow = async (workflowId) => {
+    setOpeningWorkflowId(workflowId); setPendingOpenWorkflowId(null);
+    try {
+      const workflow = validateStoredWorkflow(await getWorkflow(fetch, API_BASE_URL, workflowId));
+      const definition = editorDefinition(workflow.nodes, workflow.connections);
+      canvasNodesRef.current = definition.nodes; connectionsRef.current = definition.connections;
+      setCanvasNodes(definition.nodes); setConnections(definition.connections); setEditingNode(null); setSelectedConnectionId(null);
+      setEditorWorkflowSource("server"); setActiveServerWorkflow({ id: workflow.id, name: workflow.name, status: workflow.status, version: workflow.version, updatedAt: workflow.updatedAt });
+      editorDefinitionBaselineRef.current = definitionFingerprint(definition.nodes, definition.connections);
+      setWorkflowDirty(false); setWorkflowNotice({ status: "success", message: `Opened ${workflow.name}.` }); setShowWorkflowManager(false);
+    } catch { setWorkflowNotice({ status: "error", message: "Could not open the selected workflow." }); } finally { setOpeningWorkflowId(null); }
+  };
+
+  const requestOpenServerWorkflow = (workflowId) => {
+    if (hasUnsavedEditorChanges()) { setPendingOpenWorkflowId(workflowId); return; }
+    openServerWorkflow(workflowId);
+  };
+
   const runWorkflow = async () => {
     if (isWorkflowRunning) return;
     setIsWorkflowRunning(true);
@@ -2716,8 +2748,10 @@ function App() {
       setCanvasNodes(runNodes);
       const serverNodes = runNodes.map(({ id, name, config }) => ({ id, name, config }));
       const serverConnections = connectionsRef.current.map(({ source, target }) => ({ source, target }));
+      const workflowId = editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow";
+      const workflowName = editorWorkflowSource === "server" ? activeServerWorkflow?.name : "My Workflow";
       const executionResponse = await fetch(`${API_BASE_URL}/api/workflow-executions/run`, { method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId: "local-workflow", nodes: serverNodes, connections: serverConnections, triggerMode: "workflow" }) });
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId, nodes: serverNodes, connections: serverConnections, triggerMode: "workflow" }) });
       const result = await executionResponse.json().catch(() => null);
       if (!executionResponse.ok) throw new Error(result?.error || "Workflow execution could not be completed.");
       if (!result || !["success", "error"].includes(result.status) || !Array.isArray(result.nodes) || !Array.isArray(result.branches)) throw new Error("Workflow execution returned an invalid safe result.");
@@ -2728,7 +2762,7 @@ function App() {
       });
       canvasNodesRef.current = completedNodes;
       setCanvasNodes(completedNodes);
-      const record = { workflowId: "local-workflow", workflowName: "My Workflow", status: result.status,
+      const record = { workflowId, workflowName, status: result.status,
         triggerMode: "workflow", startedAt: result.startedAt || startedAt, finishedAt: result.completedAt || new Date().toISOString(), nodes: result.nodes };
       const response = await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
@@ -2740,8 +2774,8 @@ function App() {
       if (!executionWasPersisted) {
         try {
           await fetch(`${API_BASE_URL}/api/executions`, { method: "POST", credentials: "include",
-            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId: "local-workflow",
-              workflowName: "My Workflow", status: "error", triggerMode: "workflow", startedAt,
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflowId: editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow",
+              workflowName: editorWorkflowSource === "server" ? activeServerWorkflow?.name : "My Workflow", status: "error", triggerMode: "workflow", startedAt,
               finishedAt: new Date().toISOString(), nodes: [{ nodeId: "workflow", name: "Workflow validation", status: "error", error: error?.message || "Workflow execution failed." }] }) });
         } catch {
           // The visible workflow error remains primary if history persistence is unavailable.
@@ -2754,7 +2788,17 @@ function App() {
     }
   };
 
-  const saveWorkflow = () => {
+  const saveWorkflow = async () => {
+    if (editorWorkflowSource === "server" && activeServerWorkflow?.id) {
+      try {
+        const definition = editorDefinition(canvasNodesRef.current, connectionsRef.current);
+        const saved = validateStoredWorkflow(await updateWorkflow(fetch, API_BASE_URL, activeServerWorkflow.id, definition));
+        setActiveServerWorkflow({ id: saved.id, name: saved.name, status: saved.status, version: saved.version, updatedAt: saved.updatedAt });
+        editorDefinitionBaselineRef.current = definitionFingerprint(definition.nodes, definition.connections);
+        setWorkflowManagerRefreshKey((value) => value + 1); setWorkflowNotice({ status: "success", message: "Workflow saved." }); setWorkflowDirty(false);
+      } catch { setWorkflowNotice({ status: "error", message: "Could not save workflow." }); }
+      return;
+    }
     try {
       const workflow = {
         version: 2,
@@ -2769,6 +2813,7 @@ function App() {
         JSON.stringify(workflowForStorage(workflow))
       );
 
+      editorDefinitionBaselineRef.current = definitionFingerprint(canvasNodesRef.current, connectionsRef.current);
       setWorkflowNotice({ status: "success", message: "Workflow saved." });
       setWorkflowDirty(false);
     } catch (error) {
@@ -3093,8 +3138,10 @@ function App() {
                 <div className="breadcrumb">
                   Jarvis / Workflow
                 </div>
+                <button type="button" className="workflow-manager-entry" onClick={() => setShowWorkflowManager(true)}>Workflows</button>
 
-                <h1>My Workflow</h1>
+                <h1>{editorWorkflowSource === "server" ? activeServerWorkflow?.name : "My Workflow"}</h1>
+                {editorWorkflowSource === "server" && activeServerWorkflow && <div className="server-workflow-binding"><span>SERVER-STORED</span><strong className={`workflow-manager-status ${activeServerWorkflow.status.toLowerCase()}`}>{activeServerWorkflow.status}</strong></div>}
                 <div className={`workflow-live-status ${workflowStatus}`}><span />{workflowStatus.charAt(0).toUpperCase() + workflowStatus.slice(1)}
                   {lastExecutionAt && !isWorkflowRunning && <small> · {new Date(lastExecutionAt).toLocaleTimeString()}</small>}
                 </div>
@@ -3137,6 +3184,7 @@ function App() {
             </div>
 
             {workflowNotice && <div className={`workflow-notice ${workflowNotice.status}`} role="status">{workflowNotice.message}</div>}
+            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} activeWorkflowId={activeServerWorkflow?.id || null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} />}
 
             {workflowTab === "EDITOR" && (
               <div className="editor-layout">
