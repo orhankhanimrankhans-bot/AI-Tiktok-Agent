@@ -4,7 +4,7 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 const manager = fs.readFileSync(new URL("./WorkflowManager.jsx", import.meta.url), "utf8");
-const open = source.slice(source.indexOf("  const openServerWorkflow = async"), source.indexOf("  const runWorkflow = async"));
+const open = source.slice(source.indexOf("  const openServerWorkflow = async"), source.indexOf("  const requestOpenServerWorkflow ="));
 const save = source.slice(source.indexOf("  const saveWorkflow = async"), source.indexOf("  const openNextNodePicker"));
 const run = source.slice(source.indexOf("  const runWorkflow = async"), source.indexOf("  const saveWorkflow = async"));
 
