@@ -26,6 +26,32 @@ test("Drive download stores binary by reference without exposing OAuth data", as
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("Drive Download HTTP route delegates through the execution service and keeps the existing safe error contract", () => {
+  const source = fs.readFileSync(require.resolve("./index.js"), "utf8");
+  const route = source.slice(source.indexOf("async function handleDriveDownload"), source.indexOf('app.post("/api/google/drive/delete"'));
+  assert.match(route, /executionServices\.google\.downloadFile\(req\.body\)/);
+  assert.match(route, /error instanceof DriveSearchError/);
+  assert.match(route, /status: "error", code: error\.code, error: error\.message/);
+  assert.doesNotMatch(route, /credentialStore|createOAuthClient|createDriveClient|binaryDir/);
+});
+
+test("Drive Move HTTP route delegates through the execution service while Delete remains on its existing path", () => {
+  const source = fs.readFileSync(require.resolve("./index.js"), "utf8");
+  const route = source.slice(source.indexOf("async function handleDriveMove"), source.indexOf("app.get(\"/api/executions\""));
+  assert.match(route, /executionServices\.google\.moveFile\(req\.body\)/);
+  assert.match(route, /error instanceof DriveSearchError/);
+  assert.match(route, /status: "error", code: error\.code, error: error\.message/);
+  assert.doesNotMatch(route, /credentialStore|createOAuthClient|createDriveClient|executeDriveMove/);
+  assert.match(source, /\/api\/google\/drive\/delete", \(req, res\) => handleDriveFileAction\(req, res, executeDriveDelete\)/);
+});
+
+test("Drive download rejects an invalid file ID before creating a Drive client", async () => {
+  let created = false;
+  await assert.rejects(() => executeDriveDownload({ request: { credentialId: ID, fileId: "../private" }, credentialStore: store(), binaryDir: os.tmpdir(),
+    createOAuthClient: () => new Auth(), createDriveClient: () => { created = true; return {}; } }), (error) => error.code === "invalid_file_id" && !/private/i.test(error.message));
+  assert.equal(created, false);
+});
+
 test("Drive move adds Done and removes every original parent without copying or uploading", async () => {
   let updateRequest; let copyCalls = 0; let createCalls = 0;
   const result = await executeDriveMove({ request: { credentialId: ID, fileId: "source_file_1", destinationFolderId: "done_folder_1" }, credentialStore: store(),

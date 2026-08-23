@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const { EventEmitter } = require("node:events");
 const test = require("node:test");
 
@@ -11,6 +12,15 @@ const {
 } = require("./driveSearch");
 
 const CREDENTIAL_ID = "gcred_1234567890123456789012";
+
+test("Drive Search HTTP route delegates through the execution service without changing its safe contract", () => {
+  const source = fs.readFileSync(require.resolve("./index.js"), "utf8");
+  const route = source.slice(source.indexOf('app.post("/api/google/drive/search"'), source.indexOf("async function handleDriveFileAction"));
+  assert.match(route, /executionServices\.google\.searchFiles\(req\.body\)/);
+  assert.match(route, /error instanceof DriveSearchError/);
+  assert.match(route, /status: "error",\s*code: error\.code,\s*error: error\.message/);
+  assert.doesNotMatch(route, /credentialStore|createOAuthClient|createDriveClient/);
+});
 
 class FakeOAuthClient extends EventEmitter {
   setCredentials(tokens) {

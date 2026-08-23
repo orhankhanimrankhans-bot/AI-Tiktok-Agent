@@ -18,14 +18,19 @@ test("manual routes serialize store metadata and never include token values", ()
 });
 
 test("Graph execution routes delegate auth-mode-aware me and Page discovery", () => {
-  assert.match(source, /\/api\/facebook\/graph\/me[^\n]+executeCredentialMe/);
-  assert.match(source, /executeCredentialPages\(service, credential\)/);
-  assert.match(source, /credentialPageToken\(credential, pageId\)/);
+  assert.match(source, /\/api\/facebook\/graph\/me[^\n]+withFacebookGraphRequest/);
+  assert.match(source, /executionServices\.facebook\.graphRequest/);
+  assert.match(source, /method: req\.method, endpoint, body: req\.body, query: req\.query/);
+  assert.match(source, /\/api\/facebook\/graph\/pages[^\n]+"pages"/);
+  assert.match(source, /\/api\/facebook\/graph\/page[^\n]+"page"/);
+  assert.doesNotMatch(source.slice(source.indexOf("async function withFacebookGraphRequest"), source.indexOf("async function withFacebookCredential")), /facebookCredentialStore\.get|facebookGraphService\(\)/);
 });
 
 test("Reel publishing route resolves credentials and binary references only on the server", () => {
-  assert.match(source, /\/api\/facebook\/reels\/publish[\s\S]{0,300}publishPageReel/);
-  assert.match(source, /binaryDir:\s*BINARY_DATA_DIR/);
+  assert.match(source, /\/api\/facebook\/reels\/publish", publishFacebookReel/);
+  assert.match(source, /toLegacyReelResponse\(await executionServices\.facebook\.publishReel\(req\.body\)\)/);
+  const route = source.slice(source.indexOf("async function publishFacebookReel"), source.indexOf('app.get("/api/google/credentials"'));
+  assert.doesNotMatch(route, /facebookCredentialStore\.get|facebookGraphService\(\)|publishPageReel|BINARY_DATA_DIR/);
   assert.doesNotMatch(source, /req\.body\.upload_?url/i);
 });
 
