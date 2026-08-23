@@ -124,6 +124,15 @@ test("appearance preferences are allowlisted and select readable contrast", () =
   assert.equal(readableForeground("#e8edf2"), "#11181c"); assert.equal(readableForeground("#0d1117"), "#eef7fa");
 });
 
+test("Appearance Studio allowlists the complete control center palette", () => {
+  const safe = safeAppearance({ dashboardBackground: "#010203", dashboardPanel: "#040506", dashboardBorder: "#070809", engineReady: "#ffcc00",
+    engineRunning: "#00dd88", engineError: "#ff3344", engineDisconnected: "#cccccc", conversationPanel: "#111111", conversationUser: "#222222",
+    conversationJarvis: "#123321", conversationInput: "#333333", dashboardIcon: "#55eeff" });
+  assert.equal(safe.dashboardBackground, "#010203"); assert.equal(safe.engineReady, "#ffcc00"); assert.equal(safe.engineRunning, "#00dd88");
+  assert.equal(safe.engineError, "#ff3344"); assert.equal(safe.engineDisconnected, "#cccccc"); assert.equal(safe.conversationUser, "#222222");
+  assert.equal(safe.conversationJarvis, "#123321"); assert.equal(safe.conversationInput, "#333333"); assert.equal(safe.dashboardIcon, "#55eeff");
+});
+
 test("theme system supports presets, custom solid and white-black two-color canvas", () => {
   assert.deepEqual(THEME_PRESETS.map((preset) => preset.label), ["Jarvis Dark", "Midnight Blue", "Black", "Graphite", "White", "Silver", "Purple", "Blue", "Cyan", "Green", "Red", "Pink"]);
   const twoColor = safeAppearance({ preset: "custom", canvasStyle: "two-color", canvasColor: "#ffffff", canvasColorB: "#000000",
@@ -149,13 +158,14 @@ test("workflow header is thin and canvas has no dotted background", () => {
 
 test("dashboard pipeline consumes real workflow state and animates only while running", () => {
   const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const dashboard = fs.readFileSync(new URL("./JarvisDashboard.jsx", import.meta.url), "utf8");
   const pipeline = fs.readFileSync(new URL("./CommandPipeline.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
-  assert.match(source, /jarvis-command-center/); assert.match(source, /CommandPipeline graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/); assert.match(pipeline, /pipeline-graph-lines/);
-  assert.match(source, /isWorkflowRunning \? "workflow-running" : "workflow-idle"/);
-  assert.match(pipeline, /workflowActive \? "running" : workflowError \? "error" : "idle"/);
-  assert.match(styles, /\.pipeline-running \.pipeline-route-map path[^}]*animation:/);
+  assert.match(source, /JarvisDashboard graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/); assert.match(dashboard, /CommandPipeline graph=\{graph\}/); assert.match(pipeline, /pipeline-graph-lines/);
+  assert.match(pipeline, /workflowError \? "error" : workflowActive \? "running" : healthStates\.includes\("error"\)/); assert.match(pipeline, /healthStates\.includes\("disconnected"\)/);
+  assert.match(styles, /\.pipeline-running \.pipeline-graph-lines path[^}]*animation:/);
   assert.match(styles, /\.pipeline-running \.core-ring-outer[^}]*animation:/);
+  assert.match(styles, /\.pipeline-ready \.engine-ring[^}]*animation: none !important/);
   assert.doesNotMatch(pipeline, /setInterval|setTimeout|requestAnimationFrame/);
 });
 

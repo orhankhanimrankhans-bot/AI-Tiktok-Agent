@@ -39,8 +39,8 @@ function RoutingCore() {
   </div>;
 }
 
-function StrongEngine() {
-  return <div className="strong-engine">
+function StrongEngine({ state }) {
+  return <div className="strong-engine" data-engine-state={state}>
     <div className="strong-engine-orb" aria-label="Strong Engine">
       <span className="engine-ring engine-ring-one" /><span className="engine-ring engine-ring-two" /><span className="engine-ring engine-ring-three" />
       <svg viewBox="0 0 160 160" aria-hidden="true"><ellipse cx="80" cy="80" rx="58" ry="22" /><ellipse cx="80" cy="80" rx="58" ry="22" transform="rotate(60 80 80)" />
@@ -51,7 +51,8 @@ function StrongEngine() {
 }
 
 export default function CommandPipeline({ graph, workflowActive = false, workflowError = false, healthContext = {} }) {
-  const state = workflowActive ? "running" : workflowError ? "error" : "idle";
+  const healthStates = graph.nodes.map((node) => nodeConnectionHealth(node, healthContext));
+  const state = workflowError ? "error" : workflowActive ? "running" : healthStates.includes("error") ? "error" : !graph.nodes.length || healthStates.includes("disconnected") ? "disconnected" : "ready";
   const routingStatus = dashboardRoutingStatus(graph, workflowActive, workflowError);
   return <section className={`command-pipeline pipeline-${state}`} data-pipeline-state={state} aria-label="Command Pipeline">
     <header className="command-pipeline-heading"><div><span>LIVE WORKFLOW ROUTING</span><h2>COMMAND PIPELINE</h2></div><small>{state.toUpperCase()}</small></header>
@@ -67,8 +68,8 @@ export default function CommandPipeline({ graph, workflowActive = false, workflo
           </div>)}
         </div>
       </div>
-      <StrongEngine />
-    </div> : <div className="pipeline-empty-state"><RoutingCore /><strong>No connected workflow</strong><span>Connect nodes in the Workflow Editor to visualize routing.</span><StrongEngine /></div>}
+      <StrongEngine state={state} />
+    </div> : <div className="pipeline-empty-state"><RoutingCore /><div className="pipeline-empty-copy"><strong>No connected workflow</strong><span>Connect nodes in the Workflow Editor to visualize routing.</span></div><StrongEngine state={state} /></div>}
     <footer className="pipeline-routing-status"><span className="routing-status-light" />Routing <b aria-hidden="true">-&gt;</b> <strong>{routingStatus}</strong>
       <span className="pipeline-count-summary">{graph.nodes.length} nodes · {graph.connections.length} connections · {graph.branches.length} branches</span></footer>
   </section>;

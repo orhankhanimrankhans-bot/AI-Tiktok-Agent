@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import AdvancedColorPicker from "./AdvancedColorPicker.jsx";
-import CommandPipeline from "./CommandPipeline.jsx";
+import JarvisDashboard from "./JarvisDashboard.jsx";
 import DataViewer from "./DataViewer.jsx";
 import { buildDashboardGraph } from "./dashboardPipeline.js";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
@@ -3496,26 +3496,8 @@ function App() {
 
           </section>
         ) : topPage === "DASHBOARD" ? (
-          <section className={`dashboard-page jarvis-command-center ${isWorkflowRunning ? "workflow-running" : "workflow-idle"}`}>
-            <header className="dashboard-heading"><div><span className="eyebrow">ISK · JARVIS AUTOMATION</span><h1>Command Center</h1><p>Live workflow intelligence and automation telemetry.</p></div>
-              <div className={`dashboard-state ${workflowStatus}`}><span />{workflowStatus}</div></header>
-            <CommandPipeline graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
-              healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} />
-            <div className="dashboard-metrics">
-              <aside className="command-panel">
-                <span className="panel-kicker">CONNECTED WORKFLOW</span><strong>{dashboardGraph.nodes.length}</strong><p>Reachable workflow nodes</p>
-                <div className="telemetry-line"><span>Connections</span><b>{dashboardGraph.connections.length}</b></div>
-                <div className="telemetry-line"><span>Schedule triggers</span><b>{dashboardGraph.triggers.length}</b></div>
-                <div className="telemetry-line"><span>Branches</span><b>{dashboardGraph.branches.length}</b></div>
-              </aside>
-              <aside className="command-panel">
-                <span className="panel-kicker">EXECUTION TELEMETRY</span><strong>{workflowStatus}</strong><p>Current workflow state</p>
-                <div className="telemetry-line"><span>Last execution</span><b>{lastExecutionAt ? new Date(lastExecutionAt).toLocaleTimeString() : "—"}</b></div>
-                <div className="telemetry-line"><span>History</span><b>{executions.length}</b></div>
-              </aside>
-            </div>
-            <div className="dashboard-status-rail"><span>Runtime linked</span><i /><span>Credentials protected</span><i /><span>Production workflow ready</span></div>
-          </section>
+          <JarvisDashboard graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
+            healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt} />
         ) : (
           <section className="placeholder-page">
             <h1>{topPage}</h1>

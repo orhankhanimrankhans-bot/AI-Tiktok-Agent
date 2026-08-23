@@ -14,12 +14,12 @@ test("Command Pipeline renders the actual graph rather than demo cards", () => {
 });
 
 test("pipeline state follows real workflow activity and never starts execution", () => {
-  assert.match(component, /workflowActive \? "running" : workflowError \? "error" : "idle"/);
-  assert.match(app, /<CommandPipeline graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/);
+  assert.match(component, /workflowError \? "error" : workflowActive \? "running" : healthStates\.includes\("error"\)/); assert.match(component, /healthStates\.includes\("disconnected"\)/);
+  assert.match(app, /<JarvisDashboard graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/);
   assert.match(app, /workflowError=\{!isWorkflowRunning && workflowNotice\?\.status === "error"\}/);
   assert.match(styles, /\.pipeline-running \.pipeline-graph-lines path[^}]*animation:/);
   assert.match(styles, /\.pipeline-running \.engine-ring-one[^}]*animation:/);
-  assert.doesNotMatch(styles, /\.pipeline-idle[^}]*animation:/);
+  assert.match(styles, /\.pipeline-ready \.engine-ring[^}]*animation: none !important/);
   assert.doesNotMatch(component, /setInterval|setTimeout|requestAnimationFrame|onRunWorkflow|runWorkflow\(/);
 });
 
@@ -41,8 +41,15 @@ test("backend fetch failure cannot reintroduce a null workflow notice status acc
 });
 
 test("pipeline uses real counts, health, Appearance Studio variables, and responsive reflow", () => {
-  assert.match(app, /dashboardGraph\.nodes\.length/); assert.match(app, /dashboardGraph\.connections\.length/); assert.match(app, /dashboardGraph\.branches\.length/);
+  assert.match(app, /<JarvisDashboard graph=\{dashboardGraph\}/);
   assert.match(component, /nodeConnectionHealth\(node, healthContext\)/); assert.match(component, /health-\$\{health\}/);
   for (const variable of ["--jarvis-panel-background", "--jarvis-panel-border", "--jarvis-main-text", "--jarvis-muted-text", "--jarvis-accent"]) assert.ok(styles.includes(variable));
-  assert.match(styles, /@media \(max-width: 1380px\)[\s\S]*actual-workflow-pipeline/); assert.match(styles, /@media \(max-width: 780px\)[\s\S]*pipeline-graph-stage/);
+  assert.match(styles, /@media \(max-width: 1450px\)[\s\S]*actual-workflow-pipeline/); assert.match(styles, /@media \(max-width: 1080px\)/);
+});
+
+test("engine remains in a dedicated far-right column at desktop widths", () => {
+  assert.match(component, /className="pipeline-empty-copy"/); assert.match(component, /<StrongEngine state=\{state\} \/>/);
+  assert.match(styles, /\.jarvis-control-center \.command-pipeline-body\.actual-workflow-pipeline \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(184px, 210px\)/);
+  assert.match(styles, /@media \(max-width: 1450px\) \{[\s\S]*?command-pipeline-body\.actual-workflow-pipeline \{ grid-template-columns: minmax\(0, 1fr\) 126px;/);
+  assert.match(styles, /\.jarvis-control-center \.pipeline-empty-state \{[^}]*grid-template-columns: minmax\(132px, 180px\) minmax\(0, 1fr\) minmax\(184px, 210px\)/);
 });
