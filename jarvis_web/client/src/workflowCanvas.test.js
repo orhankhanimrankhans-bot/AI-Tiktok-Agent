@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, connectionVisualState,
-  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, canvasPointFromClient, connectionPathToPoint, connectionVisualState,
+  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, validateConnectionCandidate, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 
 test("dragging updates logical node position without zoom jumps", () => {
   const moved = moveNodeFromPointer({ id: "drive", x: 100, y: 80 }, { nodeX: 100, nodeY: 80, pointerX: 200, pointerY: 100 }, { x: 260, y: 140 }, 0.5);
@@ -175,4 +175,15 @@ test("insert between removes the direct edge and creates two valid edges", () =>
   assert.equal(result.connections.some((edge) => edge.source === "a" && edge.target === "b"), false);
   assert.deepEqual(result.connections.map(({ source, target }) => [source, target]), [["a", "middle"], ["middle", "b"]]);
   assert.equal(result.nodes.at(-1).x, 300); assert.equal(result.nodes.at(-1).y, 100);
+});
+
+test("direct drag connection validation preserves supported topology", () => {
+  const nodes = [{ id: "trigger", name: "Schedule Trigger" }, { id: "a", name: "Search" }, { id: "b", name: "Limit" }];
+  assert.equal(validateConnectionCandidate(nodes, [], "trigger", "a").ok, true);
+  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "trigger", "b").ok, true);
+  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "a", "b").ok, true);
+  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "a", "a").ok, false);
+  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "a", "trigger").ok, false);
+  assert.deepEqual(canvasPointFromClient({ clientX: 170, clientY: 140 }, { left: 20, top: 40 }, { x: 50, y: 20, zoom: .5 }), { x: 200, y: 160 });
+  assert.match(connectionPathToPoint({ x: 100, y: 80 }, { x: 500, y: 220 }), /^M 248 154 C/);
 });

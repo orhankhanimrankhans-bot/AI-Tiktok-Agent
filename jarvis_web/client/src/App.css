@@ -25,6 +25,7 @@ input {
 button {
   cursor: pointer;
 }
+.workflow-canvas.connection-dragging { cursor: crosshair; touch-action: none; }.workflow-connection-preview { fill: none; stroke: #48eaff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 8 6; pointer-events: none; }.canvas-viewport .node-output-port.connection-source-active { border-color: #54efff; }.canvas-viewport .node-input-port.connection-target-valid { border-color: #72f4c0; background: #174c43; }.canvas-viewport .node-input-port.connection-target-invalid { border-color: #e57b83; background: #4d2027; }
 
 .jarvis-app {
   width: 100vw;

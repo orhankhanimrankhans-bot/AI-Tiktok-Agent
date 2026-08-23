@@ -27,8 +27,8 @@ import { runLinearWorkflow } from "./workflowRunner.js";
 import { isStrictlyLinearWorkflow, runFanOutWorkflow } from "./workflowFanOutRunner.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
-  clampCanvasZoom, connectionMidpoint, connectionPath, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
-  nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+  canvasPointFromClient, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
+  validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
@@ -2239,6 +2239,7 @@ function App() {
     connectionsRef.current = connections;
   }, [connections]);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState(null);
+  const [connectionDrag, setConnectionDrag] = useState(null); const connectionDragRef = useRef(null); const suppressPortClickRef = useRef(false); const [workflowDirty, setWorkflowDirty] = useState(false);
   const [providerBrowser, setProviderBrowser] = useState(null);
   const [showGoogleCredential, setShowGoogleCredential] = useState(false);
   const [googleCredentials, setGoogleCredentials] = useState([]);
@@ -2768,6 +2769,7 @@ function App() {
       );
 
       setWorkflowNotice({ status: "success", message: "Workflow saved." });
+      setWorkflowDirty(false);
     } catch (error) {
       console.error("Could not save Jarvis workflow:", error);
       setWorkflowNotice({ status: "error", message: "Could not save workflow." });
@@ -2990,6 +2992,10 @@ function App() {
     panStateRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
+  const connectionTargetAt = (x, y) => document.elementFromPoint(x, y)?.closest("[data-node-input-id]")?.dataset.nodeInputId || null;
+  const startConnectionDrag = (event, sourceId) => { if (event.button !== 0) return; event.preventDefault(); event.stopPropagation(); const bounds = workflowCanvasRef.current?.getBoundingClientRect(); if (!bounds) return; event.currentTarget.setPointerCapture(event.pointerId); const next = { sourceId, pointerId: event.pointerId, point: canvasPointFromClient(event, bounds, canvasViewport), targetId: null, moved: false }; connectionDragRef.current = next; setConnectionDrag(next); };
+  const moveConnectionDrag = (event) => { const drag = connectionDragRef.current; const bounds = workflowCanvasRef.current?.getBoundingClientRect(); if (!drag || drag.pointerId !== event.pointerId || !bounds) return; event.preventDefault(); event.stopPropagation(); const point = canvasPointFromClient(event, bounds, canvasViewport); const next = { ...drag, point, targetId: connectionTargetAt(event.clientX, event.clientY), moved: true }; connectionDragRef.current = next; setConnectionDrag(next); };
+  const endConnectionDrag = (event) => { const drag = connectionDragRef.current; if (!drag || drag.pointerId !== event.pointerId) return; const targetId = connectionTargetAt(event.clientX, event.clientY); const result = targetId && validateConnectionCandidate(canvasNodesRef.current, connectionsRef.current, drag.sourceId, targetId); if (result?.ok) { const next = [...connectionsRef.current, { id: `connection-${Date.now()}`, source: drag.sourceId, target: targetId }]; connectionsRef.current = next; setConnections(next); setWorkflowDirty(true); } suppressPortClickRef.current = drag.moved; connectionDragRef.current = null; setConnectionDrag(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); };
 
   const workflowStatus = isWorkflowRunning ? "running" : "idle";
   const dashboardGraph = buildDashboardGraph(canvasNodes, connections);
@@ -3121,7 +3127,7 @@ function App() {
                   {isWorkflowRunning ? "Running..." : "▶ Run Workflow"}
                 </button>
 
-                <button onClick={saveWorkflow}>Save</button>
+                <button onClick={saveWorkflow}>{workflowDirty ? "Save *" : "Save"}</button>
 
                 <button className="publish-button">
                   Publish
@@ -3135,7 +3141,7 @@ function App() {
               <div className="editor-layout">
 
                 <div
-                  className="workflow-canvas"
+                  className={`workflow-canvas${connectionDrag ? " connection-dragging" : ""}`}
                   ref={workflowCanvasRef}
                   style={{ background: canvasBackground(canvasAppearance), color: readableForeground(canvasAppearance.canvasColor) }}
                   onPointerDown={startCanvasPan}
@@ -3216,6 +3222,7 @@ function App() {
                           </g>
                         );
                       })}
+                      {connectionDrag && (() => { const source = canvasNodes.find((node) => node.id === connectionDrag.sourceId); return source && <path d={connectionPathToPoint(source, connectionDrag.point)} className="workflow-connection-preview" />; })()}
                     </svg>
                   )}
 
@@ -3258,7 +3265,7 @@ function App() {
                       {canvasNodes.map(
                         (node, index) => {
                           const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, openAIConfigured });
-                          const borderState = nodeBorderVisualState(node, isWorkflowRunning, health);
+                          const borderState = nodeBorderVisualState(node, isWorkflowRunning, health); const candidate = connectionDrag && validateConnectionCandidate(canvasNodes, connections, connectionDrag.sourceId, node.id); const inputState = candidate?.ok ? " connection-target-valid" : connectionDrag?.targetId === node.id ? " connection-target-invalid" : ""; const outputState = connectionDrag?.sourceId === node.id ? " connection-source-active" : "";
                           return <div
   key={node.id}
   className={`workflow-node status-${visualNodeStatus(node, isWorkflowRunning)} border-${borderState}${node.name === "Schedule Trigger" ? " schedule-trigger-node" : ""}${editingNode?.id === node.id ? " selected" : ""}`}
@@ -3275,7 +3282,7 @@ function App() {
   tabIndex={0}
   aria-label={`${node.name}: ${workflowNodeSubtitle(node)}`}
 >
-                            {node.name !== "Schedule Trigger" && <span className="node-port node-input-port" title="Input" aria-hidden="true" />}
+                            {node.name !== "Schedule Trigger" && <span className={`node-port node-input-port${inputState}`} data-node-input-id={node.id} title="Input" aria-hidden="true" />}
                             <button
                               className="node-delete-button"
                               onClick={(event) => {
@@ -3304,9 +3311,11 @@ function App() {
                             <span className={`node-status-indicator health-${health}`} title={`Connection health: ${health}`} aria-label={`Connection health: ${health}`} />
 
                             <button
-                              className="node-port node-output-port"
+                              className={`node-port node-output-port${outputState}`}
+                              onPointerDown={(event) => startConnectionDrag(event, node.id)} onPointerMove={moveConnectionDrag} onPointerUp={endConnectionDrag} onPointerCancel={endConnectionDrag}
                               onClick={(event) => {
                                 event.stopPropagation();
+                                if (suppressPortClickRef.current) { suppressPortClickRef.current = false; return; }
                                 openNextNodePicker(node.id);
                               }}
                               title="Add next step"
