@@ -33,10 +33,23 @@ import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, T
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
+const LOCAL_WORKFLOW_MANAGER_ID = "local-workflow";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
 
 function loadCanvasAppearance() {
   try { return safeAppearance(JSON.parse(localStorage.getItem(CANVAS_APPEARANCE_KEY) || "{}")); } catch { return safeAppearance(); }
+}
+
+function loadStoredLocalWorkflow() {
+  const saved = localStorage.getItem(WORKFLOW_STORAGE_KEY);
+  if (!saved) return null;
+  const parsedWorkflow = JSON.parse(saved);
+  const workflow = normalizeSavedWorkflow(parsedWorkflow);
+  const safeWorkflow = workflowForStorage(parsedWorkflow);
+  if (JSON.stringify(safeWorkflow) !== JSON.stringify(parsedWorkflow)) {
+    localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(safeWorkflow));
+  }
+  return workflow;
 }
 
 function AppearanceColorField({ label, value, onOpen, onReset }) {
@@ -2527,15 +2540,8 @@ function App() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(WORKFLOW_STORAGE_KEY);
-      if (!saved) return;
-
-      const parsedWorkflow = JSON.parse(saved);
-      const workflow = normalizeSavedWorkflow(parsedWorkflow);
-      const safeWorkflow = workflowForStorage(parsedWorkflow);
-      if (JSON.stringify(safeWorkflow) !== JSON.stringify(parsedWorkflow)) {
-        localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(safeWorkflow));
-      }
+      const workflow = loadStoredLocalWorkflow();
+      if (!workflow) return;
       if (Array.isArray(workflow?.nodes)) {
         setCanvasNodes(workflow.nodes);
       }
@@ -2734,6 +2740,24 @@ function App() {
   const requestOpenServerWorkflow = (workflowId) => {
     if (hasUnsavedEditorChanges()) { setPendingOpenWorkflowId(workflowId); return; }
     openServerWorkflow(workflowId);
+  };
+
+  const openLocalWorkflow = () => {
+    try {
+      const workflow = loadStoredLocalWorkflow();
+      if (!workflow) throw new Error("No saved local workflow.");
+      const definition = editorDefinition(workflow.nodes, workflow.connections);
+      canvasNodesRef.current = definition.nodes; connectionsRef.current = definition.connections;
+      setCanvasNodes(definition.nodes); setConnections(definition.connections); setEditingNode(null); setSelectedConnectionId(null);
+      setEditorWorkflowSource("local"); setActiveServerWorkflow(null);
+      editorDefinitionBaselineRef.current = definitionFingerprint(definition.nodes, definition.connections);
+      setWorkflowDirty(false); setPendingOpenWorkflowId(null); setWorkflowNotice({ status: "success", message: "Opened My Workflow." }); setShowWorkflowManager(false);
+    } catch { setWorkflowNotice({ status: "error", message: "Could not open the local workflow." }); }
+  };
+
+  const requestOpenLocalWorkflow = () => {
+    if (hasUnsavedEditorChanges()) { setPendingOpenWorkflowId(LOCAL_WORKFLOW_MANAGER_ID); return; }
+    openLocalWorkflow();
   };
 
   const runWorkflow = async () => {
@@ -3184,7 +3208,7 @@ function App() {
             </div>
 
             {workflowNotice && <div className={`workflow-notice ${workflowNotice.status}`} role="status">{workflowNotice.message}</div>}
-            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} activeWorkflowId={activeServerWorkflow?.id || null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} />}
+            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} activeWorkflowId={activeServerWorkflow?.id || null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} localWorkflowId={LOCAL_WORKFLOW_MANAGER_ID} onSelectLocalWorkflow={() => setSelectedManagedWorkflowId(LOCAL_WORKFLOW_MANAGER_ID)} onOpenLocalWorkflow={requestOpenLocalWorkflow} onDiscardAndOpenLocal={openLocalWorkflow} />}
 
             {workflowTab === "EDITOR" && (
               <div className="editor-layout">
