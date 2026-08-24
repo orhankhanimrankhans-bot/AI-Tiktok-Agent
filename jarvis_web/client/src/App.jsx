@@ -3585,10 +3585,10 @@ function App() {
 
           </section>
         ) : topPage === "DASHBOARD" ? (
-          <JarvisDashboard graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
+          <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
             healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
-            workflowName="My Workflow"
-            onOpenWorkflow={() => setTopPage("WORKFLOW")} />
+            activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
+            onOpenWorkflow={(workflowId) => { setTopPage("WORKFLOW"); if (workflowId && workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
         ) : topPage === "TOOLS" ? (
           <SecurityAccess />
         ) : (

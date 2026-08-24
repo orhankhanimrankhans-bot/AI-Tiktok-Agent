@@ -12,11 +12,11 @@ test("workflow feedback is a temporary fixed toast rather than a canvas row", ()
   assert.match(notice, /position: fixed/);
   assert.match(notice, /transform: translateX\(-50%\)/);
 });
-test("dashboard quick access opens the actual local workflow editor without fake cards", () => {
-  assert.match(dashboard, /WORKFLOW QUICK ACCESS/);
-  assert.match(dashboard, /workflowName/);
+test("dashboard workflow nodes open the actual workflow editor without fake cards", () => {
+  assert.match(dashboard, /listWorkflows\(fetch, apiBaseUrl\)/);
+  assert.match(dashboard, /activeWorkflowId/);
   assert.match(dashboard, /onOpenWorkflow/);
-  assert.match(app, /workflowName="My Workflow"/);
+  assert.match(app, /activeWorkflowId=\{editorWorkflowSource/);
   assert.match(app, /setTopPage\("WORKFLOW"\)/);
   assert.doesNotMatch(dashboard, /Workflow 2|Workflow 3|Workflow 4|Workflow 5/);
 });

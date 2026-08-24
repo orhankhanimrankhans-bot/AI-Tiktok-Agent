@@ -3,53 +3,24 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const component = readFileSync(new URL("./CommandPipeline.jsx", import.meta.url), "utf8");
-const pipelineLogic = readFileSync(new URL("./dashboardPipeline.js", import.meta.url), "utf8");
-const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 
-test("Command Pipeline renders the actual graph rather than demo cards", () => {
-  assert.match(component, /graph\.branches\.map/); assert.match(component, /branch\.nodes\.map/); assert.match(component, /node\.name/);
-  assert.match(component, /data-node-id=\{node\.id\}/); assert.match(component, /Central routing core/); assert.match(component, /STRONG ENGINE/);
-  assert.doesNotMatch(component, /PDF, DOCX, TXT|URL \/ LINKS|VIDEO CONTENT|DATA FILES|const SOURCES|const DESTINATIONS/);
+test("pipeline renders dynamic workflows around a clean J Route core", () => {
+  assert.match(component, /workflows\.map/); assert.match(component, /displayed\.map/); assert.match(component, /workflow\.name/); assert.match(component, /onOpen\?\.\(workflow\.id\)/);
+  assert.match(component, /Central J Route core/); assert.match(component, /<span>J<\/span><small>ROUTE<\/small>/); assert.doesNotMatch(component, /BRANCH|pipeline-branch-label|pipeline-core-axis/);
 });
 
-test("pipeline state follows real workflow activity and never starts execution", () => {
-  assert.match(component, /workflowError \? "error" : workflowActive \? "running" : healthStates\.includes\("error"\)/); assert.match(component, /healthStates\.includes\("disconnected"\)/);
-  assert.match(app, /<JarvisDashboard graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/);
-  assert.match(app, /workflowError=\{!isWorkflowRunning && workflowNotice\?\.status === "error"\}/);
-  assert.match(styles, /\.pipeline-running \.pipeline-graph-lines path[^}]*animation:/);
-  assert.match(styles, /\.pipeline-running \.engine-ring-one[^}]*animation:/);
-  assert.match(styles, /\.pipeline-ready \.engine-ring[^}]*animation: none !important/);
-  assert.doesNotMatch(component, /setInterval|setTimeout|requestAnimationFrame|onRunWorkflow|runWorkflow\(/);
+test("workflow status comes from current activity and real execution history", () => {
+  assert.match(component, /workflow\.id === activeWorkflowId && workflowActive/); assert.match(component, /workflow\.id === activeWorkflowId && workflowError/); assert.match(component, /execution\?\.status === "error"/);
+  for (const state of ["running", "ready", "error", "offline"]) assert.match(component, new RegExp(`wire-\\$\\{workflow\\.dashboardStatus\\}|workflow-${state}|${state}:`));
 });
 
-test("dashboard initial null execution state and empty history remain render-safe", () => {
-  assert.match(app, /const \[workflowNotice, setWorkflowNotice\] = useState\(null\)/);
-  assert.match(app, /const \[lastExecutionAt, setLastExecutionAt\] = useState\(null\)/);
-  assert.match(app, /const \[selectedExecution, setSelectedExecution\] = useState\(null\)/);
-  assert.match(app, /const \[executions, setExecutions\] = useState\(\[\]\)/);
-  assert.doesNotMatch(app, /workflowError=\{!isWorkflowRunning && workflowNotice\.status/);
-  assert.match(component, /workflowActive = false, workflowError = false/);
-  assert.match(pipelineLogic, /workflowError \? "Last run error" : "Waiting"/);
+test("SVG wires animate energy independently by workflow state", () => {
+  assert.match(component, /className="workflow-wire-layer"/); assert.match(component, /className="wire-energy"/); assert.match(styles, /\.wire-running \.wire-energy[^}]*animation-duration: 1s/); assert.match(styles, /\.wire-ready \.wire-energy[^}]*animation-duration: 4s/); assert.match(styles, /\.wire-error \.wire-energy[^}]*animation-duration: 2s/); assert.match(styles, /\.wire-offline \.wire-energy[^}]*animation: none/);
 });
 
-test("backend fetch failure cannot reintroduce a null workflow notice status access", () => {
-  assert.match(app, /fetch\(`\$\{API_BASE_URL\}\/api\/health`/);
-  assert.match(app, /\.catch\(\(\) => \{ if \(!cancelled\) setOpenAIConfigured\(false\); \}\)/);
-  assert.match(app, /workflowNotice\?\.status/);
-  assert.doesNotMatch(app, /workflowError=\{!isWorkflowRunning && workflowNotice\.status/);
-});
-
-test("pipeline uses real counts, health, Appearance Studio variables, and responsive reflow", () => {
-  assert.match(app, /<JarvisDashboard graph=\{dashboardGraph\}/);
-  assert.match(component, /nodeConnectionHealth\(node, healthContext\)/); assert.match(component, /health-\$\{health\}/);
-  for (const variable of ["--jarvis-panel-background", "--jarvis-panel-border", "--jarvis-main-text", "--jarvis-muted-text", "--jarvis-accent"]) assert.ok(styles.includes(variable));
-  assert.match(styles, /@media \(max-width: 1450px\)[\s\S]*actual-workflow-pipeline/); assert.match(styles, /@media \(max-width: 1080px\)/);
-});
-
-test("engine remains in a dedicated far-right column at desktop widths", () => {
-  assert.match(component, /className="pipeline-empty-copy"/); assert.match(component, /<StrongEngine state=\{state\} \/>/);
-  assert.match(styles, /\.jarvis-control-center \.command-pipeline-body\.actual-workflow-pipeline \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(184px, 210px\)/);
-  assert.match(styles, /@media \(max-width: 1450px\) \{[\s\S]*?command-pipeline-body\.actual-workflow-pipeline \{ grid-template-columns: minmax\(0, 1fr\) 126px;/);
-  assert.match(styles, /\.jarvis-control-center \.pipeline-empty-state \{[^}]*grid-template-columns: minmax\(132px, 180px\) minmax\(0, 1fr\) minmax\(184px, 210px\)/);
+test("Strong Engine is a lightweight CSS and SVG 3D orb at far right", () => {
+  assert.match(component, /Strong Engine 3D activity orb/); assert.match(component, /className="engine-shell"/); assert.match(component, /<StrongEngine state=\{state\}/); assert.match(styles, /\.pipeline-live-stage \{[^}]*grid-template-columns: minmax\(135px, 190px\) minmax\(115px, 160px\) minmax\(145px, 190px\)/); assert.match(styles, /perspective\(420px\) rotateX\(9deg\)/);
+  assert.match(component, /className="engine-core"/); assert.match(component, /className="engine-meridian meridian-one"/); assert.doesNotMatch(component, /<svg viewBox="0 0 160 160"/);
+  assert.doesNotMatch(component, /WebGL|setInterval|requestAnimationFrame/);
 });

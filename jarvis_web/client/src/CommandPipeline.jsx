@@ -1,76 +1,37 @@
-import { dashboardNodeState, dashboardRoutingStatus } from "./dashboardPipeline.js";
 import { nodeConnectionHealth } from "./workflowCanvas.js";
 
-function PipelineNodeIcon({ node }) {
-  if (node.name === "Schedule Trigger") return <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="10" /><path d="M16 9v7l5 3" /></svg>;
-  if (node.provider === "Google Drive" || /Files|File/.test(node.name || "")) return <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M12 4h8l9 16-4 7H7l-4-7L12 4Z" /><path d="m12 4 9 16M20 4 11 20M3 20h26" /></svg>;
-  if (node.name === "Facebook Graph API") return <b aria-hidden="true">f</b>;
-  if (node.name === "Prepare Content" || node.name === "Prepare Content / AI") return <b aria-hidden="true">AI</b>;
-  if (node.name === "Limit") return <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 9h20M6 16h15M6 23h10" /></svg>;
-  return <b aria-hidden="true">{String(node.name || "N").slice(0, 1).toUpperCase()}</b>;
+function statusForWorkflow(workflow, { activeWorkflowId, workflowActive, workflowError, executions }) {
+  if (workflow.id === activeWorkflowId && workflowActive) return "running";
+  if (workflow.id === activeWorkflowId && workflowError) return "error";
+  const execution = executions.find((item) => item.workflowId === workflow.id);
+  if (execution?.status === "error") return "error";
+  if (workflow.status === "DISABLED") return "offline";
+  return "ready";
 }
 
-function WorkflowNodeCard({ node, workflowActive, healthContext }) {
-  const executionState = dashboardNodeState(node, workflowActive);
-  const health = nodeConnectionHealth(node, healthContext);
-  return <article className={`pipeline-workflow-node node-${executionState}`} data-node-id={node.id} data-execution-state={executionState}>
-    <i className="pipeline-node-icon"><PipelineNodeIcon node={node} /></i>
-    <div><strong>{node.name}</strong><small>{node.provider || node.type || "Jarvis"}</small></div>
-    <span className={`pipeline-health health-${health}`} title={`Connection: ${health}`} />
-  </article>;
-}
-
-function BranchLines({ branchCount }) {
-  const count = Math.max(1, branchCount);
-  return <svg className="pipeline-graph-lines" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true">
-    <path className="trigger-core-line" d="M120 250 C225 250 250 250 380 250" />
-    {Array.from({ length: count }, (_, index) => {
-      const y = count === 1 ? 250 : 55 + (390 * index) / Math.max(1, count - 1);
-      return <path key={index} className="core-branch-line" d={`M485 250 C570 250 560 ${y} 670 ${y}`} />;
-    })}
-  </svg>;
+function WorkflowNode({ workflow, status, onOpen }) {
+  const label = { running: "RUNNING", ready: "READY", error: "ERROR", offline: "OFFLINE" }[status];
+  return <button type="button" className={`pipeline-workflow workflow-${status}`} onClick={() => onOpen?.(workflow.id)} title={workflow.error || `Open ${workflow.name} in Workflow Editor`}>
+    <span className="workflow-node-led" /><span className="workflow-node-copy"><strong>{workflow.name}</strong><small>{label}{workflow.updatedAt ? ` / ${new Date(workflow.updatedAt).toLocaleDateString()}` : ""}</small></span>
+  </button>;
 }
 
 function RoutingCore() {
-  return <div className="pipeline-routing-core" aria-label="Central routing core">
-    <span className="pipeline-core-ring core-ring-outer" /><span className="pipeline-core-ring core-ring-middle" /><span className="pipeline-core-ring core-ring-inner" />
-    <span className="pipeline-core-axis axis-one" /><span className="pipeline-core-axis axis-two" />
-    <div className="pipeline-core-orb"><span>J</span><small>ROUTE</small></div>
-  </div>;
+  return <div className="pipeline-routing-core" aria-label="Central J Route core"><span className="pipeline-core-ring core-ring-outer" /><span className="pipeline-core-ring core-ring-middle" /><span className="pipeline-core-ring core-ring-inner" /><div className="pipeline-core-orb"><span>J</span><small>ROUTE</small></div></div>;
 }
 
 function StrongEngine({ state }) {
-  return <div className="strong-engine" data-engine-state={state}>
-    <div className="strong-engine-orb" aria-label="Strong Engine">
-      <span className="engine-ring engine-ring-one" /><span className="engine-ring engine-ring-two" /><span className="engine-ring engine-ring-three" />
-      <svg viewBox="0 0 160 160" aria-hidden="true"><ellipse cx="80" cy="80" rx="58" ry="22" /><ellipse cx="80" cy="80" rx="58" ry="22" transform="rotate(60 80 80)" />
-        <ellipse cx="80" cy="80" rx="58" ry="22" transform="rotate(120 80 80)" /><circle cx="80" cy="80" r="12" /></svg>
-    </div>
-    <strong>STRONG ENGINE</strong><button type="button" title="Engine configuration is not available yet">CONFIGURE</button>
-  </div>;
+  return <div className="strong-engine" data-engine-state={state}><div className="strong-engine-orb" aria-label="Strong Engine 3D activity orb"><span className="engine-halo" /><span className="engine-shell"><i className="engine-core"><b /></i></span><span className="engine-ring engine-ring-one" /><span className="engine-ring engine-ring-two" /><span className="engine-ring engine-ring-three" /><span className="engine-meridian meridian-one" /><span className="engine-meridian meridian-two" /></div><strong>STRONG ENGINE</strong><small>{state.toUpperCase()}</small><button type="button" disabled title="Engine configuration backend is not available">CONFIGURE</button></div>;
 }
 
-export default function CommandPipeline({ graph, workflowActive = false, workflowError = false, healthContext = {} }) {
+function WorkflowWires({ workflows }) {
+  const count = Math.max(workflows.length, 1);
+  return <svg className="workflow-wire-layer" viewBox="0 0 1000 520" preserveAspectRatio="none" aria-hidden="true">{workflows.map((workflow, index) => { const y = count === 1 ? 260 : 55 + (410 * index) / (count - 1); return <g key={workflow.id} className={`wire-${workflow.dashboardStatus}`}><path className="wire-base" d={`M120 ${y} C330 ${y} 310 260 495 260`} /><path className="wire-energy" d={`M120 ${y} C330 ${y} 310 260 495 260`} /></g>; })}<path className="core-engine-wire" d="M570 260 C700 260 715 260 865 260" /></svg>;
+}
+
+export default function CommandPipeline({ graph, workflows = [], activeWorkflowId = "local-workflow", workflowActive = false, workflowError = false, healthContext = {}, executions = [], onOpenWorkflow }) {
   const healthStates = graph.nodes.map((node) => nodeConnectionHealth(node, healthContext));
   const state = workflowError ? "error" : workflowActive ? "running" : healthStates.includes("error") ? "error" : !graph.nodes.length || healthStates.includes("disconnected") ? "disconnected" : "ready";
-  const routingStatus = dashboardRoutingStatus(graph, workflowActive, workflowError);
-  return <section className={`command-pipeline pipeline-${state}`} data-pipeline-state={state} aria-label="Command Pipeline">
-    <header className="command-pipeline-heading"><div><span>LIVE WORKFLOW ROUTING</span><h2>COMMAND PIPELINE</h2></div><small>{state.toUpperCase()}</small></header>
-    {graph.nodes.length ? <div className="command-pipeline-body actual-workflow-pipeline">
-      <div className="pipeline-graph-stage">
-        <BranchLines branchCount={graph.branches.length} />
-        <div className="pipeline-trigger-column">{graph.trigger && <WorkflowNodeCard node={graph.trigger} workflowActive={workflowActive} healthContext={healthContext} />}</div>
-        <RoutingCore />
-        <div className={`pipeline-branches branch-count-${Math.min(graph.branches.length, 9)}`}>
-          {graph.branches.map((branch, index) => <div className="pipeline-branch" key={branch.branchId} data-branch-id={branch.branchId}>
-            {graph.branches.length > 1 && <span className="pipeline-branch-label">BRANCH {index + 1}</span>}
-            <div className="pipeline-branch-nodes">{branch.nodes.map((node) => <WorkflowNodeCard key={node.id} node={node} workflowActive={workflowActive} healthContext={healthContext} />)}</div>
-          </div>)}
-        </div>
-      </div>
-      <StrongEngine state={state} />
-    </div> : <div className="pipeline-empty-state"><RoutingCore /><div className="pipeline-empty-copy"><strong>No connected workflow</strong><span>Connect nodes in the Workflow Editor to visualize routing.</span></div><StrongEngine state={state} /></div>}
-    <footer className="pipeline-routing-status"><span className="routing-status-light" />Routing <b aria-hidden="true">-&gt;</b> <strong>{routingStatus}</strong>
-      <span className="pipeline-count-summary">{graph.nodes.length} nodes · {graph.connections.length} connections · {graph.branches.length} branches</span></footer>
-  </section>;
+  const displayed = workflows.map((workflow) => ({ ...workflow, dashboardStatus: statusForWorkflow(workflow, { activeWorkflowId, workflowActive, workflowError, executions }) }));
+  return <section className={`command-pipeline pipeline-${state}`} data-pipeline-state={state} aria-label="Command Pipeline"><header className="command-pipeline-heading"><div><span>LIVE WORKFLOW ROUTING</span><h2>COMMAND PIPELINE</h2></div><small>{state.toUpperCase()}</small></header><div className="pipeline-live-stage"><WorkflowWires workflows={displayed} /><div className="pipeline-workflow-stack">{displayed.length ? displayed.map((workflow) => <WorkflowNode key={workflow.id} workflow={workflow} status={workflow.dashboardStatus} onOpen={onOpenWorkflow} />) : <div className="pipeline-empty-copy"><strong>No connected workflow</strong><span>Create or connect a workflow in the editor.</span></div>}</div><RoutingCore /><StrongEngine state={state} /></div><footer className="pipeline-routing-status"><span className="routing-status-light" />J/Route <b aria-hidden="true">-&gt;</b> <strong>{workflowActive ? "ACTIVE DATA FLOW" : workflowError ? "ATTENTION REQUIRED" : displayed.length ? "STANDBY" : "WAITING"}</strong><span className="pipeline-count-summary">{displayed.length} workflows / {graph.nodes.length} active nodes / {graph.connections.length} connections</span></footer></section>;
 }

@@ -3,46 +3,50 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const dashboard = readFileSync(new URL("./JarvisDashboard.jsx", import.meta.url), "utf8");
+const office = readFileSync(new URL("./OfficeSimulation.jsx", import.meta.url), "utf8");
 const pipeline = readFileSync(new URL("./CommandPipeline.jsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
-test("Jarvis Core renders an exact circular ISK conversation control", () => {
+test("dashboard keeps a compact Jarvis Core and equal compact controls", () => {
   assert.match(dashboard, /<h1>JARVIS CORE<\/h1>/); assert.match(dashboard, /className="isk-core-button"/); assert.match(dashboard, /<span>ISK<\/span>/);
-  assert.match(dashboard, /onClick=\{focusConversation\}/); assert.match(dashboard, /inputRef\.current\?\.focus\(\)/);
-  assert.match(styles, /\.isk-core-button \{[^}]*width: 82px;[^}]*height: 82px;[^}]*border-radius: 50%;[^}]*aspect-ratio: 1;/);
-  assert.doesNotMatch(dashboard, /<span>J<\/span>|<span>JSK<\/span>|<span>JARVIS<\/span>/);
-});
-
-test("five operational cards and every detail drawer route are present", () => {
   for (const label of ["UPLOAD QUEUE", "WORKFLOW CONTROL", "FACEBOOK", "YOUTUBE", "STORAGE & MEDIA"]) assert.match(dashboard, new RegExp(label));
-  for (const id of ["upload", "workflow", "facebook", "youtube", "storage"]) assert.match(dashboard, new RegExp(`\\["${id}"`));
-  assert.match(dashboard, /setDetail\(id\)/); assert.match(dashboard, /role="dialog"/); assert.match(dashboard, /event\.key === "Escape"/);
+  assert.match(styles, /\.jarvis-core-header \{ min-height: 64px/); assert.match(styles, /\.operational-controls \{ grid-template-rows: repeat\(5, 48px\)/);
 });
 
-test("six integrations are truthful and Chat focuses the shared conversation", () => {
-  for (const label of ["CHAT", "VOICE", "WHATSAPP", "TIKTOK", "TOOLS", "MEMORY"]) assert.match(dashboard, new RegExp(label));
-  assert.match(dashboard, /id === "chat" \? focusConversation\(\)/); assert.match(dashboard, /Voice transcription is unavailable/);
-  assert.match(dashboard, /WhatsApp", "Not connected/); assert.match(dashboard, /TikTok", "Not connected/);
+test("saved workflows and real execution inputs feed the live pipeline", () => {
+  assert.match(dashboard, /listWorkflows\(fetch, apiBaseUrl\)/); assert.match(dashboard, /savedWorkflows\.filter/); assert.match(dashboard, /executions=\{executions\}/);
+  assert.match(app, /apiBaseUrl=\{API_BASE_URL\}/); assert.match(app, /activeWorkflowId=\{editorWorkflowSource/); assert.match(app, /requestOpenServerWorkflow\(workflowId\)/);
+  assert.match(pipeline, /executions\.find\(\(item\) => item\.workflowId === workflow\.id\)/);
 });
 
-test("large conversation panel supports real typed input without fake replies or transcription", () => {
-  assert.match(dashboard, /JARVIS CONVERSATION/); assert.match(dashboard, /className="conversation-thread"/); assert.match(dashboard, /placeholder="Type a message\.\.\."/);
-  assert.match(dashboard, /className="conversation-mic" disabled/); assert.match(dashboard, /setMessages\(\(current\) => \[\.\.\.current/);
-  assert.match(dashboard, /role: "user"/); assert.doesNotMatch(dashboard, /role: "jarvis", text|SpeechRecognition|webkitSpeechRecognition/);
-  assert.match(styles, /\.jarvis-conversation \{[^}]*grid-template-rows: auto 1fr auto/); assert.match(styles, /\.conversation-thread \{[^}]*overflow-y: auto/);
+test("conversation routes tasks to agents and reports unavailable connectors honestly", () => {
+  for (const name of ["NOVA", "PULSE", "ORBIT", "ATLAS", "LINK"]) assert.match(`${dashboard}\n${office}`, new RegExp(name));
+  for (const member of ["IMRAN", "SULAIMAN", "KAZIM"]) assert.match(office, new RegExp(member));
+  assert.match(dashboard, /setAgentStates/); assert.match(dashboard, /workflowActive \? "WORKING"/); assert.match(dashboard, /taskStatus = "DONE"/);
+  assert.doesNotMatch(dashboard, /setTimeout|setInterval/);
+  assert.match(dashboard, /WhatsApp is NOT CONNECTED/); assert.match(dashboard, /analytics are NOT CONNECTED/); assert.match(dashboard, /No metric was fabricated/);
+  assert.match(dashboard, /className="conversation-mic" disabled/); assert.doesNotMatch(dashboard, /SpeechRecognition|webkitSpeechRecognition/);
+  assert.match(dashboard, /handoffIntent\(text\)/); assert.match(dashboard, /setOfficeHandoff/); assert.match(dashboard, /No external action was claimed/);
 });
 
-test("engine and route states are disconnected, static-ready, running, and error driven", () => {
-  assert.match(pipeline, /workflowError \? "error" : workflowActive \? "running" : healthStates\.includes\("error"\)/); assert.match(pipeline, /healthStates\.includes\("disconnected"\)/);
-  assert.match(pipeline, /data-engine-state=\{state\}/); assert.match(styles, /\.pipeline-ready \.strong-engine-orb[^}]*--jarvis-engine-ready/);
-  assert.match(styles, /\.pipeline-running \.strong-engine-orb[^}]*--jarvis-engine-running/); assert.match(styles, /\.pipeline-error \.strong-engine-orb[^}]*--jarvis-engine-error/);
-  assert.match(styles, /\.pipeline-disconnected \.strong-engine-orb[^}]*--jarvis-engine-disconnected/); assert.match(styles, /\.pipeline-running \.strong-engine-orb::before[^}]*animation:/);
-  assert.match(styles, /\.pipeline-ready \.engine-ring[^}]*animation: none !important/); assert.doesNotMatch(pipeline, /setInterval|setTimeout|requestAnimationFrame/);
+test("AI Office is configuration-driven and exposes rooms, agents, tasks, and states", () => {
+  assert.match(office, /const AGENTS = \[/); assert.match(office, /const MEMBERS = \[/); assert.match(office, /MAIN ACCESS ROOM/); assert.match(office, /COORDINATOR ROOM/); assert.match(office, /OfficeHotspot/); assert.match(office, /RoomHighlight/);
+  assert.match(office, /jarvis-ai-office\.webp/); assert.match(office, /--office-x/); assert.match(office, /onError=\{\(\) => setImageFailed\(true\)\}/);
+  assert.match(office, /MovingOfficeAgent/); assert.match(office, /findOfficeRoute/); assert.match(office, /HANDING_OVER/); assert.match(office, /RETURNING/);
+  assert.match(office, /WALKING_TO_DESTINATION/); assert.match(office, /ARRIVED/); assert.match(office, /requestAnimationFrame/); assert.match(office, /interpolateRoutePosition/);
+  assert.match(office, /OfficeEmployee/); assert.match(office, /STANDING_UP/); assert.match(office, /RETURNED/); assert.match(office, /DELIVERING/); assert.match(styles, /\.office-character\.pose-seated/);
+  for (const employee of ["nova", "pulse", "orbit", "atlas", "link", "imran", "sulaiman", "kazim"]) assert.match(office, new RegExp(`${employee}-poses\\.webp`));
+  assert.match(styles, /employee-walk-frames/); assert.match(styles, /background-size: 300% 200%/); assert.match(styles, /width: clamp\(96px, 9\.2vw, 148px\)/); assert.match(styles, /animation-duration: \.44s/); assert.match(styles, /\.employee-identity/); assert.doesNotMatch(office, /ai-head|ai-torso|ai-visor/);
+  assert.match(office, /AMAZON OPERATIONS/); assert.match(office, /PlatformSign/); assert.match(office, /platformStates\.facebook/);
+  for (const platform of ["amazon", "facebook", "tiktok", "youtube"]) assert.match(styles, new RegExp(`\\.platform-${platform}`));
+  assert.match(styles, /Physical platform branding is baked into the office wall/); assert.match(styles, /\.platform-a11y/); assert.doesNotMatch(office, /social-operations-label|className="platform-mark"/);
+  assert.match(dashboard, /facts\.facebookCredentials\.length \? "CONNECTED" : "NOT CONNECTED"/); assert.match(dashboard, /Amazon is not connected/);
+  assert.match(styles, /\.office-scene \{/); assert.match(styles, /\.office-hotspot\.state-working/); assert.match(styles, /\.office-live-route\.route-visible/);
+  assert.match(office, /office-detail-popover/); assert.match(office, /office-live-route/);
 });
 
-test("old status stack is replaced and dashboard remains wired to the actual graph", () => {
-  assert.match(app, /<JarvisDashboard graph=\{dashboardGraph\}/); assert.doesNotMatch(app, /dashboard-metrics|dashboard-status-rail/);
-  assert.doesNotMatch(dashboard, /Command Runtime|Interfaces|System Health/); assert.match(dashboard, /<CommandPipeline graph=\{graph\}/);
-  assert.match(styles, /@media \(max-width: 1450px\)/); assert.match(styles, /@media \(max-width: 1080px\)/); assert.match(styles, /@media \(max-width: 760px\)/);
+test("responsive and reduced-motion safeguards cover the headquarters", () => {
+  assert.match(styles, /@media \(max-width: 1450px\)[\s\S]*pipeline-live-stage/); assert.match(styles, /@media \(max-width: 1080px\)/); assert.match(styles, /@media \(max-width: 760px\)[\s\S]*workflow-wire-layer/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*workflow-wire-layer \.wire-energy/);
 });
