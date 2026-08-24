@@ -67,10 +67,11 @@ function OfficeEmployee({ item, status, pose = "seated", position = item, packag
   const human = Boolean(item.services);
   const movementPose = phase === "HANDING_OVER" ? "handover" : ["WALKING_TO_DESTINATION", "RETURNING"].includes(phase) ? "walking" : phase === "ARRIVED" ? "carrying" : pose;
   const movementLabel = ["WALKING_TO_DESTINATION", "ARRIVED", "HANDING_OVER"].includes(phase) ? "DELIVERING" : phase === "RETURNING" ? "RETURNING" : null;
+  const identityStatus = movementLabel || String(status || "AVAILABLE").replaceAll("_", " ");
   return <button type="button" className={`office-character character-${human ? "human" : "agent"} pose-${movementPose} facing-${facing} employee-${item.id} ${phase ? `phase-${phase.toLowerCase().replaceAll("_", "-")}` : ""}`} style={{ left: `${position.x}%`, top: `${position.y}%`, "--character-accent": item.accent, "--employee-sheet": `url(${EMPLOYEE_POSES[item.id]})` }} onClick={() => onSelect({ type: human ? "workspace" : "agent", ...item, status })} aria-label={`${item.name}, ${status}`}>
     <span className="employee-sprite" aria-hidden="true" />
     {packageType && <span className={`work-package package-${packageType}`}>{packageGlyph(packageType)}</span>}
-    <span className="employee-identity"><strong>{item.name}</strong>{movementLabel && <small>{movementLabel}</small>}</span>
+    <span className="employee-identity"><strong>{item.name}</strong><small>{identityStatus}</small></span>
   </button>;
 }
 
