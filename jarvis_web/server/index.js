@@ -6,6 +6,8 @@ const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
+const { AccessControlStore } = require("./accessControl");
+const { enforceSecurity, registerSecurityRoutes } = require("./securityAccess");
 const { DriveSearchError } = require("./driveSearch");
 const { executeDriveDelete } = require("./driveFiles");
 const { ExecutionStore } = require("./executionStore");
@@ -132,6 +134,12 @@ app.use(
   })
 );
 
+// Access control is disabled until an owner explicitly completes setup.  The
+// guard names only routes with a real permission requirement; health, startup,
+// OAuth callbacks, and all unrelated existing routes retain their behavior.
+app.use(enforceSecurity(() => accessControlStore));
+registerSecurityRoutes(app, () => accessControlStore);
+
 // ============================================================
  //  Signed OAuth State Token (production-safe, session-less)
  //  ============================================================
@@ -243,6 +251,7 @@ const credentialStore = new CredentialStore({
 });
 let executionStore;
 let facebookCredentialStore;
+let accessControlStore;
 let executionServices;
 let facebookExecutionContext;
 let workflowExecutor;
@@ -788,6 +797,8 @@ async function startServer() {
   await credentialStore.open();
   executionStore = new ExecutionStore(credentialStore.db);
   executionStore.open();
+  accessControlStore = new AccessControlStore({ db: credentialStore.db });
+  accessControlStore.open();
   facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
     legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();

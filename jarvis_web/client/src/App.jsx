@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import AdvancedColorPicker from "./AdvancedColorPicker.jsx";
 import WorkflowManager from "./WorkflowManager.jsx";
+import SecurityAccess from "./SecurityAccess.jsx";
 import { getWorkflow, updateWorkflow } from "./workflowApi.js";
 import { definitionFingerprint, editorDefinition, validateStoredWorkflow } from "./workflowEditorBinding.js";
 import JarvisDashboard from "./JarvisDashboard.jsx";
@@ -3588,6 +3589,8 @@ function App() {
             healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             workflowName="My Workflow"
             onOpenWorkflow={() => setTopPage("WORKFLOW")} />
+        ) : topPage === "TOOLS" ? (
+          <SecurityAccess />
         ) : (
           <section className="placeholder-page">
             <h1>{topPage}</h1>
