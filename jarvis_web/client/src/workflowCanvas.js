@@ -185,9 +185,42 @@ export function connectionPath(source, target) {
   return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${targetX - curve} ${targetY}, ${targetX} ${targetY}`;
 }
 
-export function connectionPathToPoint(source, point) { const sourceX = (source.x ?? 140) + CANVAS_NODE_WIDTH; const sourceY = (source.y ?? 200) + CANVAS_NODE_HEIGHT / 2; const curve = Math.max(64, Math.abs(point.x - sourceX) * 0.42); return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${point.x - curve} ${point.y}, ${point.x} ${point.y}`; }
-export function canvasPointFromClient({ clientX, clientY }, bounds, viewport) { return { x: (clientX - bounds.left - viewport.x) / viewport.zoom, y: (clientY - bounds.top - viewport.y) / viewport.zoom }; }
-export function validateConnectionCandidate(nodes, connections, sourceId, targetId) { const map = new Map(nodes.map((node) => [node.id, node])); const source = map.get(sourceId); const target = map.get(targetId); if (!source || !target || sourceId === targetId || target.name === "Schedule Trigger" || connections.some((edge) => edge.source === sourceId && edge.target === targetId) || connections.some((edge) => edge.target === targetId) || (source.name !== "Schedule Trigger" && connections.some((edge) => edge.source === sourceId))) return { ok: false, error: "That connection is not supported." }; const out = new Map(nodes.map((node) => [node.id, []])); connections.forEach((edge) => out.get(edge.source)?.push(edge.target)); const pending = [targetId], seen = new Set(); while (pending.length) { const id = pending.pop(); if (id === sourceId) return { ok: false, error: "Workflow cycles are not supported." }; if (!seen.has(id)) { seen.add(id); pending.push(...(out.get(id) || [])); } } return { ok: true, error: "" }; }
+export function connectionPathToPoint(source, point) {
+  const sourceX = (source.x ?? 140) + CANVAS_NODE_WIDTH;
+  const sourceY = (source.y ?? 200) + CANVAS_NODE_HEIGHT / 2;
+  const targetX = point.x;
+  const targetY = point.y;
+  const curve = Math.max(64, Math.abs(targetX - sourceX) * 0.42);
+  return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${targetX - curve} ${targetY}, ${targetX} ${targetY}`;
+}
+
+export function canvasPointFromClient({ clientX, clientY }, bounds, viewport) {
+  return {
+    x: (clientX - bounds.left - viewport.x) / viewport.zoom,
+    y: (clientY - bounds.top - viewport.y) / viewport.zoom,
+  };
+}
+
+export function validateConnectionCandidate(nodes, connections, sourceId, targetId) {
+  const nodeMap = new Map(nodes.filter((node) => node?.id).map((node) => [node.id, node]));
+  const source = nodeMap.get(sourceId); const target = nodeMap.get(targetId);
+  if (!source || !target) return { ok: false, error: "Choose a valid workflow input port." };
+  if (sourceId === targetId) return { ok: false, error: "A node cannot connect to itself." };
+  if (target.name === "Schedule Trigger") return { ok: false, error: "Schedule Trigger must remain the workflow start node." };
+  if (connections.some((connection) => connection.source === sourceId && connection.target === targetId)) return { ok: false, error: "Those nodes are already connected." };
+  const outgoing = new Map(nodes.map((node) => [node.id, []]));
+  for (const connection of connections) outgoing.get(connection.source)?.push(connection.target);
+  const seen = new Set(); const pending = [targetId];
+  while (pending.length) {
+    const nodeId = pending.pop();
+    if (nodeId === sourceId) return { ok: false, error: "Workflow cycles are not supported." };
+    if (seen.has(nodeId)) continue;
+    seen.add(nodeId); pending.push(...(outgoing.get(nodeId) || []));
+  }
+  if (connections.some((connection) => connection.target === targetId)) return { ok: false, error: "Workflow merges are not supported in this phase." };
+  if (source.name !== "Schedule Trigger" && connections.some((connection) => connection.source === sourceId)) return { ok: false, error: "Only Schedule Trigger may branch in this phase." };
+  return { ok: true, error: "" };
+}
 
 export function fitCanvasViewport(nodes, width, height, padding = 80) {
   if (!nodes.length || width <= 0 || height <= 0) return { x: 0, y: 0, zoom: 1 };

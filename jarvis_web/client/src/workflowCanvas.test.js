@@ -177,13 +177,33 @@ test("insert between removes the direct edge and creates two valid edges", () =>
   assert.equal(result.nodes.at(-1).x, 300); assert.equal(result.nodes.at(-1).y, 100);
 });
 
-test("direct drag connection validation preserves supported topology", () => {
-  const nodes = [{ id: "trigger", name: "Schedule Trigger" }, { id: "a", name: "Search" }, { id: "b", name: "Limit" }];
+test("direct connection validator permits linear edges and Schedule Trigger fan-out", () => {
+  const nodes = [{ id: "trigger", name: "Schedule Trigger" }, { id: "a", name: "Search" }, { id: "b", name: "Limit" }, { id: "c", name: "Prepare" }];
   assert.equal(validateConnectionCandidate(nodes, [], "trigger", "a").ok, true);
-  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "trigger", "b").ok, true);
-  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "a", "b").ok, true);
-  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "a", "a").ok, false);
-  assert.equal(validateConnectionCandidate(nodes, [{ source: "trigger", target: "a" }], "a", "trigger").ok, false);
-  assert.deepEqual(canvasPointFromClient({ clientX: 170, clientY: 140 }, { left: 20, top: 40 }, { x: 50, y: 20, zoom: .5 }), { x: 200, y: 160 });
+  assert.equal(validateConnectionCandidate(nodes, [{ id: "ta", source: "trigger", target: "a" }], "trigger", "b").ok, true);
+  assert.equal(validateConnectionCandidate(nodes, [{ id: "ta", source: "trigger", target: "a" }], "a", "c").ok, true);
+});
+
+test("direct connection validator rejects self, duplicate, merge, cycle, and nested branch", () => {
+  const nodes = [{ id: "trigger", name: "Schedule Trigger" }, { id: "a", name: "Search" }, { id: "b", name: "Limit" }, { id: "c", name: "Prepare" }];
+  const linear = [{ id: "ta", source: "trigger", target: "a" }, { id: "ab", source: "a", target: "b" }];
+  assert.equal(validateConnectionCandidate(nodes, linear, "a", "a").ok, false);
+  assert.equal(validateConnectionCandidate(nodes, linear, "trigger", "a").ok, false);
+  assert.match(validateConnectionCandidate(nodes, linear, "c", "b").error, /merges/i);
+  assert.match(validateConnectionCandidate(nodes, linear, "b", "trigger").error, /start node/i);
+  assert.match(validateConnectionCandidate(nodes, [...linear, { id: "bc", source: "b", target: "c" }], "c", "a").error, /cycle/i);
+  assert.match(validateConnectionCandidate(nodes, linear, "a", "c").error, /branch/i);
+});
+
+test("temporary wire coordinates honor canvas pan and zoom", () => {
+  assert.deepEqual(canvasPointFromClient({ clientX: 170, clientY: 140 }, { left: 20, top: 40 }, { x: 50, y: 20, zoom: 0.5 }), { x: 200, y: 160 });
   assert.match(connectionPathToPoint({ x: 100, y: 80 }, { x: 500, y: 220 }), /^M 248 154 C/);
+});
+
+test("App wires Pointer Events from existing ports without changing workflow runtime", () => {
+  const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  assert.match(app, /onPointerDown=\{\(event\) => startConnectionDrag\(event, node.id\)\}/);
+  assert.match(app, /workflow-connection-preview/); assert.match(app, /validateConnectionCandidate/);
+  assert.match(app, /data-node-input-id=\{node.id\}/); assert.match(app, /setWorkflowDirty\(true\)/);
+  for (const runtime of ["workflowRunner.js", "workflowFanOutRunner.js", "workflowStorage.js"]) assert.equal(fs.existsSync(new URL(`./${runtime}`, import.meta.url)), true);
 });
