@@ -3663,3 +3663,22 @@ button {
 @media (min-width: 1600px) {
   .employee-identity { max-width: min(82%, 86px); }
 }
+
+/* Runtime-invariant dashboard geometry: production data scrolls inside fixed localhost panels. */
+.jarvis-control-center .command-pipeline { height: 427px; display: grid; grid-template-rows: 58px 330px 39px; overflow: hidden; }
+.jarvis-control-center .command-pipeline-heading { min-height: 0; overflow: hidden; }
+.jarvis-control-center .pipeline-live-stage { height: 330px; min-height: 330px; box-sizing: border-box; grid-template-columns: 190px 160px 190px; align-items: center; justify-content: space-between; overflow: hidden; }
+.jarvis-control-center .pipeline-workflow-stack { width: 100%; min-width: 0; height: 300px; max-height: 300px; box-sizing: border-box; align-content: start; grid-auto-rows: 45px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.jarvis-control-center .pipeline-workflow { min-width: 0; min-height: 45px; height: 45px; box-sizing: border-box; }
+.jarvis-control-center .pipeline-routing-core { width: 138px; min-width: 138px; height: 138px; min-height: 138px; align-self: center; justify-self: center; }
+.jarvis-control-center .strong-engine { width: 190px; min-width: 190px; align-self: center; justify-self: center; }
+.jarvis-control-center .strong-engine-orb { width: 150px; min-width: 150px; height: 150px; min-height: 150px; }
+.jarvis-control-center .pipeline-routing-status { min-width: 0; min-height: 0; height: 39px; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
+.jarvis-control-center .pipeline-routing-status > strong { flex: 0 0 auto; }
+.jarvis-control-center .pipeline-count-summary { min-width: 0; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1450px) and (min-width: 1081px) {
+  .jarvis-control-center .pipeline-live-stage { grid-template-columns: 155px 120px 130px; }
+  .jarvis-control-center .pipeline-routing-core { width: 112px; min-width: 112px; height: 112px; min-height: 112px; }
+  .jarvis-control-center .strong-engine { width: 130px; min-width: 130px; }
+  .jarvis-control-center .strong-engine-orb { width: 120px; min-width: 120px; height: 120px; min-height: 120px; }
+}
