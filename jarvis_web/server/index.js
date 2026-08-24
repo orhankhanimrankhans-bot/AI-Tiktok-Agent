@@ -20,7 +20,7 @@ const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredent
 const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
 const { logReelFailure, publishPageReel } = require("./facebookReels");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
-const { makeFacebookPopupHtml } = require("./facebookPopup");
+const { makeFacebookPageSelectorHtml, makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require("./openaiPrepareContent");
 
@@ -379,6 +379,23 @@ app.get("/api/facebook/auth/start", (req, res) => {
   return res.redirect(url.toString());
 });
 
+app.post("/api/facebook/auth/page-selection", (req, res) => {
+  try {
+    const keys = Object.keys(req.body || {});
+    if (keys.some((key) => !["selectionId", "pageId"].includes(key))) return res.status(400).json({ error: "Only safe Page selection fields are accepted." });
+    const selected = facebookCredentialStore.consumePageSelection({ selectionId: req.body?.selectionId, pageId: req.body?.pageId });
+    if (!selected) return res.status(400).json({ error: "Facebook Page selection is invalid or expired." });
+    const pageToken = selected.tokens?.pageAccessTokens?.[selected.page.id];
+    if (!pageToken) return res.status(400).json({ error: "The selected Facebook Page is no longer available." });
+    const existing = facebookCredentialStore.findByPage({ accountId: selected.accountId, pageId: selected.page.id });
+    const saved = facebookCredentialStore.save({ id: selected.credentialId || existing?.id || FacebookCredentialStore.generateId(), accountId: selected.accountId,
+      accountName: selected.accountName, pageId: selected.page.id, pageName: selected.page.name, name: existing?.name,
+      tokens: { userAccessToken: selected.tokens.userAccessToken, tokenType: selected.tokens.tokenType,
+        expiresIn: selected.tokens.expiresIn, pageAccessTokens: { [selected.page.id]: pageToken } } });
+    return res.json(saved);
+  } catch { return res.status(500).json({ error: "Facebook Page selection could not be completed." }); }
+});
+
 app.get("/api/facebook/auth/callback", async (req, res) => {
   let mode = "redirect"; let state = null;
   if (req.query.state) state = verifyFacebookOAuthState(req.query.state, { secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me", validateCredentialId: FacebookCredentialStore.isValidId });
@@ -391,13 +408,38 @@ app.get("/api/facebook/auth/callback", async (req, res) => {
     const tokenResponse = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: META_APP_ID, client_secret: META_APP_SECRET, redirect_uri: META_REDIRECT_URI, code: req.query.code }) });
     const tokenData = await tokenResponse.json();
     if (!tokenResponse.ok || !tokenData.access_token) throw new Error("Meta token exchange failed.");
-    const profile = await facebookGraphService().me(tokenData.access_token);
-    const previous = state.intent === "reconnect" ? facebookCredentialStore.get(state.credentialId, { includeTokens: true }) : facebookCredentialStore.findByAccountId(profile.id, { includeTokens: true });
+    const service = facebookGraphService();
+    const profile = await service.me(tokenData.access_token);
+    const previous = state.intent === "reconnect" ? facebookCredentialStore.get(state.credentialId, { includeTokens: true }) : null;
     if (state.intent === "reconnect" && previous?.accountId !== String(profile.id)) return failure("Reconnect must use the same Meta account. Create a new credential for another account.");
-    const id = state.intent === "reconnect" ? state.credentialId : previous?.id || FacebookCredentialStore.generateId();
-    const saved = facebookCredentialStore.save({ id, accountId: profile.id, accountName: profile.name || "Meta account",
-      tokens: { ...(previous?.tokens || {}), userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn: tokenData.expires_in || null, pageAccessTokens: {} } });
-    if (mode === "popup") return res.send(makeFacebookPopupHtml({ status: "connected", message: `${saved.accountName} is connected to Jarvis.`, credentialId: saved.id, clientUrl: CLIENT_URL }));
+    const available = await service.pages(tokenData.access_token);
+    const pages = available.pages.filter((page) => page?.id && available.pageTokens?.[page.id]);
+    if (!pages.length) return failure("No Facebook Pages were available for this Meta account.");
+    const commonTokens = { userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn: tokenData.expires_in || null };
+    let saved;
+    if (state.intent === "reconnect") {
+      const selected = previous?.pageId ? pages.find((page) => String(page.id) === previous.pageId) : pages.length === 1 ? pages[0] : null;
+      if (!selected && !previous?.pageId) {
+        const selection = facebookCredentialStore.createPageSelection({ accountId: profile.id, accountName: profile.name || "Meta account", pages,
+          credentialId: previous.id, tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } });
+        return res.send(makeFacebookPageSelectorHtml({ selectionId: selection.id, pages: selection.pages, clientUrl: CLIENT_URL }));
+      }
+      if (!selected) return failure("The Page linked to this credential was not available. Create a new Page credential instead.");
+      saved = facebookCredentialStore.save({ id: previous.id, accountId: profile.id, accountName: profile.name || "Meta account",
+        pageId: selected.id, pageName: selected.name || "Facebook Page", name: previous.name,
+        tokens: { ...commonTokens, pageAccessTokens: { [selected.id]: available.pageTokens[selected.id] } } });
+    } else if (pages.length === 1) {
+      const selected = pages[0]; const existing = facebookCredentialStore.findByPage({ accountId: profile.id, pageId: selected.id });
+      saved = facebookCredentialStore.save({ id: existing?.id || FacebookCredentialStore.generateId(), accountId: profile.id,
+        accountName: profile.name || "Meta account", pageId: selected.id, pageName: selected.name || "Facebook Page", name: existing?.name,
+        tokens: { ...commonTokens, pageAccessTokens: { [selected.id]: available.pageTokens[selected.id] } } });
+    } else {
+      const selection = facebookCredentialStore.createPageSelection({ accountId: profile.id, accountName: profile.name || "Meta account", pages,
+        tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } });
+      return res.send(makeFacebookPageSelectorHtml({ selectionId: selection.id, pages: selection.pages, clientUrl: CLIENT_URL }));
+    }
+    const message = `${saved.pageName} is connected to Jarvis.`;
+    if (mode === "popup") return res.send(makeFacebookPopupHtml({ status: "connected", message, credentialId: saved.id, clientUrl: CLIENT_URL }));
     const redirect = new URL(CLIENT_URL); redirect.searchParams.set("facebook_oauth", "connected"); redirect.searchParams.set("facebook_credential_id", saved.id); return res.redirect(redirect.toString());
   } catch (error) { return failure(error instanceof FacebookGraphError ? error.message : "Meta sign-in could not be completed."); }
 });

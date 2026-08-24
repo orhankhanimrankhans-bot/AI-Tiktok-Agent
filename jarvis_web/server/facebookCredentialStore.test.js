@@ -42,6 +42,44 @@ test("manual Page credentials encrypt, update, list with OAuth, and delete witho
   assert.doesNotMatch(fs.readFileSync(dbPath).toString("latin1"), /manual-plaintext-secret|oauth-plaintext-secret/);
 });
 
+test("independent Page credentials never overwrite rows sharing a Meta account or Page", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-facebook-pages-")); const dbPath = path.join(dir, "credentials.sqlite3");
+  const google = new CredentialStore({ dbPath, encryptionSecret: "independent-pages-test-secret" }); await google.open();
+  const store = new FacebookCredentialStore({ db: google.db, encryptionSecret: "independent-pages-test-secret" }); store.open();
+  t.after(async () => { try { await google.close(); } catch {} fs.rmSync(dir, { recursive: true, force: true }); });
+  const firstId = FacebookCredentialStore.generateId(); const secondId = FacebookCredentialStore.generateId(); const duplicatePageId = FacebookCredentialStore.generateId();
+  store.save({ id: firstId, accountId: "meta-user-1", accountName: "Owner", pageId: "10101", pageName: "TinyTech", tokens: { userAccessToken: "user-one", pageAccessTokens: { 10101: "page-one" } } });
+  store.save({ id: secondId, accountId: "meta-user-1", accountName: "Owner", pageId: "20202", pageName: "Page 2", tokens: { userAccessToken: "user-one", pageAccessTokens: { 20202: "page-two" } } });
+  store.saveManual({ id: duplicatePageId, name: "Independent copy", pageId: "10101", pageName: "TinyTech copy", accessToken: "manual-page-copy" });
+  assert.deepEqual(store.list().map((item) => item.id), [firstId, secondId, duplicatePageId]);
+  assert.deepEqual(store.list().map((item) => item.pageName), ["TinyTech", "Page 2", "TinyTech copy"]);
+});
+
+test("one hundred OAuth Pages coexist and exact Page creation reuses only that opaque ID", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-facebook-100-pages-")); const dbPath = path.join(dir, "credentials.sqlite3");
+  const google = new CredentialStore({ dbPath, encryptionSecret: "one-hundred-pages-test-secret" }); await google.open();
+  const store = new FacebookCredentialStore({ db: google.db, encryptionSecret: "one-hundred-pages-test-secret" }); store.open();
+  t.after(async () => { try { await google.close(); } catch {} fs.rmSync(dir, { recursive: true, force: true }); });
+  const ids = [];
+  for (let index = 1; index <= 100; index += 1) { const id = FacebookCredentialStore.generateId(); ids.push(id); const pageId = String(900000 + index); store.save({ id, accountId: "shared-meta-account", accountName: "Owner", pageId, pageName: `Page ${index}`, tokens: { userAccessToken: "shared-user-token", pageAccessTokens: { [pageId]: `page-token-${index}` } } }); }
+  assert.equal(store.list().length, 100);
+  const duplicate = store.save({ id: FacebookCredentialStore.generateId(), accountId: "shared-meta-account", accountName: "Owner", pageId: "900002", pageName: "Page 2 reconnected", tokens: { userAccessToken: "updated-user-token", pageAccessTokens: { 900002: "updated-page-token" } } });
+  assert.equal(duplicate.id, ids[1]); assert.equal(store.list().length, 100);
+});
+
+test("Page-aware indexes preserve OAuth/manual separation and pending selection tokens stay encrypted", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-facebook-page-indexes-")); const dbPath = path.join(dir, "credentials.sqlite3");
+  const google = new CredentialStore({ dbPath, encryptionSecret: "page-index-selection-test-secret" }); await google.open();
+  const store = new FacebookCredentialStore({ db: google.db, encryptionSecret: "page-index-selection-test-secret" }); store.open();
+  t.after(async () => { try { await google.close(); } catch {} fs.rmSync(dir, { recursive: true, force: true }); });
+  const oauth = store.save({ id: FacebookCredentialStore.generateId(), accountId: "owner", pageId: "123456", pageName: "OAuth Page", tokens: { userAccessToken: "oauth-user-secret", pageAccessTokens: { 123456: "oauth-page-secret" } } });
+  const manual = store.saveManual({ id: FacebookCredentialStore.generateId(), name: "Manual Page", pageId: "123456", accessToken: "manual-page-secret" });
+  assert.notEqual(oauth.id, manual.id);
+  const selection = store.createPageSelection({ accountId: "owner", pages: [{ id: "222222", name: "Second Page" }], tokens: { userAccessToken: "pending-user-secret", pageAccessTokens: { 222222: "pending-page-secret" } } });
+  assert.doesNotMatch(fs.readFileSync(dbPath).toString("latin1"), /pending-user-secret|pending-page-secret/);
+  assert.equal(store.consumePageSelection({ selectionId: selection.id, pageId: "222222" }).page.name, "Second Page");
+});
+
 test("schema migration preserves existing Phase 3A OAuth records", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-facebook-migration-")); const dbPath = path.join(dir, "credentials.sqlite3");
   const secret = "migration-test-secret-long-enough"; const google = new CredentialStore({ dbPath, encryptionSecret: secret }); await google.open();

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { deleteManualFacebookCredential, facebookConnectionStatus, safeFacebookCredentialError, saveManualFacebookCredential, testManualFacebookCredential } from "./facebookManualCredential.js";
+import { facebookCredentialLabel } from "./facebookConfig.js";
 
 const appSource = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
@@ -56,6 +57,14 @@ test("existing Meta OAuth controls remain available", () => {
   assert.match(appSource, /Connect Meta Account/);
   assert.match(appSource, /Reconnect/);
   assert.match(appSource, /onDisconnect/);
+});
+
+test("Facebook dropdown labels independent credentials by Page and refreshes after creation", () => {
+  assert.equal(facebookCredentialLabel({ pageName: "TinyTech", accountName: "Owner" }), "Facebook - TinyTech");
+  assert.equal(facebookCredentialLabel({ pageName: "Page 2", accountName: "Owner" }), "Facebook - Page 2");
+  assert.match(appSource, /await syncFacebookCredentials\(saved\.id\)/);
+  assert.match(appSource, /credentials\.map\(\(credential\) => <option key=\{credential\.id\}/);
+  assert.match(appSource, /node\.id === nodeId \? \{ \.\.\.node, config: \{ \.\.\.node\.config, credentialId: saved\.id \}/);
 });
 
 test("connection states and safe failures render correctly", () => {

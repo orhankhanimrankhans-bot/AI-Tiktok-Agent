@@ -10,6 +10,24 @@ test("manual credential routes are body-only and Graph v26 is the production def
   assert.doesNotMatch(source, /manual\/test\?accessToken|credentials\/manual\?accessToken/);
 });
 
+test("OAuth creation selects one Page-scoped credential and reconnect updates only one", () => {
+  assert.match(source, /available = await service\.pages/);
+  assert.match(source, /makeFacebookPageSelectorHtml/);
+  assert.match(source, /createPageSelection/);
+  assert.match(source, /app\.post\("\/api\/facebook\/auth\/page-selection"/);
+  assert.match(source, /findByPage\(\{ accountId: selected\.accountId, pageId: selected\.page\.id \}\)/);
+  assert.match(source, /pageAccessTokens: \{ \[selected\.page\.id\]: pageToken \}/);
+  assert.match(source, /state\.intent === "reconnect"[\s\S]*previous\.id/);
+  assert.doesNotMatch(source, /pages\.map\(\(page\) => facebookCredentialStore\.save/);
+});
+
+test("Page selection accepts safe identifiers only and never returns token material", () => {
+  const route = source.slice(source.indexOf('app.post("/api/facebook/auth/page-selection"'), source.indexOf('app.get("/api/facebook/auth/callback"'));
+  assert.match(route, /\["selectionId", "pageId"\]/);
+  assert.match(route, /consumePageSelection/);
+  assert.doesNotMatch(route, /res\.json\([^)]*(?:accessToken|pageToken|tokens)/);
+});
+
 test("manual routes serialize store metadata and never include token values", () => {
   const routeSection = source.slice(source.indexOf('app.post("/api/facebook/credentials/manual/test"'), source.indexOf('app.get("/api/facebook/auth/start"'));
   assert.doesNotMatch(routeSection, /res\.json\([^)]*accessToken|access_token|token_ciphertext|token_iv|token_tag/);

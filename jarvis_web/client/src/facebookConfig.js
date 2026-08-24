@@ -30,5 +30,5 @@ export function sanitizeFacebookConfig(config = {}) {
   return safe;
 }
 export function facebookCredentialLabel(credential) {
-  return `Facebook - ${credential?.accountName || credential?.accountId || "Account"}`;
+  return `Facebook - ${credential?.pageName || credential?.name || credential?.accountName || credential?.accountId || "Account"}`;
 }
