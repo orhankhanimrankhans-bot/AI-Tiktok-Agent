@@ -2554,6 +2554,12 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!workflowNotice) return undefined;
+    const timeout = window.setTimeout(() => setWorkflowNotice(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [workflowNotice]);
+
   const updateAppearance = (patch) => {
     setCanvasAppearance((current) => safeAppearance({ ...current, ...patch, viewport: canvasViewport }));
   };
@@ -3579,7 +3585,9 @@ function App() {
           </section>
         ) : topPage === "DASHBOARD" ? (
           <JarvisDashboard graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
-            healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt} />
+            healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
+            workflowName="My Workflow"
+            onOpenWorkflow={() => setTopPage("WORKFLOW")} />
         ) : (
           <section className="placeholder-page">
             <h1>{topPage}</h1>

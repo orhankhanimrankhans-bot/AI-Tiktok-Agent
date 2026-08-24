@@ -45,7 +45,7 @@ function ConversationPanel({ inputRef, messages, draft, onDraft, onSend }) {
   </aside>;
 }
 
-export default function JarvisDashboard({ graph, workflowActive = false, workflowError = false, healthContext = {}, executions = [], lastExecutionAt = null }) {
+export default function JarvisDashboard({ graph, workflowActive = false, workflowError = false, healthContext = {}, executions = [], lastExecutionAt = null, workflowName = "My Workflow", onOpenWorkflow }) {
   const [detail, setDetail] = useState(null);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
@@ -87,6 +87,10 @@ export default function JarvisDashboard({ graph, workflowActive = false, workflo
         <nav className="operational-controls" aria-label="Operational controls">{operationalCards.map(([id, label, summary]) => <button type="button" key={id} onClick={() => setDetail(id)}><i>{CONTROL_ICONS[id]}</i><span><strong>{label}</strong><small>{summary}</small></span><b>›</b></button>)}</nav>
         <CommandPipeline graph={graph} workflowActive={workflowActive} workflowError={workflowError} healthContext={healthContext} />
       </div>
+      <section className="workflow-quick-access" aria-label="Workflow quick access">
+        <div><span>WORKFLOW QUICK ACCESS</span><h2>{workflowName}</h2><small>{facts.nodeCount} connected workflow node{facts.nodeCount === 1 ? "" : "s"}</small></div>
+        <div className="workflow-quick-access-actions"><button type="button" onClick={onOpenWorkflow} disabled={!onOpenWorkflow}><strong>Open Workflow Editor</strong><small>Current local workflow</small></button></div>
+      </section>
       <nav className="integration-controls" aria-label="Jarvis integrations">{integrations.map(([id, label, summary]) => <button type="button" key={id} onClick={() => id === "chat" ? focusConversation() : setDetail(id)}><i>{INTEGRATION_ICONS[id]}</i><strong>{label}</strong><small>{summary}</small></button>)}</nav>
     </div>
     <ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} />
