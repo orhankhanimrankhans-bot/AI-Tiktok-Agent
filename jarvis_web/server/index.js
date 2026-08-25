@@ -6,7 +6,7 @@ const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
-const { AccessControlStore } = require("./accessControl");
+const { AccessControlStore, workflowWorkspace } = require("./accessControl");
 const { enforceSecurity, registerSecurityRoutes } = require("./securityAccess");
 const { DriveSearchError } = require("./driveSearch");
 const { executeDriveDelete } = require("./driveFiles");
@@ -14,7 +14,7 @@ const { ExecutionStore } = require("./executionStore");
 const { createExecutionServices } = require("./executionServices");
 const { createWorkflowExecutor, WorkflowExecutorError } = require("./workflowExecutor");
 const { createWorkflowStore } = require("./workflowStore");
-const { registerWorkflowRoutes } = require("./workflowRoutes");
+const { canExecuteWorkflow, registerWorkflowRoutes } = require("./workflowRoutes");
 const { createFacebookExecutionContext, toLegacyReelResponse } = require("./facebookExecutionContext");
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
@@ -547,6 +547,8 @@ app.post("/api/workflow-executions/run", async (req, res) => {
   if (!body || !Array.isArray(body.nodes) || !Array.isArray(body.connections) || typeof body.workflowId !== "string" || !body.workflowId.trim() || body.nodes.length > 100 || body.connections.length > 200 || body.triggerMode !== "workflow" || containsForbiddenExecutionFields(body)) {
     return res.status(400).json({ status: "error", code: "invalid_workflow_request", error: "Provide a valid manual workflow definition." });
   }
+  const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+  if (!canExecuteWorkflow(workflowStore, body.workflowId, owner)) return res.status(404).json({ error: "Workflow not found." });
   try { return res.json(await workflowExecutor.execute({ workflowId: body.workflowId, nodes: body.nodes, connections: body.connections, triggerMode: body.triggerMode })); }
   catch (error) {
     if (error instanceof WorkflowExecutorError) return res.status(400).json({ status: "error", code: error.code, error: error.message });
@@ -556,20 +558,24 @@ app.post("/api/workflow-executions/run", async (req, res) => {
 });
 
 app.get("/api/executions", (req, res) => {
-  try { return res.json({ executions: executionStore.list(req.query.limit) }); }
+  const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+  try { return res.json({ executions: executionStore.list(req.query.limit, owner) }); }
   catch { return res.status(500).json({ error: "Could not list workflow executions." }); }
 });
 
 app.get("/api/executions/:executionId", (req, res) => {
   if (!ExecutionStore.isValidId(req.params.executionId)) return res.status(400).json({ error: "Invalid execution ID." });
-  try { const record = executionStore.get(req.params.executionId); return record ? res.json(record) : res.status(404).json({ error: "Execution not found." }); }
+  const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+  try { const record = executionStore.get(req.params.executionId, owner); return record ? res.json(record) : res.status(404).json({ error: "Execution not found." }); }
   catch { return res.status(500).json({ error: "Could not read workflow execution." }); }
 });
 
 app.post("/api/executions", (req, res) => {
   try {
     if (!req.body?.startedAt || !req.body?.finishedAt) return res.status(400).json({ error: "Execution timestamps are required." });
-    return res.status(201).json(executionStore.save(req.body));
+    const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    if (!canExecuteWorkflow(workflowStore, req.body.workflowId, owner)) return res.status(404).json({ error: "Workflow not found." });
+    return res.status(201).json(executionStore.save(req.body, owner));
   } catch { return res.status(500).json({ error: "Could not save workflow execution." }); }
 });
 
@@ -843,7 +849,7 @@ async function startServer() {
   executionServices = createExecutionServices({ credentialStore, createOAuthClient, createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }), facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
-  registerWorkflowRoutes(app, { workflowStore, logger: console });
+  registerWorkflowRoutes(app, { workflowStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore), logger: console });
   app.listen(PORT, () => {
     console.log("");
     console.log("=================================");

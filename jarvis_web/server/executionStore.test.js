@@ -28,3 +28,14 @@ test("execution history persists and strips OAuth data", () => {
   reopenedDb.close();
   fs.rmSync(directory, { recursive: true, force: true });
 });
+
+test("legacy executions migrate to Admin and history remains workspace-isolated", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-execution-tenancy-")); const dbPath = path.join(directory, "history.sqlite3"); const db = new DatabaseSync(dbPath);
+  db.exec("CREATE TABLE workflow_executions (id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, workflow_name TEXT NOT NULL, status TEXT NOT NULL, trigger_mode TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT NOT NULL, nodes_json TEXT NOT NULL)");
+  db.prepare("INSERT INTO workflow_executions VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run("exec_1234567890123456789012", "wf_legacy", "Legacy", "success", "manual", "2026-01-01", "2026-01-02", '[]');
+  const store = new ExecutionStore(db); store.open(); const admin = { ownerType: "admin", ownerId: "primary" }; const a = { ownerType: "additional", ownerId: "profile_a" }; const b = { ownerType: "additional", ownerId: "profile_b" };
+  assert.equal(store.list(50, admin)[0].workflowName, "Legacy"); assert.equal(store.list(50, a).length, 0);
+  const saved = store.save({ workflowId: "wf_a", workflowName: "A", status: "success", startedAt: "2026-02-01", finishedAt: "2026-02-02", nodes: [] }, a);
+  assert.equal(store.get(saved.executionId, a).workflowName, "A"); assert.equal(store.get(saved.executionId, b), null); assert.equal(store.list(50, b).length, 0);
+  db.close(); fs.rmSync(directory, { recursive: true, force: true });
+});

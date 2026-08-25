@@ -15,6 +15,7 @@ function publicFields(body, fields, { required = false } = {}) {
 }
 
 function validId(id) { return typeof id === "string" && WORKFLOW_ID.test(id); }
+function canExecuteWorkflow(workflowStore, workflowId, owner) { return workflowId === "local-workflow" || validId(workflowId) && Boolean(workflowStore.getWorkflow(workflowId, owner)); }
 function pagination(query) {
   const parse = (value, fallback, maximum) => { if (value === undefined) return fallback; if (typeof value !== "string" || !/^\d+$/.test(value)) throw new WorkflowStoreError("INVALID_PAGINATION", "limit and offset must be valid integers."); const number = Number(value); if (!Number.isSafeInteger(number) || number < 0 || number > maximum || (maximum === 100 && number < 1)) throw new WorkflowStoreError("INVALID_PAGINATION", "limit or offset is outside the allowed range."); return number; };
   return { limit: parse(query.limit, 50, 100), offset: parse(query.offset, 0, 100000) };
@@ -25,13 +26,14 @@ function safeError(res, error, logger) {
   return res.status(500).json({ error: "Workflow operation could not be completed." });
 }
 
-function registerWorkflowRoutes(app, { workflowStore, logger = console }) {
+function registerWorkflowRoutes(app, { workflowStore, workspaceForRequest = () => ({ ownerType: "admin", ownerId: "primary" }), logger = console }) {
   if (!workflowStore) throw new Error("workflowStore is required.");
-  app.post("/api/workflows", (req, res) => { try { return res.status(201).json(workflowStore.createWorkflow(publicFields(req.body, CREATE_FIELDS, { required: true }))); } catch (error) { return safeError(res, error, logger); } });
-  app.get("/api/workflows", (req, res) => { try { const page = workflowStore.listWorkflows(pagination(req.query)); return res.json({ workflows: page.items, total: page.total, limit: page.limit, offset: page.offset }); } catch (error) { return safeError(res, error, logger); } });
-  app.get("/api/workflows/:workflowId", (req, res) => { if (!validId(req.params.workflowId)) return res.status(400).json({ error: "Workflow ID is invalid." }); try { const workflow = workflowStore.getWorkflow(req.params.workflowId); return workflow ? res.json(workflow) : res.status(404).json({ error: "Workflow not found." }); } catch (error) { return safeError(res, error, logger); } });
-  app.patch("/api/workflows/:workflowId", (req, res) => { if (!validId(req.params.workflowId)) return res.status(400).json({ error: "Workflow ID is invalid." }); try { const workflow = workflowStore.updateWorkflow(req.params.workflowId, publicFields(req.body, UPDATE_FIELDS)); return workflow ? res.json(workflow) : res.status(404).json({ error: "Workflow not found." }); } catch (error) { return safeError(res, error, logger); } });
-  app.delete("/api/workflows/:workflowId", (req, res) => { if (!validId(req.params.workflowId)) return res.status(400).json({ error: "Workflow ID is invalid." }); try { return workflowStore.deleteWorkflow(req.params.workflowId) ? res.json({ ok: true, id: req.params.workflowId }) : res.status(404).json({ error: "Workflow not found." }); } catch (error) { return safeError(res, error, logger); } });
+  const workspace = (req, res) => { const value = workspaceForRequest(req); if (!value) { res.status(401).json({ error: "Authentication is required." }); return null; } return value; };
+  app.post("/api/workflows", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.status(201).json(workflowStore.createWorkflow(publicFields(req.body, CREATE_FIELDS, { required: true }), owner)); } catch (error) { return safeError(res, error, logger); } });
+  app.get("/api/workflows", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const page = workflowStore.listWorkflows({ ...pagination(req.query), owner }); return res.json({ workflows: page.items, total: page.total, limit: page.limit, offset: page.offset }); } catch (error) { return safeError(res, error, logger); } });
+  app.get("/api/workflows/:workflowId", (req, res) => { if (!validId(req.params.workflowId)) return res.status(400).json({ error: "Workflow ID is invalid." }); const owner = workspace(req, res); if (!owner) return; try { const workflow = workflowStore.getWorkflow(req.params.workflowId, owner); return workflow ? res.json(workflow) : res.status(404).json({ error: "Workflow not found." }); } catch (error) { return safeError(res, error, logger); } });
+  app.patch("/api/workflows/:workflowId", (req, res) => { if (!validId(req.params.workflowId)) return res.status(400).json({ error: "Workflow ID is invalid." }); const owner = workspace(req, res); if (!owner) return; try { const workflow = workflowStore.updateWorkflow(req.params.workflowId, publicFields(req.body, UPDATE_FIELDS), owner); return workflow ? res.json(workflow) : res.status(404).json({ error: "Workflow not found." }); } catch (error) { return safeError(res, error, logger); } });
+  app.delete("/api/workflows/:workflowId", (req, res) => { if (!validId(req.params.workflowId)) return res.status(400).json({ error: "Workflow ID is invalid." }); const owner = workspace(req, res); if (!owner) return; try { return workflowStore.deleteWorkflow(req.params.workflowId, owner) ? res.json({ ok: true, id: req.params.workflowId }) : res.status(404).json({ error: "Workflow not found." }); } catch (error) { return safeError(res, error, logger); } });
 }
 
-module.exports = { registerWorkflowRoutes };
+module.exports = { canExecuteWorkflow, registerWorkflowRoutes };
