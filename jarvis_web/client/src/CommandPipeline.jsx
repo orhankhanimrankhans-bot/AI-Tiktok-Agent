@@ -21,7 +21,7 @@ function RoutingCore() {
 }
 
 function StrongEngine({ state }) {
-  return <div className="strong-engine" data-engine-state={state}><div className="strong-engine-orb" aria-label="Strong Engine 3D activity orb"><span className="engine-halo" /><span className="engine-shell"><i className="engine-core"><b /></i></span><span className="engine-ring engine-ring-one" /><span className="engine-ring engine-ring-two" /><span className="engine-ring engine-ring-three" /><span className="engine-meridian meridian-one" /><span className="engine-meridian meridian-two" /></div><strong>STRONG ENGINE</strong><small>{state.toUpperCase()}</small><button type="button" disabled title="Engine configuration backend is not available">CONFIGURE</button></div>;
+  return <div className="strong-engine" data-engine-state={state}><div className="strong-engine-orb" aria-label="Strong Engine activity orb"><span className="engine-ring engine-ring-one" /><span className="engine-ring engine-ring-two" /><span className="engine-ring engine-ring-three" /><svg viewBox="0 0 160 160" aria-hidden="true"><ellipse cx="80" cy="80" rx="58" ry="22" /><ellipse cx="80" cy="80" rx="58" ry="22" transform="rotate(60 80 80)" /><ellipse cx="80" cy="80" rx="58" ry="22" transform="rotate(120 80 80)" /><circle cx="80" cy="80" r="12" /></svg></div><strong>STRONG ENGINE</strong><small>{state.toUpperCase()}</small><button type="button" disabled title="Engine configuration backend is not available">CONFIGURE</button></div>;
 }
 
 function WorkflowWires({ workflows }) {

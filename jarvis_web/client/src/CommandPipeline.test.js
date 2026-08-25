@@ -19,8 +19,8 @@ test("SVG wires animate energy independently by workflow state", () => {
   assert.match(component, /className="workflow-wire-layer"/); assert.match(component, /className="wire-energy"/); assert.match(styles, /\.wire-running \.wire-energy[^}]*animation-duration: 1s/); assert.match(styles, /\.wire-ready \.wire-energy[^}]*animation-duration: 4s/); assert.match(styles, /\.wire-error \.wire-energy[^}]*animation-duration: 2s/); assert.match(styles, /\.wire-offline \.wire-energy[^}]*animation: none/);
 });
 
-test("Strong Engine is a lightweight CSS and SVG 3D orb at far right", () => {
-  assert.match(component, /Strong Engine 3D activity orb/); assert.match(component, /className="engine-shell"/); assert.match(component, /<StrongEngine state=\{state\}/); assert.match(styles, /\.pipeline-live-stage \{[^}]*grid-template-columns: minmax\(135px, 190px\) minmax\(115px, 160px\) minmax\(145px, 190px\)/); assert.match(styles, /perspective\(420px\) rotateX\(9deg\)/);
-  assert.match(component, /className="engine-core"/); assert.match(component, /className="engine-meridian meridian-one"/); assert.doesNotMatch(component, /<svg viewBox="0 0 160 160"/);
+test("Strong Engine restores the original lightweight vector atom orb at far right", () => {
+  assert.match(component, /Strong Engine activity orb/); assert.match(component, /<svg viewBox="0 0 160 160"/); assert.match(component, /<ellipse cx="80" cy="80" rx="58" ry="22"/); assert.match(component, /<circle cx="80" cy="80" r="12"/); assert.match(component, /<StrongEngine state=\{state\}/); assert.match(styles, /\.pipeline-live-stage \{[^}]*grid-template-columns: minmax\(135px, 190px\) minmax\(115px, 160px\) minmax\(145px, 190px\)/);
+  assert.match(styles, /Original Strong Engine atom orb restored/); assert.match(styles, /\.strong-engine-orb svg \{[^}]*display: block/); assert.doesNotMatch(component, /engine-shell|engine-core|engine-meridian/);
   assert.doesNotMatch(component, /WebGL|setInterval|requestAnimationFrame/);
 });
