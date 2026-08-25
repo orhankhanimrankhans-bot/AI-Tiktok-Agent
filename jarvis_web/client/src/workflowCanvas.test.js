@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, canvasPointFromClient, connectionPathToPoint, connectionVisualState,
+import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionPathToPoint, connectionVisualState,
   fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, validateConnectionCandidate, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 
 test("dragging updates logical node position without zoom jumps", () => {
@@ -198,6 +198,20 @@ test("direct connection validator rejects self, duplicate, merge, cycle, and nes
 test("temporary wire coordinates honor canvas pan and zoom", () => {
   assert.deepEqual(canvasPointFromClient({ clientX: 170, clientY: 140 }, { left: 20, top: 40 }, { x: 50, y: 20, zoom: 0.5 }), { x: 200, y: 160 });
   assert.match(connectionPathToPoint({ x: 100, y: 80 }, { x: 500, y: 220 }), /^M 248 154 C/);
+});
+
+test("viewport paints at browser resolution without rasterizing the full scene", () => {
+  assert.deepEqual(canvasViewportStyle({ x: 10.31, y: -4.26, zoom: 1.25 }, 2), { transform: "translate(10.5px, -4.5px)", zoom: 1.25 });
+  assert.deepEqual(canvasViewportStyle({ x: 10.31, y: -4.26, zoom: 1 }, 1.25), { transform: "translate(10.4px, -4px)", zoom: 1 });
+  for (const ratio of [1, 1.25, 1.5, 2]) for (const zoom of [.5, .67, .75, .8, .9, 1, 1.1, 1.25, 1.5, 1.75, 2]) {
+    const style = canvasViewportStyle({ x: 13.37, y: -7.19, zoom }, ratio);
+    assert.equal(style.zoom, clampCanvasZoom(zoom)); assert.match(style.transform, /^translate\(-?\d+(?:\.\d+)?px, -?\d+(?:\.\d+)?px\)$/);
+  }
+  const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.match(app, /canvasViewportStyle\(canvasViewport, window\.devicePixelRatio\)/);
+  assert.doesNotMatch(app, /translate3d\([^\n]+scale\(/);
+  assert.doesNotMatch(styles.match(/\.canvas-viewport \{[\s\S]*?\}/)?.[0] || "", /will-change/);
 });
 
 test("App wires Pointer Events from existing ports without changing workflow runtime", () => {

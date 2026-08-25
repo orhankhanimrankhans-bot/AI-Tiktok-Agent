@@ -201,6 +201,15 @@ export function canvasPointFromClient({ clientX, clientY }, bounds, viewport) {
   };
 }
 
+export function canvasViewportStyle(viewport, devicePixelRatio = 1) {
+  const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const snap = (value) => Math.round(Number(value || 0) * ratio) / ratio;
+  return {
+    transform: `translate(${snap(viewport.x)}px, ${snap(viewport.y)}px)`,
+    zoom: clampCanvasZoom(viewport.zoom),
+  };
+}
+
 export function validateConnectionCandidate(nodes, connections, sourceId, targetId) {
   const nodeMap = new Map(nodes.filter((node) => node?.id).map((node) => [node.id, node]));
   const source = nodeMap.get(sourceId); const target = nodeMap.get(targetId);

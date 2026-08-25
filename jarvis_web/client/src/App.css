@@ -2430,7 +2430,6 @@ button {
   width: 2400px;
   height: 1600px;
   transform-origin: 0 0;
-  will-change: transform;
 }
 
 .canvas-viewport .canvas-node-area { width: 2400px; height: 1600px; inset: 0 auto auto 0; }
@@ -2463,7 +2462,6 @@ button {
   box-shadow: 0 9px 24px rgba(0, 0, 0, .3);
   cursor: grab;
   touch-action: none;
-  will-change: left, top;
 }
 
 .workflow-node:active { cursor: grabbing; }

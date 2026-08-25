@@ -30,7 +30,7 @@ import {
 } from "./workflowExecution.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
-  canvasPointFromClient, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
+  canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
@@ -3280,7 +3280,7 @@ function App() {
                     <button type="button" className="reset-entire-theme" onClick={() => setCanvasAppearance(safeAppearance({ viewport: canvasViewport }))}>Reset Entire Theme</button>
                   </aside>}
 
-                  <div className="canvas-viewport" style={{ transform: `translate3d(${canvasViewport.x}px, ${canvasViewport.y}px, 0) scale(${canvasViewport.zoom})` }}>
+                  <div className="canvas-viewport" style={canvasViewportStyle(canvasViewport, window.devicePixelRatio)}>
                   {canvasNodes.length > 0 && (
                     <svg className="workflow-connections" aria-label="Workflow connections">
                       <defs><marker id="workflow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>
