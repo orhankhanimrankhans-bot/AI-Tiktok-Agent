@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "security:recover-owner": "node recoverOwner.js",
     "test": "node --test *.test.js",
     "start": "node index.js"
   },
@@ -16,6 +17,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
-    "googleapis": "^176.0.0"
+    "googleapis": "^176.0.0",
+    "nodemailer": "^9.0.5"
   }
 }

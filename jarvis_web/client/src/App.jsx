@@ -3,6 +3,7 @@ import "./App.css";
 import AdvancedColorPicker from "./AdvancedColorPicker.jsx";
 import WorkflowManager from "./WorkflowManager.jsx";
 import SecurityAccess from "./SecurityAccess.jsx";
+import { useJarvisAuth } from "./JarvisAuth.jsx";
 import { getWorkflow, updateWorkflow } from "./workflowApi.js";
 import { definitionFingerprint, editorDefinition, validateStoredWorkflow } from "./workflowEditorBinding.js";
 import JarvisDashboard from "./JarvisDashboard.jsx";
@@ -2215,6 +2216,7 @@ function ExecutionHistory({ executions, selected, onSelect }) {
 }
 
 function App() {
+  const { session, can } = useJarvisAuth();
   const [topPage, setTopPage] =
     useState("WORKFLOW");
 
@@ -3076,10 +3078,11 @@ function App() {
 
   const workflowStatus = isWorkflowRunning ? "running" : "idle";
   const dashboardGraph = buildDashboardGraph(canvasNodes, connections);
+  const visibleTopPage = topPage === "WORKFLOW" && !can("view_workflow") ? (can("dashboard") ? "DASHBOARD" : "TOOLS") : topPage === "DASHBOARD" && !can("dashboard") ? (can("view_workflow") ? "WORKFLOW" : "TOOLS") : topPage;
 
   return (
     <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
-      style={appearanceCssVariables(canvasAppearance)}>
+      data-can-edit-workflow={can("edit_workflow") ? "true" : "false"} style={appearanceCssVariables(canvasAppearance)}>
 
       <aside className="sidebar">
 
@@ -3111,7 +3114,7 @@ function App() {
             ["▰", "Backups"],
             ["⚙", "Settings"],
             ["〽", "System Health"],
-          ].map(([icon, label]) => (
+          ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools" }[label]))).map(([icon, label]) => (
             <button key={label}>
               <span>{icon}</span>
               {label}
@@ -3143,11 +3146,11 @@ function App() {
             "DASHBOARD",
             "WORKFLOW",
             "TOOLS",
-          ].map((item) => (
+          ].filter((item) => item === "DASHBOARD" ? can("dashboard") : item === "WORKFLOW" ? can("view_workflow") : can("tools")).map((item) => (
             <button
               key={item}
               className={
-                topPage === item
+                visibleTopPage === item
                   ? "top-active"
                   : ""
               }
@@ -3160,7 +3163,7 @@ function App() {
           ))}
         </header>
 
-        {topPage === "WORKFLOW" ? (
+        {visibleTopPage === "WORKFLOW" ? (
           <section className="workflow-page">
 
             <div className="workflow-header" style={{ background: canvasAppearance.headerColor, color: readableForeground(canvasAppearance.headerColor) }}>
@@ -3584,13 +3587,13 @@ function App() {
             )}
 
           </section>
-        ) : topPage === "DASHBOARD" ? (
+        ) : visibleTopPage === "DASHBOARD" ? (
           <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
             healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
-            onOpenWorkflow={(workflowId) => { setTopPage("WORKFLOW"); if (workflowId && workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
-        ) : topPage === "TOOLS" ? (
-          <SecurityAccess />
+            onOpenWorkflow={(workflowId) => { if (!can("view_workflow")) return; setTopPage("WORKFLOW"); if (workflowId && workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
+        ) : visibleTopPage === "TOOLS" ? (
+          session.role === "admin" ? <SecurityAccess /> : <section className="placeholder-page"><h1>TOOLS</h1><p>Child-safe tools are available according to the active permission policy.</p></section>
         ) : (
           <section className="placeholder-page">
             <h1>{topPage}</h1>

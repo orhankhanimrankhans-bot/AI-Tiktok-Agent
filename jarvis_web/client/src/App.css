@@ -3682,3 +3682,33 @@ button {
   .jarvis-control-center .strong-engine { width: 130px; min-width: 130px; }
   .jarvis-control-center .strong-engine-orb { width: 120px; min-width: 120px; height: 120px; min-height: 120px; }
 }
+
+/* Secure Admin / Child session gateway. */
+.jarvis-auth-screen { min-height: 100vh; display: grid; place-items: center; position: relative; overflow: hidden; color: #e9fbff; background: radial-gradient(circle at 50% 25%, #12354a 0, #07141f 38%, #03080e 100%); font-family: Inter, system-ui, sans-serif; }
+.auth-grid { position: absolute; inset: 0; opacity: .16; background-image: linear-gradient(#35d9ff 1px, transparent 1px), linear-gradient(90deg, #35d9ff 1px, transparent 1px); background-size: 42px 42px; transform: perspective(700px) rotateX(58deg) scale(1.5) translateY(28%); }
+.jarvis-login-card { position: relative; z-index: 1; width: min(92vw, 620px); padding: 34px; border: 1px solid #36d9ff66; border-radius: 18px; background: #071521eb; box-shadow: 0 0 70px #00b8ff24, inset 0 0 35px #0ebde80d; backdrop-filter: blur(18px); }
+.jarvis-login-mark { width: 68px; height: 68px; display: grid; place-items: center; margin-bottom: 18px; border: 1px solid #5ee8ff; border-radius: 50%; color: #7af0ff; font: 700 34px/1 monospace; box-shadow: 0 0 25px #2adfff66; }
+.jarvis-login-card > span { color: #55dff5; font: 700 11px/1.2 monospace; letter-spacing: .2em; }
+.jarvis-login-card h1 { margin: 8px 0; font-size: 28px; letter-spacing: .05em; }
+.jarvis-login-card p { color: #9ab4c1; }
+.session-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 24px 0; }
+.session-choices button { min-height: 76px; display: grid; gap: 6px; padding: 12px; color: #b7ced8; border: 1px solid #244755; border-radius: 10px; background: #0a1c28; text-align: left; }
+.session-choices button.active { color: #effdff; border-color: #49dfff; background: #0d3040; box-shadow: 0 0 18px #21d5ff22; }
+.session-choices button:disabled { opacity: .4; }
+.session-choices small { font-size: 10px; }
+.jarvis-login-card form, .jarvis-login-card label { display: grid; gap: 8px; }
+.jarvis-login-card form { gap: 14px; }
+.jarvis-login-card label { color: #7fdceb; font: 700 10px/1.2 monospace; letter-spacing: .12em; }
+.jarvis-login-card input, .jarvis-login-card select { min-height: 44px; padding: 0 12px; color: #eefcff; border: 1px solid #275060; border-radius: 8px; background: #06111a; }
+.jarvis-login-submit { min-height: 46px; border: 1px solid #51e7ff; border-radius: 8px; color: #031016; background: linear-gradient(135deg, #55e9ff, #38bfe8); font-weight: 800; letter-spacing: .08em; }
+.auth-link { min-height: 34px; border: 0; color: #75dceb; background: transparent; text-decoration: underline; }
+.jarvis-auth-error { margin: 0; color: #ff9a9a !important; }
+.session-actions { position: fixed; z-index: 2000; right: 18px; bottom: 14px; display: flex; gap: 7px; }
+.session-actions button { padding: 7px 10px; border: 1px solid #36cde866; border-radius: 6px; color: #a9eaf4; background: #07131ee6; font: 700 9px/1 monospace; letter-spacing: .08em; }
+.child-session-indicator { position: fixed; z-index: 2000; right: 18px; top: 12px; padding: 7px 11px; border: 1px solid #5bdcf277; border-radius: 999px; color: #b8f4ff; background: #071722e8; font: 700 9px/1 monospace; letter-spacing: .12em; }
+@media (max-width: 640px) { .session-choices { grid-template-columns: 1fr; } .jarvis-login-card { padding: 24px; } }
+.jarvis-app[data-can-edit-workflow="false"] .workflow-actions button:not(.run-button),
+.jarvis-app[data-can-edit-workflow="false"] .empty-card,
+.jarvis-app[data-can-edit-workflow="false"] .edge-insert-button,
+.jarvis-app[data-can-edit-workflow="false"] .node-port,
+.jarvis-app[data-can-edit-workflow="false"] .node-menu { display: none !important; }

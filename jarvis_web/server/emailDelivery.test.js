@@ -1,0 +1,4 @@
+"use strict";
+const assert = require("node:assert/strict"); const test = require("node:test");
+const { createEmailDelivery, mailSettings } = require("./emailDelivery");
+test("SMTP configuration is environment-only and reset mail contains a configured one-time link", async () => { const sent = []; const env = { SMTP_HOST: "smtp.example.test", SMTP_PORT: "465", SMTP_USER: "mailer", SMTP_PASSWORD: "private-test-value", SMTP_FROM: "Jarvis <security@example.test>", JARVIS_PUBLIC_URL: "https://direngineeringsolutions.com" }; const delivery = createEmailDelivery({ env, createTransport: (options) => ({ sendMail: async (message) => { sent.push({ options, message }); } }) }); assert.equal(delivery.configured, true); await delivery.sendAdminReset("owner@example.com", "opaque-token"); assert.equal(sent.length, 1); assert.match(sent[0].message.text, /https:\/\/direngineeringsolutions\.com\/\?reset_token=opaque-token/); assert.equal(mailSettings({}).configured, false); });
