@@ -9,8 +9,14 @@ function loginKey(req, role) { return `${req.ip || req.socket?.remoteAddress || 
 function loginBlocked(key, now = Date.now()) { const value = failures.get(key); if (!value) return false; if (value.lockedUntil > now) return true; if (value.lockedUntil) failures.delete(key); return false; }
 function recordFailure(key, now = Date.now()) { const value = failures.get(key) || { count: 0, lockedUntil: 0 }; value.count += 1; if (value.count >= MAX_FAILURES) { value.count = 0; value.lockedUntil = now + LOCK_MS; } failures.set(key, value); }
 function allowResetRequest(key, now = Date.now()) { const value = resetRequests.get(key); if (!value || now - value.startedAt >= RESET_WINDOW_MS) { resetRequests.set(key, { count: 1, startedAt: now }); return true; } if (value.count >= RESET_MAX) return false; value.count += 1; return true; }
-function requiredPermission(req) {
-  if (req.path === "/api/workflow-executions/run") return "run_workflow";
+const STORAGE_NODE_PERMISSIONS = Object.freeze({ "Search Files and Folders": "storage", "Download File": "storage", "Move File": "storage_modify", "Delete File": "storage_modify" });
+function requiredPermissions(req) {
+  const permissions = [];
+  if (req.path === "/api/workflow-executions/run") {
+    permissions.push("run_workflow");
+    for (const node of Array.isArray(req.body?.nodes) ? req.body.nodes : []) { const permission = STORAGE_NODE_PERMISSIONS[node?.name]; if (permission) permissions.push(permission); }
+    return [...new Set(permissions)];
+  }
   if (req.path.startsWith("/api/workflows")) return req.method === "GET" ? "view_workflow" : req.method === "DELETE" ? "delete_workflow" : "edit_workflow";
   if (req.path.startsWith("/api/executions")) return req.method === "GET" ? "view_workflow" : "run_workflow";
   if (req.path.startsWith("/api/facebook/reels/publish")) return "publish_facebook";
@@ -24,7 +30,8 @@ function requiredPermission(req) {
   if (req.path.startsWith("/api/conversation") || req.path.startsWith("/api/agent/")) return "conversation";
   return null;
 }
-function enforceSecurity(getStore) { return (req, res, next) => { const store = getStore(); if (!store || req.path.startsWith("/api/security") || req.path === "/api/health" || store.securityState() === "disabled") return next(); if (store.securityState() === "recovery_required") return denied(res, 503, "Security recovery is required."); const permission = requiredPermission(req); if (!permission) return next(); const identity = sessionIdentity(req, Date.now(), store); if (!identity) return denied(res, 401, "Jarvis is locked. Authenticate to continue."); if (!hasPermission(req, permission, store)) return denied(res, 403, "This session does not have permission for that action."); store.touchSession(identity.sessionId); return next(); }; }
+function requiredPermission(req) { const value = requiredPermissions(req); return Array.isArray(value) ? value[0] || null : value; }
+function enforceSecurity(getStore) { return (req, res, next) => { const store = getStore(); if (!store || req.path.startsWith("/api/security") || req.path === "/api/health" || store.securityState() === "disabled") return next(); if (store.securityState() === "recovery_required") return denied(res, 503, "Security recovery is required."); const required = requiredPermissions(req); const permissions = Array.isArray(required) ? required : required ? [required] : []; if (!permissions.length) return next(); const identity = sessionIdentity(req, Date.now(), store); if (!identity) return denied(res, 401, "Jarvis is locked. Authenticate to continue."); if (permissions.some((permission) => !hasPermission(req, permission, store))) return denied(res, 403, "This session does not have permission for that action."); store.touchSession(identity.sessionId); return next(); }; }
 function establishSession(req, res, store, identity, status = 200) { const sessionId = store.createSession(identity.role, { profileId: identity.profileId, authVersion: identity.authVersion }); req.session.regenerate((error) => { if (error) return denied(res, 500, "Could not start a secure session."); req.session.jarvisAuth = { ...identity, sessionId }; return req.session.save(() => res.status(status).json({ security: store.publicSettings(), session: publicSession(req, store) })); }); }
 function registerSecurityRoutes(app, getStore, emailDelivery = createEmailDelivery()) {
   const admin = (req, res) => { const store = getStore(); return ["admin", "owner"].includes(sessionIdentity(req, Date.now(), store)?.role) || (denied(res, 403, "Admin access is required."), false); };
@@ -50,4 +57,4 @@ function registerSecurityRoutes(app, getStore, emailDelivery = createEmailDelive
   app.patch("/api/security/children/:id", (req, res) => { if (!admin(req, res)) return; try { const profile = getStore().updateChild(req.params.id, req.body || {}); return profile ? res.json(profile) : res.status(404).json({ error: "Profile not found." }); } catch (error) { return res.status(400).json({ error: error.message }); } });
   app.delete("/api/security/children/:id", (req, res) => { if (!admin(req, res)) return; const deleted = getStore().deleteChild(req.params.id); if (!deleted) return res.status(404).json({ error: "Profile not found." }); console.info("Jarvis security event: Additional Access profile removed."); return res.json({ ok: true }); });
 }
-module.exports = { allowResetRequest, enforceSecurity, loginBlocked, recordFailure, registerSecurityRoutes, requiredPermission };
+module.exports = { STORAGE_NODE_PERMISSIONS, allowResetRequest, enforceSecurity, loginBlocked, recordFailure, registerSecurityRoutes, requiredPermission, requiredPermissions };

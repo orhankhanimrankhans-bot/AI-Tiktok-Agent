@@ -15,6 +15,16 @@ const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
 
 async function fixture(t, { productionProxy = false } = {}) { const file = path.join(os.tmpdir(), `jarvis-security-http-${crypto.randomUUID()}.sqlite`); const db = new DatabaseSync(file); const store = new AccessControlStore({ db }); store.open(); const app = express(); configureSessionProxy(app, productionProxy); app.use(express.json()); app.use(session(sessionOptions({ secret: "test only session secret", isProduction: productionProxy }))); app.use(enforceSecurity(() => store)); registerSecurityRoutes(app, () => store); app.get("/api/health", (_, res) => res.json({ ok: true })); app.all("/api/workflows", (_, res) => res.json({ ok: true })); const listener = http.createServer(app); await new Promise((resolve) => listener.listen(0, "127.0.0.1", resolve)); const base = `http://127.0.0.1:${listener.address().port}`; t.after(async () => { await new Promise((resolve) => listener.close(resolve)); db.close(); fs.rmSync(file, { force: true }); }); return { store, request: async (route, options = {}) => { const headers = { ...(options.headers || {}) }; if (productionProxy) headers["x-forwarded-proto"] ||= "https"; const response = await fetch(`${base}${route}`, { ...options, headers }); return { response, body: await response.json(), setCookie: response.headers.get("set-cookie") || "", cookie: response.headers.get("set-cookie")?.split(";")[0] }; } }; }
 
+async function storageFixture(t) {
+  const file = path.join(os.tmpdir(), `jarvis-storage-auth-${crypto.randomUUID()}.sqlite`); const db = new DatabaseSync(file); const store = new AccessControlStore({ db }); store.open();
+  const app = express(); app.use(express.json()); app.use(session(sessionOptions({ secret: "storage authorization test secret", isProduction: false }))); app.use(enforceSecurity(() => store)); registerSecurityRoutes(app, () => store);
+  app.post("/api/google/drive/:action", (req, res) => res.json({ ok: true, action: req.params.action }));
+  app.post("/api/workflow-executions/run", (_, res) => res.json({ ok: true }));
+  const listener = http.createServer(app); await new Promise((resolve) => listener.listen(0, "127.0.0.1", resolve)); const base = `http://127.0.0.1:${listener.address().port}`;
+  t.after(async () => { await new Promise((resolve) => listener.close(resolve)); db.close(); fs.rmSync(file, { force: true }); });
+  return { store, request: async (route, options = {}) => { const response = await fetch(`${base}${route}`, options); return { response, body: await response.json(), cookie: response.headers.get("set-cookie")?.split(";")[0] }; } };
+}
+
 test("production forwarded HTTPS issues a secure session and preserves Admin API authentication", async (t) => { const { store, request } = await fixture(t, { productionProxy: true }); await store.setup("admin secure password", 0, "owner@example.test"); const login = await request("/api/security/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "admin", password: "admin secure password" }) }); assert.equal(login.response.status, 200); assert.match(login.setCookie, /; Secure/i); assert.match(login.setCookie, /; HttpOnly/i); assert.match(login.setCookie, /; SameSite=Lax/i); const owner = await request("/api/security/owner-account", { headers: { cookie: login.cookie } }); assert.equal(owner.response.status, 200); assert.equal(owner.body.account.email, "owner@example.test"); });
 
 test("Admin endpoints reject unauthenticated and Child sessions behind the production proxy", async (t) => { const { store, request } = await fixture(t, { productionProxy: true }); await store.setup("admin secure password", 0, "owner@example.test"); await store.setChildPassword("child secure password", { displayName: "Child", email: "child@example.test" }); assert.ok([401, 403].includes((await request("/api/security/sessions")).response.status)); const login = await request("/api/security/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "child", password: "child secure password" }) }); assert.equal(login.response.status, 200); assert.equal((await request("/api/security/children", { headers: { cookie: login.cookie } })).response.status, 403); });
@@ -61,4 +71,29 @@ test("only Admin can permanently remove Additional Access, revoke its sessions, 
   assert.equal(store.getChild(profile.body.id), null); assert.ok(store.sessionRecord(activeSession.id).revoked_at);
   const recreated = await request("/api/security/children", { method: "POST", headers: admin, body: JSON.stringify({ displayName: "Replacement", email: "reusable@example.test", password: "replacement secure password", permissions: {} }) });
   assert.equal(recreated.response.status, 201); assert.notEqual(recreated.body.id, profile.body.id);
+});
+
+test("storage capabilities authorize Admin and Additional file, folder, and workflow operations", async (t) => {
+  const { store, request } = await storageFixture(t); const json = { "content-type": "application/json" };
+  const setup = await request("/api/security/setup", { method: "POST", headers: json, body: JSON.stringify({ password: "admin secure password", confirmPassword: "admin secure password", email: "owner@example.test" }) }); const admin = { cookie: setup.cookie, ...json };
+  assert.equal((await request("/api/google/drive/search", { method: "POST", headers: admin, body: "{}" })).response.status, 200);
+  assert.equal((await request("/api/google/drive/folders", { method: "POST", headers: admin, body: "{}" })).response.status, 200);
+  assert.equal((await request("/api/google/drive/search", { method: "POST", headers: json, body: "{}" })).response.status, 401);
+  const view = await store.createChild({ displayName: "View storage", email: "view@example.test", password: "view storage password", permissions: { storage: true, view_workflow: true, run_workflow: true } });
+  const noView = await store.createChild({ displayName: "No storage", email: "none@example.test", password: "no storage password", permissions: { view_workflow: true, run_workflow: true } });
+  const modify = await store.createChild({ displayName: "Modify storage", email: "modify@example.test", password: "modify storage password", permissions: { storage_modify: true } });
+  const noModify = await store.createChild({ displayName: "Read only", email: "readonly@example.test", password: "read only password", permissions: { storage: true } });
+  const login = async (profile, password) => (await request("/api/security/login", { method: "POST", headers: json, body: JSON.stringify({ profileId: profile.id, password }) })).cookie;
+  const viewCookie = await login(view, "view storage password"); const noViewCookie = await login(noView, "no storage password"); const modifyCookie = await login(modify, "modify storage password"); const noModifyCookie = await login(noModify, "read only password");
+  for (const action of ["search", "folders", "download"]) assert.equal((await request(`/api/google/drive/${action}`, { method: "POST", headers: { cookie: viewCookie, ...json }, body: "{}" })).response.status, 200);
+  assert.equal((await request("/api/google/drive/search", { method: "POST", headers: { cookie: noViewCookie, ...json }, body: "{}" })).response.status, 403);
+  store.updateChild(noView.id, { permissions: { ...noView.permissions, storage: true, run_workflow: true } }); assert.equal((await request("/api/google/drive/search", { method: "POST", headers: { cookie: noViewCookie, ...json }, body: "{}" })).response.status, 200);
+  store.updateChild(noView.id, { permissions: { ...noView.permissions, storage: false, run_workflow: true } }); assert.equal((await request("/api/google/drive/search", { method: "POST", headers: { cookie: noViewCookie, ...json }, body: "{}" })).response.status, 403);
+  assert.equal((await request("/api/google/drive/move", { method: "POST", headers: { cookie: modifyCookie, ...json }, body: "{}" })).response.status, 200);
+  assert.equal((await request("/api/google/drive/move", { method: "POST", headers: { cookie: noModifyCookie, ...json }, body: "{}" })).response.status, 403);
+  const searchWorkflow = JSON.stringify({ nodes: [{ name: "Search Files and Folders" }] });
+  assert.equal((await request("/api/workflow-executions/run", { method: "POST", headers: { cookie: viewCookie, ...json }, body: searchWorkflow })).response.status, 200);
+  assert.equal((await request("/api/workflow-executions/run", { method: "POST", headers: { cookie: noViewCookie, ...json }, body: searchWorkflow })).response.status, 403);
+  await store.setChildPassword("child storage password", { displayName: "Child", email: "child@example.test" }); const childLogin = await request("/api/security/login", { method: "POST", headers: json, body: JSON.stringify({ role: "child", password: "child storage password" }) });
+  assert.equal((await request("/api/google/drive/search", { method: "POST", headers: { cookie: childLogin.cookie, ...json }, body: "{}" })).response.status, 403);
 });
