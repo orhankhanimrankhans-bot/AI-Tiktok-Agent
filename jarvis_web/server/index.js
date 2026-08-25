@@ -23,6 +23,7 @@ const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebo
 const { makeFacebookPageSelectorHtml, makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require("./openaiPrepareContent");
+const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
 
 dotenv.config();
 
@@ -78,6 +79,7 @@ if (IS_PRODUCTION && !process.env.JARVIS_DB_PATH) {
 }
 
 const app = express();
+configureSessionProxy(app, IS_PRODUCTION);
 
 const PORT = Number(process.env.PORT || 3001);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
@@ -121,17 +123,10 @@ app.use(
 app.use(express.json());
 
 app.use(
-  session({
+  session(sessionOptions({
     secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: IS_PRODUCTION, // HTTPS behind reverse proxy in production
-      maxAge: 10 * 60 * 1000,
-    },
-  })
+    isProduction: IS_PRODUCTION,
+  }))
 );
 
 // Access control is disabled until an owner explicitly completes setup.  The
