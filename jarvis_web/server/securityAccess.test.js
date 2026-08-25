@@ -45,3 +45,20 @@ test("disabled Child access rejects login and logout invalidates Admin session",
   const disabled = await request("/api/security/login", { method: "POST", headers: json, body: JSON.stringify({ role: "child", password: "child secure password" }) }); assert.equal(disabled.response.status, 403); assert.match(disabled.body.error, /disabled/);
   assert.equal((await request("/api/security/logout", { method: "POST", headers: admin })).response.status, 200); assert.equal((await request("/api/workflows", { headers: admin })).response.status, 401);
 });
+
+test("only Admin can permanently remove Additional Access, revoke its sessions, and reuse its email", async (t) => {
+  const { store, request } = await fixture(t); const json = { "content-type": "application/json" };
+  const setup = await request("/api/security/setup", { method: "POST", headers: json, body: JSON.stringify({ password: "admin secure password", confirmPassword: "admin secure password", email: "owner@example.test" }) }); const admin = { cookie: setup.cookie, ...json };
+  await request("/api/security/password/child", { method: "PUT", headers: admin, body: JSON.stringify({ displayName: "Child", email: "child@example.test", password: "child secure password", confirmPassword: "child secure password" }) });
+  const profile = await request("/api/security/children", { method: "POST", headers: admin, body: JSON.stringify({ displayName: "Temporary", email: "reusable@example.test", password: "additional secure password", permissions: { view_workflow: true } }) });
+  const childLogin = await request("/api/security/login", { method: "POST", headers: json, body: JSON.stringify({ role: "child", password: "child secure password" }) });
+  const additionalLogin = await request("/api/security/login", { method: "POST", headers: json, body: JSON.stringify({ profileId: profile.body.id, password: "additional secure password" }) });
+  assert.equal((await request(`/api/security/children/${profile.body.id}`, { method: "DELETE" })).response.status, 403);
+  assert.equal((await request(`/api/security/children/${profile.body.id}`, { method: "DELETE", headers: { cookie: childLogin.cookie } })).response.status, 403);
+  assert.equal((await request(`/api/security/children/${profile.body.id}`, { method: "DELETE", headers: { cookie: additionalLogin.cookie } })).response.status, 403);
+  const activeSession = store.db.prepare("SELECT id FROM jarvis_auth_sessions WHERE role = 'additional' AND profile_id = ? AND revoked_at IS NULL").get(profile.body.id); assert.ok(activeSession);
+  assert.equal((await request(`/api/security/children/${profile.body.id}`, { method: "DELETE", headers: admin })).response.status, 200);
+  assert.equal(store.getChild(profile.body.id), null); assert.ok(store.sessionRecord(activeSession.id).revoked_at);
+  const recreated = await request("/api/security/children", { method: "POST", headers: admin, body: JSON.stringify({ displayName: "Replacement", email: "reusable@example.test", password: "replacement secure password", permissions: {} }) });
+  assert.equal(recreated.response.status, 201); assert.notEqual(recreated.body.id, profile.body.id);
+});

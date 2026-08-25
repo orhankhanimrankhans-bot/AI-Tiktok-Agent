@@ -48,6 +48,6 @@ function registerSecurityRoutes(app, getStore, emailDelivery = createEmailDelive
   app.get("/api/security/children", (req, res) => admin(req, res) && res.json({ profiles: getStore().listChildren() }));
   app.post("/api/security/children", async (req, res) => { if (!admin(req, res)) return; try { return res.status(201).json(await getStore().createChild(req.body || {})); } catch (error) { return res.status(400).json({ error: error.message }); } });
   app.patch("/api/security/children/:id", (req, res) => { if (!admin(req, res)) return; try { const profile = getStore().updateChild(req.params.id, req.body || {}); return profile ? res.json(profile) : res.status(404).json({ error: "Profile not found." }); } catch (error) { return res.status(400).json({ error: error.message }); } });
-  app.delete("/api/security/children/:id", (req, res) => admin(req, res) && res.json({ ok: getStore().deleteChild(req.params.id) }));
+  app.delete("/api/security/children/:id", (req, res) => { if (!admin(req, res)) return; const deleted = getStore().deleteChild(req.params.id); if (!deleted) return res.status(404).json({ error: "Profile not found." }); console.info("Jarvis security event: Additional Access profile removed."); return res.json({ ok: true }); });
 }
 module.exports = { allowResetRequest, enforceSecurity, loginBlocked, recordFailure, registerSecurityRoutes, requiredPermission };
