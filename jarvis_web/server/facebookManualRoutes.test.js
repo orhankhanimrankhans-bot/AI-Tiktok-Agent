@@ -15,7 +15,7 @@ test("OAuth creation selects one Page-scoped credential and reconnect updates on
   assert.match(source, /makeFacebookPageSelectorHtml/);
   assert.match(source, /createPageSelection/);
   assert.match(source, /app\.post\("\/api\/facebook\/auth\/page-selection"/);
-  assert.match(source, /findByPage\(\{ accountId: selected\.accountId, pageId: selected\.page\.id \}\)/);
+  assert.match(source, /findByPage\(\{ accountId: selected\.accountId, pageId: selected\.page\.id \}, \{ owner \}\)/);
   assert.match(source, /pageAccessTokens: \{ \[selected\.page\.id\]: pageToken \}/);
   assert.match(source, /state\.intent === "reconnect"[\s\S]*previous\.id/);
   assert.doesNotMatch(source, /pages\.map\(\(page\) => facebookCredentialStore\.save/);
@@ -38,15 +38,15 @@ test("manual routes serialize store metadata and never include token values", ()
 test("Graph execution routes delegate auth-mode-aware me and Page discovery", () => {
   assert.match(source, /\/api\/facebook\/graph\/me[^\n]+withFacebookGraphRequest/);
   assert.match(source, /executionServices\.facebook\.graphRequest/);
-  assert.match(source, /method: req\.method, endpoint, body: req\.body, query: req\.query/);
+  assert.match(source, /method: req\.method, endpoint, body: req\.body, query: req\.query \}, owner/);
   assert.match(source, /\/api\/facebook\/graph\/pages[^\n]+"pages"/);
   assert.match(source, /\/api\/facebook\/graph\/page[^\n]+"page"/);
-  assert.doesNotMatch(source.slice(source.indexOf("async function withFacebookGraphRequest"), source.indexOf("async function withFacebookCredential")), /facebookCredentialStore\.get|facebookGraphService\(\)/);
+  assert.doesNotMatch(source.slice(source.indexOf("async function withFacebookGraphRequest"), source.indexOf("async function publishFacebookReel")), /facebookCredentialStore\.get|facebookGraphService\(\)/);
 });
 
 test("Reel publishing route resolves credentials and binary references only on the server", () => {
   assert.match(source, /\/api\/facebook\/reels\/publish", publishFacebookReel/);
-  assert.match(source, /toLegacyReelResponse\(await executionServices\.facebook\.publishReel\(req\.body\)\)/);
+  assert.match(source, /toLegacyReelResponse\(await executionServices\.facebook\.publishReel\(req\.body, owner\)\)/);
   const route = source.slice(source.indexOf("async function publishFacebookReel"), source.indexOf('app.get("/api/google/credentials"'));
   assert.doesNotMatch(route, /facebookCredentialStore\.get|facebookGraphService\(\)|publishPageReel|BINARY_DATA_DIR/);
   assert.doesNotMatch(source, /req\.body\.upload_?url/i);

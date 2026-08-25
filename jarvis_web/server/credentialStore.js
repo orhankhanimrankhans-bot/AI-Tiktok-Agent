@@ -17,6 +17,7 @@ const TYPE = "oauth2";
 const CREDENTIAL_ID_PATTERN = /^gcred_[A-Za-z0-9_-]{22}$/;
 const KEY_SALT = "jarvis-web-google-credential-store-v1";
 const ACCOUNT_UNIQUE_INDEX = "idx_google_credentials_provider_account_email";
+const { normalizeCredentialOwner } = require("./credentialOwnership");
 
 class CredentialDecryptionError extends Error {
   constructor() { super("Stored credential could not be decrypted."); this.code = "credential_decryption_failed"; }
@@ -136,6 +137,9 @@ class CredentialStore {
         updated_at TEXT NOT NULL
       )
     `);
+    const columns = new Set(this.db.prepare("PRAGMA table_info(google_credentials)").all().map((column) => column.name));
+    if (!columns.has("owner_type")) this.db.exec("ALTER TABLE google_credentials ADD COLUMN owner_type TEXT NOT NULL DEFAULT 'admin'");
+    if (!columns.has("owner_id")) this.db.exec("ALTER TABLE google_credentials ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'primary'");
     this.migrateCredentialUniqueness();
     return this;
   }
@@ -151,7 +155,7 @@ class CredentialStore {
             SELECT
               id,
               ROW_NUMBER() OVER (
-                PARTITION BY provider, lower(trim(account_email))
+                PARTITION BY provider, owner_type, owner_id, lower(trim(account_email))
                 ORDER BY updated_at DESC, created_at DESC, id DESC
               ) AS duplicate_rank
             FROM google_credentials
@@ -160,9 +164,10 @@ class CredentialStore {
           WHERE duplicate_rank > 1
         )
       `);
+      this.db.exec(`DROP INDEX IF EXISTS ${ACCOUNT_UNIQUE_INDEX}`);
       this.db.exec(`
         CREATE UNIQUE INDEX IF NOT EXISTS ${ACCOUNT_UNIQUE_INDEX}
-        ON google_credentials(provider, lower(trim(account_email)))
+        ON google_credentials(provider, owner_type, owner_id, lower(trim(account_email)))
         WHERE trim(account_email) <> ''
       `);
       this.db.exec("COMMIT");
@@ -192,10 +197,11 @@ class CredentialStore {
     return Promise.resolve(this.db.prepare(sql).all(...params));
   }
 
-  getRow(id) {
+  getRow(id, owner) {
+    const { ownerType, ownerId } = normalizeCredentialOwner(owner);
     const row = this.db
-      .prepare("SELECT * FROM google_credentials WHERE id = ?")
-      .get(id);
+      .prepare("SELECT * FROM google_credentials WHERE id = ? AND owner_type = ? AND owner_id = ?")
+      .get(id, ownerType, ownerId);
     return Promise.resolve(row || null);
   }
 
@@ -209,48 +215,56 @@ class CredentialStore {
     return result.tokens;
   }
 
-  async findByAccountEmail(accountEmail, { includeTokens = false } = {}) {
+  async findByAccountEmail(accountEmail, { includeTokens = false, owner } = {}) {
+    const { ownerType, ownerId } = normalizeCredentialOwner(owner);
     const normalizedEmail = String(accountEmail || "").trim().toLowerCase();
     if (!normalizedEmail) return null;
     const row = this.db.prepare(`
       SELECT *
       FROM google_credentials
-      WHERE provider = ? AND lower(trim(account_email)) = ?
+      WHERE provider = ? AND owner_type = ? AND owner_id = ? AND lower(trim(account_email)) = ?
       LIMIT 1
-    `).get(PROVIDER, normalizedEmail);
+    `).get(PROVIDER, ownerType, ownerId, normalizedEmail);
     if (!row) return null;
     const credential = publicCredential(row); const tokens = this.readTokens(row);
     if (includeTokens) credential.tokens = tokens;
     return credential;
   }
 
-  async list() {
+  async list(owner) {
+    const { ownerType, ownerId } = normalizeCredentialOwner(owner);
     const rows = await this.all(
-      "SELECT * FROM google_credentials ORDER BY created_at ASC"
+      "SELECT * FROM google_credentials WHERE owner_type = ? AND owner_id = ? ORDER BY created_at ASC",
+      [ownerType, ownerId]
     );
     return rows.map(publicCredential);
   }
 
-  async get(id, { includeTokens = false } = {}) {
+  async get(id, { includeTokens = false, owner } = {}) {
     if (!CredentialStore.isValidId(id)) return null;
-    const row = await this.getRow(id);
+    const row = await this.getRow(id, owner);
     if (!row) return null;
     const credential = publicCredential(row); const tokens = this.readTokens(row);
     if (includeTokens) credential.tokens = tokens;
     return credential;
   }
 
-  async save({ id, accountEmail = "", accountName = "", tokens }) {
+  async save({ id, accountEmail = "", accountName = "", tokens }, owner) {
+    const normalizedOwner = normalizeCredentialOwner(owner);
     if (!CredentialStore.isValidId(id)) throw new Error("Invalid credential ID.");
     if (!tokens || typeof tokens !== "object") throw new Error("OAuth tokens are required.");
-    const existing = await this.getRow(id);
+    const anyExisting = this.db.prepare("SELECT owner_type, owner_id FROM google_credentials WHERE id = ?").get(id);
+    if (anyExisting && (anyExisting.owner_type !== normalizedOwner.ownerType || anyExisting.owner_id !== normalizedOwner.ownerId)) {
+      throw new Error("Credential ID belongs to another workspace.");
+    }
+    const existing = await this.getRow(id, normalizedOwner);
     const now = new Date().toISOString();
     const encrypted = encryptTokens(tokens, this.key);
     await this.run(
       `INSERT INTO google_credentials (
         id, provider, type, account_email, account_name,
-        token_ciphertext, token_iv, token_tag, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        token_ciphertext, token_iv, token_tag, created_at, updated_at, owner_type, owner_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         account_email = excluded.account_email,
         account_name = excluded.account_name,
@@ -261,17 +275,18 @@ class CredentialStore {
       [
         id, PROVIDER, TYPE, accountEmail, accountName,
         encrypted.ciphertext, encrypted.iv, encrypted.tag,
-        existing?.created_at || now, now,
+        existing?.created_at || now, now, normalizedOwner.ownerType, normalizedOwner.ownerId,
       ]
     );
-    return this.get(id);
+    return this.get(id, { owner: normalizedOwner });
   }
 
-  async delete(id) {
+  async delete(id, owner) {
     if (!CredentialStore.isValidId(id)) return false;
+    const { ownerType, ownerId } = normalizeCredentialOwner(owner);
     const result = await this.run(
-      "DELETE FROM google_credentials WHERE id = ?",
-      [id]
+      "DELETE FROM google_credentials WHERE id = ? AND owner_type = ? AND owner_id = ?",
+      [id, ownerType, ownerId]
     );
     return result.changes > 0;
   }

@@ -4,10 +4,10 @@ const path = require("path");
 const { CredentialStore } = require("./credentialStore");
 const { DriveSearchError } = require("./driveSearch");
 
-async function selectedDrive({ request, credentialStore, createOAuthClient, createDriveClient }) {
+async function selectedDrive({ request, credentialStore, createOAuthClient, createDriveClient, owner }) {
   const credentialId = String(request.credentialId || "");
   if (!CredentialStore.isValidId(credentialId)) throw new DriveSearchError(400, "invalid_credential_id", "Select a valid Google Drive credential.");
-  const credential = await credentialStore.get(credentialId, { includeTokens: true });
+  const credential = await credentialStore.get(credentialId, { includeTokens: true, owner });
   if (!credential) throw new DriveSearchError(404, "credential_not_found", "The selected Google credential was not found.");
   const auth = createOAuthClient();
   if (!auth) throw new DriveSearchError(503, "google_oauth_not_configured", "Google OAuth is not configured.");
@@ -16,7 +16,7 @@ async function selectedDrive({ request, credentialStore, createOAuthClient, crea
   auth.on("tokens", (tokens) => { refreshed = { ...(refreshed || {}), ...tokens }; });
   return { credential, auth, drive: createDriveClient(auth), persistRefresh: async () => {
     if (refreshed) await credentialStore.save({ id: credential.id, accountEmail: credential.accountEmail,
-      accountName: credential.accountName, tokens: { ...credential.tokens, ...refreshed } });
+      accountName: credential.accountName, tokens: { ...credential.tokens, ...refreshed } }, owner);
   } };
 }
 

@@ -15,11 +15,11 @@ function createExecutionServices(dependencies) {
   const executeDriveDownload = input.executeDriveDownload || productionDriveDownload;
   const executeDriveMove = input.executeDriveMove || productionDriveMove;
   const services = {
-    google: { ...google, searchFiles: (request) => executeDriveSearch({ request, ...google, logger }),
-      downloadFile: (request) => executeDriveDownload({ request, ...google, binaryDir: required("binaryDirectory", input.binaryDirectory) }),
-      moveFile: (request) => executeDriveMove({ request, ...google }) },
-    facebook: { graphRequest: required("facebookExecutionContext", input.facebookExecutionContext).graphRequest,
-      publishReel: required("facebookExecutionContext", input.facebookExecutionContext).publishReel },
+    google: { ...google, searchFiles: (request, owner) => executeDriveSearch({ request, owner, ...google, logger }),
+      downloadFile: (request, owner) => executeDriveDownload({ request, owner, ...google, binaryDir: required("binaryDirectory", input.binaryDirectory) }),
+      moveFile: (request, owner) => executeDriveMove({ request, owner, ...google }) },
+    facebook: { graphRequest: (request, owner) => required("facebookExecutionContext", input.facebookExecutionContext).graphRequest(request, owner),
+      publishReel: (request, owner) => required("facebookExecutionContext", input.facebookExecutionContext).publishReel(request, owner) },
     binary: { directory: required("binaryDirectory", input.binaryDirectory) },
     openAI: { prepare: required("prepareContent", input.prepareContent), apiKey: required("openAIApiKey", input.openAIApiKey), model: required("openAIModel", input.openAIModel) },
     history: { store: required("executionStore", input.executionStore) },

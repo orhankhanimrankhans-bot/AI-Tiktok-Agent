@@ -2,6 +2,7 @@
 const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, validatePageId } = require("./facebookGraph");
 
 function required(name, value) { if (!value) throw new Error(`Facebook execution dependency is required: ${name}`); return value; }
+function tokenOptions(owner) { return owner ? { includeTokens: true, owner } : { includeTokens: true }; }
 
 function graphRequestError(statusCode, code, message, responseBody = null) {
   const error = new FacebookGraphError(statusCode, code, message);
@@ -50,10 +51,10 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
   function resolveBinaryReference(referenceId) {
     return binaryResolver ? binaryResolver(referenceId) : { referenceId, binaryDirectory };
   }
-  async function graphRequest(request) {
+  async function graphRequest(request, owner) {
     const input = request || {};
     validateGraphOperation(input, validateCredentialId);
-    const credential = credentialStore.get(input.credentialId, { includeTokens: true });
+    const credential = credentialStore.get(input.credentialId, tokenOptions(owner));
     if (!credential?.tokens?.userAccessToken && !credential?.tokens?.pageAccessToken) {
       throw graphRequestError(404, "credential_disconnected", "Facebook credential was not found or is disconnected.", { error: "Facebook credential was not found or is disconnected." });
     }
@@ -62,12 +63,12 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
     if (input.endpoint === "pages") {
       const result = await executeCredentialPages(service, credential);
       credentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
-        tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } });
+        tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } }, owner);
       return { pages: result.pages };
     }
     return service.pageMetadata(validatePageId(input.body?.pageId), credentialPageToken(credential, input.body?.pageId));
   }
-  async function publishReel(request) {
+  async function publishReel(request, owner) {
     const input = request || {};
     if (containsForbiddenSecretFields(input)) {
       throw graphRequestError(400, "client_supplied_secret", "Facebook secrets must not be supplied by the client.", { error: "Facebook secrets must not be supplied by the client." });
@@ -76,7 +77,7 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
       throw graphRequestError(400, "invalid_credential_id", "Select a valid Facebook credential.", { error: "Select a valid Facebook credential." });
     }
     const source = sourceMetadata(input);
-    const credential = credentialStore.get(input.credentialId, { includeTokens: true });
+    const credential = credentialStore.get(input.credentialId, tokenOptions(owner));
     if (!credential?.tokens?.userAccessToken && !credential?.tokens?.pageAccessToken) {
       throw graphRequestError(404, "credential_disconnected", "Facebook credential was not found or is disconnected.", { error: "Facebook credential was not found or is disconnected." });
     }
@@ -93,7 +94,7 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
     return result?.success === true ? { ...result, ...source } : result;
   }
   return Object.freeze({
-    resolveCredential(credentialId) { return credentialStore.get(credentialId, { includeTokens: true }); },
+    resolveCredential(credentialId, owner) { return credentialStore.get(credentialId, tokenOptions(owner)); },
     createGraphService() { return graphServiceFactory(); },
     graphRequest,
     publishReel,

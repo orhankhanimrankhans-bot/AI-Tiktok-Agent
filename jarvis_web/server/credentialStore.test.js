@@ -76,6 +76,28 @@ test("encrypted credentials persist across reload and remain independently delet
   );
 });
 
+test("legacy credentials migrate to Admin and Google credentials are workspace isolated", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-credential-owner-")); const dbPath = path.join(tempDir, "credentials.sqlite3");
+  const store = new CredentialStore({ dbPath, encryptionSecret: TEST_SECRET }); await store.open();
+  t.after(async () => { await store.close(); fs.rmSync(tempDir, { recursive: true, force: true }); });
+  const admin = { ownerType: "admin", ownerId: "primary" }; const child = { ownerType: "child", ownerId: "primary" };
+  const additionalA = { ownerType: "additional", ownerId: "profile_a" }; const additionalB = { ownerType: "additional", ownerId: "profile_b" };
+  const adminId = CredentialStore.generateId(); const childId = CredentialStore.generateId(); const aId = CredentialStore.generateId(); const bId = CredentialStore.generateId();
+  await store.save({ id: adminId, accountEmail: "same@example.com", tokens: { refresh_token: "admin-secret" } });
+  await store.save({ id: childId, accountEmail: "same@example.com", tokens: { refresh_token: "child-secret" } }, child);
+  await store.save({ id: aId, accountEmail: "same@example.com", tokens: { refresh_token: "a-secret" } }, additionalA);
+  await store.save({ id: bId, accountEmail: "same@example.com", tokens: { refresh_token: "b-secret" } }, additionalB);
+  assert.deepEqual((await store.list(admin)).map((item) => item.id), [adminId]);
+  assert.deepEqual((await store.list(child)).map((item) => item.id), [childId]);
+  assert.deepEqual((await store.list(additionalA)).map((item) => item.id), [aId]);
+  assert.equal(await store.get(adminId, { owner: additionalA }), null);
+  assert.equal(await store.get(bId, { owner: additionalA }), null);
+  assert.equal(await store.delete(adminId, additionalA), false);
+  assert.equal((await store.get(adminId, { includeTokens: true, owner: admin })).tokens.refresh_token, "admin-secret");
+  const columns = store.db.prepare("PRAGMA table_info(google_credentials)").all().map((column) => column.name);
+  assert.ok(columns.includes("owner_type") && columns.includes("owner_id"));
+});
+
 test("legacy SESSION_SECRET credentials migrate once to the current encryption key", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-key-migration-"));
   const dbPath = path.join(tempDir, "credentials.sqlite3");

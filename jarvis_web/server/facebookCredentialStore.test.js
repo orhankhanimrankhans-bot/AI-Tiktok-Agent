@@ -1,5 +1,12 @@
 const assert = require("node:assert/strict"); const fs = require("node:fs"); const os = require("node:os"); const path = require("node:path"); const test = require("node:test");
 const { CredentialStore, decryptTokens, deriveEncryptionKey, encryptTokens } = require("./credentialStore"); const { FacebookCredentialStore } = require("./facebookCredentialStore");
+test("Facebook credentials are isolated by stable workspace owner", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-facebook-owner-")); const google = new CredentialStore({ dbPath: path.join(dir, "db.sqlite3"), encryptionSecret: "owner-test-secret" }); await google.open();
+  const store = new FacebookCredentialStore({ db: google.db, encryptionSecret: "owner-test-secret" }); store.open(); t.after(async () => { await google.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const a = { ownerType: "additional", ownerId: "a" }; const b = { ownerType: "additional", ownerId: "b" }; const id = FacebookCredentialStore.generateId();
+  store.save({ id, accountId: "100", pageId: "200", tokens: { userAccessToken: "secret" } }, a);
+  assert.equal(store.list(a).length, 1); assert.equal(store.list(b).length, 0); assert.equal(store.get(id, { owner: b }), null); assert.equal(store.delete(id, b), false); assert.ok(store.get(id, { owner: a }));
+});
 test("Facebook credentials are encrypted, persistent, multi-account, and isolated from Google", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-facebook-store-")); const dbPath = path.join(dir, "credentials.sqlite3");
   const google = new CredentialStore({ dbPath, encryptionSecret: "test-secret-long-enough" }); await google.open();

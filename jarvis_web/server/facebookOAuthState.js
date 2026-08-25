@@ -1,8 +1,8 @@
 const crypto = require("crypto");
 
 function encode(value) { return Buffer.from(value).toString("base64url"); }
-function createFacebookOAuthState({ secret, mode, intent, credentialId = null, now = Date.now() }) {
-  const payload = JSON.stringify({ provider: "facebook", mode, intent, credentialId,
+function createFacebookOAuthState({ secret, mode, intent, credentialId = null, ownerType = "admin", ownerId = "primary", now = Date.now() }) {
+  const payload = JSON.stringify({ provider: "facebook", mode, intent, credentialId, ownerType, ownerId,
     nonce: crypto.randomBytes(16).toString("hex"), iat: Math.floor(now / 60000) });
   const signature = crypto.createHmac("sha256", secret).update(payload).digest("base64url");
   return `${encode(payload)}.${signature}`;
@@ -21,6 +21,7 @@ function verifyFacebookOAuthState(token, { secret, validateCredentialId, now = D
       typeof payload.iat !== "number" || payload.iat > minute + 1 || minute - payload.iat > 10) return null;
   if (payload.intent === "create" && payload.credentialId !== null) return null;
   if (payload.intent === "reconnect" && !validateCredentialId(payload.credentialId)) return null;
+  if (!["admin", "child", "additional"].includes(payload.ownerType) || typeof payload.ownerId !== "string" || !payload.ownerId || payload.ownerId.length > 200) return null;
   return payload;
 }
 module.exports = { createFacebookOAuthState, verifyFacebookOAuthState };

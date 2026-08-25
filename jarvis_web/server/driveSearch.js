@@ -122,13 +122,14 @@ async function executeDriveSearch({
   createOAuthClient,
   createDriveClient,
   logger = console,
+  owner,
 }) {
   const params = normalizeSearchRequest(request);
   if (!CredentialStore.isValidId(params.credentialId)) {
     throw new DriveSearchError(400, "invalid_credential_id", "Invalid Google credential ID.");
   }
 
-  const credential = await credentialStore.get(params.credentialId, { includeTokens: true });
+  const credential = await credentialStore.get(params.credentialId, { includeTokens: true, owner });
   if (!credential) {
     throw new DriveSearchError(404, "credential_not_found", "The selected Google credential was not found.");
   }
@@ -174,7 +175,7 @@ async function executeDriveSearch({
         accountEmail: credential.accountEmail,
         accountName: credential.accountName,
         tokens: { ...credential.tokens, ...refreshedTokens },
-      });
+      }, owner);
     }
   }
 
