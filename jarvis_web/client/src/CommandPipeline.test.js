@@ -19,16 +19,17 @@ test("SVG wires animate energy independently by workflow state", () => {
   assert.match(component, /className="workflow-wire-layer"/); assert.match(component, /className="wire-energy"/); assert.match(styles, /\.wire-running \.wire-energy[^}]*animation-duration: 1s/); assert.match(styles, /\.wire-ready \.wire-energy[^}]*animation-duration: 4s/); assert.match(styles, /\.wire-error \.wire-energy[^}]*animation-duration: 2s/); assert.match(styles, /\.wire-offline \.wire-energy[^}]*animation: none/);
 });
 
-test("neon routing deck keeps real workflow sources and neutral Jarvis destination modules", () => {
-  assert.match(component, /WORKFLOW SOURCES/); assert.match(component, /displayed\.map/); assert.match(component, /DESTINATIONS/); assert.match(component, /destinationModules\.map/);
-  for (const name of ["Chat", "Voice", "WhatsApp", "TikTok", "Tools", "Memory"]) assert.match(component, new RegExp(`"${name}"`));
-  assert.match(component, /<small>MODULE<\/small>/); assert.doesNotMatch(component, /CONNECTED|ONLINE|SUCCESS/);
+test("neon routing deck shows only real workflows and active workflow nodes", () => {
+  assert.match(component, />WORKFLOWS</); assert.match(component, /displayed\.map/); assert.match(component, /WORKFLOW NODES/); assert.match(component, /routedNodes/); assert.match(component, /nodes\.map/);
+  for (const name of ["Chat", "Voice", "WhatsApp", "TikTok", "Tools", "Memory"]) assert.doesNotMatch(component, new RegExp(`"${name}"`));
+  assert.match(component, /node\.provider \|\| node\.type \|\| "JARVIS"/); assert.doesNotMatch(component, /CONNECTED|ONLINE|SUCCESS/);
   assert.match(styles, /Neon Command Pipeline routing deck/); assert.match(styles, /background-size: 22px 22px/); assert.match(styles, /vector-effect: non-scaling-stroke/);
   assert.match(component, /className="module-engine-wire"/); assert.match(styles, /grid-template-columns: 200px 150px 175px 170px/); assert.match(styles, /min-height: 54px; height: 54px/);
+  assert.match(styles, /pipeline-core-live 1\.8s/); assert.match(styles, /engine-nucleus-live 1\.8s/);
 });
 
 test("Strong Engine restores the original lightweight vector atom orb at far right", () => {
-  assert.match(component, /Strong Engine activity orb/); assert.match(component, /<svg viewBox="0 0 160 160"/); assert.match(component, /<ellipse cx="80" cy="80" rx="58" ry="22"/); assert.match(component, /<circle cx="80" cy="80" r="12"/); assert.match(component, /<DestinationModules \/><StrongEngine state=\{state\}/); assert.match(styles, /\.jarvis-control-center \.pipeline-live-stage \{[^}]*grid-template-columns: 220px 170px 180px 190px/);
+  assert.match(component, /Strong Engine activity orb/); assert.match(component, /<svg viewBox="0 0 160 160"/); assert.match(component, /<ellipse cx="80" cy="80" rx="58" ry="22"/); assert.match(component, /<circle cx="80" cy="80" r="12"/); assert.match(component, /<WorkflowNodes nodes=\{routedNodes\} \/><StrongEngine state=\{state\}/); assert.match(styles, /\.jarvis-control-center \.pipeline-live-stage \{[^}]*grid-template-columns: 220px 170px 180px 190px/);
   assert.match(styles, /Original Strong Engine atom orb restored/); assert.match(styles, /\.strong-engine-orb svg \{[^}]*display: block/); assert.doesNotMatch(component, /engine-shell|engine-core|engine-meridian/);
   assert.doesNotMatch(component, /WebGL|setInterval|requestAnimationFrame/);
 });
