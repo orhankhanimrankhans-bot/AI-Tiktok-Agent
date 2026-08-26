@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createWorkflow, listWorkflows, MAX_WORKFLOW_NAME_LENGTH, normalizeWorkflowName } from "./workflowApi.js";
+import { createWorkflow, listWorkflows, MAX_WORKFLOW_NAME_LENGTH, normalizeWorkflowName, updateWorkflow } from "./workflowApi.js";
 
 function formatUpdatedAt(value) {
   if (!value) return "Not updated yet";
@@ -16,6 +16,8 @@ export default function WorkflowManager({ apiBaseUrl, onClose, selectedWorkflowI
   const [nameError, setNameError] = useState("");
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [statusChangingId, setStatusChangingId] = useState("");
+  const [statusError, setStatusError] = useState("");
 
   const load = async () => {
     setLoading(true); setLoadError("");
@@ -47,6 +49,7 @@ export default function WorkflowManager({ apiBaseUrl, onClose, selectedWorkflowI
 
   const selectedLocal = selectedWorkflowId === localWorkflowId;
   const selected = workflows.find((workflow) => workflow.id === selectedWorkflowId) || null;
+  const changeStatus = async (workflow) => { setStatusChangingId(workflow.id); setStatusError(""); try { const updated = await updateWorkflow(fetch, apiBaseUrl, workflow.id, { status: workflow.status === "ACTIVE" ? "PAUSED" : "ACTIVE" }); setWorkflows((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item)); } catch (error) { setStatusError(error.message || "Could not update the workflow schedule state."); } finally { setStatusChangingId(""); } };
   return <div className="workflow-manager-overlay" role="presentation" onMouseDown={onClose}>
     <aside className="workflow-manager" role="dialog" aria-modal="true" aria-labelledby="workflow-manager-heading" onMouseDown={(event) => event.stopPropagation()}>
       <header className="workflow-manager-header"><div><span>WORKFLOW MANAGER</span><h2 id="workflow-manager-heading">Workflows</h2></div><button type="button" onClick={onClose} aria-label="Close workflows">×</button></header>
@@ -58,7 +61,7 @@ export default function WorkflowManager({ apiBaseUrl, onClose, selectedWorkflowI
       {!loading && !loadError && !workflows.length && <p className="workflow-manager-state">No saved workflows yet.</p>}
       {!loading && !loadError && workflows.length > 0 && <div className="workflow-manager-list" aria-label="Saved workflows">{workflows.map((workflow) => <button type="button" key={workflow.id} className={`workflow-manager-row${workflow.id === selectedWorkflowId ? " selected" : ""}${workflow.id === activeWorkflowId ? " open" : ""}`} onClick={() => onSelectWorkflow(workflow.id)}><span className="workflow-manager-row-main"><strong>{workflow.name}</strong><small>Updated {formatUpdatedAt(workflow.updatedAt)}</small>{workflow.id === activeWorkflowId && <small className="workflow-manager-open-label">Open in editor</small>}</span><span className={`workflow-manager-status ${String(workflow.status || "DRAFT").toLowerCase()}`}>{workflow.status || "DRAFT"}</span></button>)}</div>}
       {selectedLocal && <footer className="workflow-manager-selection"><span>Selected in Manager</span><strong>My Workflow</strong><small>LOCAL</small><button type="button" className="workflow-manager-new" onClick={onOpenLocalWorkflow}>Open Local Workflow</button>{pendingOpenWorkflowId === localWorkflowId && <div className="workflow-manager-discard"><p>You have unsaved changes. Open another workflow and discard them?</p><button type="button" onClick={onCancelOpen}>Cancel</button><button type="button" className="workflow-manager-new" onClick={onDiscardAndOpenLocal}>Discard and Open</button></div>}<p>This selection does not replace the current editor.</p></footer>}
-      {selected && <footer className="workflow-manager-selection"><span>Selected in Manager</span><strong>{selected.name}</strong><small>{selected.id}</small>{selected.id === activeWorkflowId && <small className="workflow-manager-open-label">Open in editor</small>}<button type="button" className="workflow-manager-new" onClick={() => onOpenWorkflow(selected.id)} disabled={openingWorkflowId === selected.id}>{openingWorkflowId === selected.id ? "Opening…" : "Open Workflow"}</button>{pendingOpenWorkflowId === selected.id && <div className="workflow-manager-discard"><p>You have unsaved changes. Open another workflow and discard them?</p><button type="button" onClick={onCancelOpen}>Cancel</button><button type="button" className="workflow-manager-new" onClick={() => onDiscardAndOpen(selected.id)}>Discard and Open</button></div>}<p>This selection does not replace the current editor.</p></footer>}
+      {selected && <footer className="workflow-manager-selection"><span>Selected in Manager</span><strong>{selected.name}</strong><small>{selected.id}</small>{selected.id === activeWorkflowId && <small className="workflow-manager-open-label">Open in editor</small>}<button type="button" className="workflow-manager-new" onClick={() => onOpenWorkflow(selected.id)} disabled={openingWorkflowId === selected.id}>{openingWorkflowId === selected.id ? "Opening…" : "Open Workflow"}</button><button type="button" onClick={() => changeStatus(selected)} disabled={statusChangingId === selected.id}>{statusChangingId === selected.id ? "Updating schedule..." : selected.status === "ACTIVE" ? "Pause Schedule" : "Activate Schedule"}</button>{statusError && <p className="workflow-manager-error" role="alert">{statusError}</p>}{pendingOpenWorkflowId === selected.id && <div className="workflow-manager-discard"><p>You have unsaved changes. Open another workflow and discard them?</p><button type="button" onClick={onCancelOpen}>Cancel</button><button type="button" className="workflow-manager-new" onClick={() => onDiscardAndOpen(selected.id)}>Discard and Open</button></div>}<p>ACTIVE workflows run saved Schedule Trigger rules on the backend. PAUSED and DRAFT workflows do not run.</p></footer>}
     </aside>
   </div>;
 }

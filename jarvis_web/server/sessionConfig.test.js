@@ -11,7 +11,8 @@ test("production trusts one proxy hop and keeps hardened secure cookies", () => 
   assert.equal(app.get("trust proxy fn")("127.0.0.1", 0), true);
   assert.equal(app.get("trust proxy fn")("127.0.0.1", 1), false);
   assert.equal(options.proxy, true);
-  assert.deepEqual(options.cookie, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 600_000 });
+  assert.deepEqual(options.cookie, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 31_536_000_000 });
+  assert.equal(options.resave, false);
 });
 
 test("development keeps proxy trust disabled and supports HTTP localhost cookies", () => {

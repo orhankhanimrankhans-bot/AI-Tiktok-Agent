@@ -8,7 +8,10 @@
   ],
   "scripts": {
     "build": "npm run build --workspace=client",
-    "start": "npm start --workspace=server"
+    "start": "npm start --workspace=server",
+    "service:install": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-jarvis-startup.ps1",
+    "service:remove": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/remove-jarvis-startup.ps1",
+    "service:status": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/status-jarvis-startup.ps1"
   },
   "engines": {
     "node": "22.x"

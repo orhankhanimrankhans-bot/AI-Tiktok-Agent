@@ -60,6 +60,7 @@ function normalizeDefinition(input, { partial = false } = {}) {
   for (const key of ["timezone", "lastRunAt", "nextRunAt"]) {
     if (Object.hasOwn(input, key)) {
       if (input[key] !== null && (typeof input[key] !== "string" || input[key].length > 255)) throw new WorkflowStoreError("INVALID_DEFINITION", `${key} must be null or a string.`);
+      if (key === "timezone" && input[key] !== null) { try { new Intl.DateTimeFormat("en-US", { timeZone: input[key] }).format(); } catch { throw new WorkflowStoreError("INVALID_DEFINITION", "timezone must be a valid IANA timezone."); } }
       result[key] = input[key];
     } else if (!partial) result[key] = null;
   }
@@ -91,6 +92,12 @@ function createWorkflowStore({ dbPath = path.join(__dirname, "data", "workflows.
   if (!columns.has("owner_type")) db.exec("ALTER TABLE workflow_definitions ADD COLUMN owner_type TEXT NOT NULL DEFAULT 'admin'");
   if (!columns.has("owner_id")) db.exec("ALTER TABLE workflow_definitions ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'primary'");
   db.exec("CREATE INDEX IF NOT EXISTS idx_workflow_definitions_owner_updated ON workflow_definitions(owner_type, owner_id, updated_at DESC)");
+  db.exec(`CREATE TABLE IF NOT EXISTS workflow_schedule_occurrences (
+    occurrence_key TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, owner_type TEXT NOT NULL, owner_id TEXT NOT NULL,
+    rule_id TEXT NOT NULL, scheduled_for TEXT NOT NULL, actual_start TEXT, finished_at TEXT, execution_id TEXT,
+    status TEXT NOT NULL, error TEXT, created_at TEXT NOT NULL
+  ); CREATE INDEX IF NOT EXISTS idx_workflow_occurrences_scheduled ON workflow_schedule_occurrences(scheduled_for DESC);`);
+  db.exec("CREATE TABLE IF NOT EXISTS workflow_scheduler_state (state_key TEXT PRIMARY KEY, state_value TEXT NOT NULL)");
   const getStatement = db.prepare("SELECT * FROM workflow_definitions WHERE id = ? AND owner_type = ? AND owner_id = ?");
   const summaryStatement = db.prepare("SELECT id, name, status, created_at, updated_at, last_run_at, next_run_at, version FROM workflow_definitions WHERE owner_type = ? AND owner_id = ? ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?");
   const countStatement = db.prepare("SELECT count(*) AS count FROM workflow_definitions WHERE owner_type = ? AND owner_id = ?");
@@ -105,6 +112,12 @@ function createWorkflowStore({ dbPath = path.join(__dirname, "data", "workflows.
     listWorkflows({ limit = 100, offset = 0, owner = ADMIN_OWNER } = {}) { assertOpen(); if (!Number.isInteger(limit) || limit < 1 || limit > 1000 || !Number.isInteger(offset) || offset < 0) throw new WorkflowStoreError("INVALID_PAGINATION", "limit and offset are invalid."); const identity = normalizeOwner(owner); return { items: summaryStatement.all(identity.ownerType, identity.ownerId, limit, offset).map((row) => ({ id: row.id, name: row.name, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at, lastRunAt: row.last_run_at, nextRunAt: row.next_run_at, version: row.version })), total: countStatement.get(identity.ownerType, identity.ownerId).count, limit, offset }; },
     updateWorkflow(id, changes, owner = ADMIN_OWNER) { assertOpen(); const identity = normalizeOwner(owner); const current = getWorkflow(id, identity); if (!current) return null; const update = normalizeDefinition(changes, { partial: true }); if (!Object.keys(update).length) throw new WorkflowStoreError("INVALID_DEFINITION", "At least one workflow field must be updated."); const next = { ...current, ...update, updatedAt: now(), version: current.version + 1 }; db.prepare("UPDATE workflow_definitions SET name = ?, status = ?, nodes_json = ?, connections_json = ?, schedule_json = ?, timezone = ?, updated_at = ?, last_run_at = ?, next_run_at = ?, version = ? WHERE id = ? AND owner_type = ? AND owner_id = ?").run(next.name, next.status, JSON.stringify(next.nodes), JSON.stringify(next.connections), next.schedule === null ? null : JSON.stringify(next.schedule), next.timezone, next.updatedAt, next.lastRunAt, next.nextRunAt, next.version, id, identity.ownerType, identity.ownerId); return getWorkflow(id, identity); },
     deleteWorkflow(id, owner = ADMIN_OWNER) { assertOpen(); const identity = normalizeOwner(owner); return deleteStatement.run(id, identity.ownerType, identity.ownerId).changes === 1; },
+    listSchedulerWorkflows() { assertOpen(); return db.prepare("SELECT * FROM workflow_definitions WHERE status = 'ACTIVE' ORDER BY id").all().map((row) => ({ ...parseRow(row), ownerType: row.owner_type, ownerId: row.owner_id })); },
+    claimOccurrence({ key, workflowId, owner, ruleId, scheduledFor, status }) { assertOpen(); const identity = normalizeOwner(owner); return db.prepare("INSERT OR IGNORE INTO workflow_schedule_occurrences (occurrence_key, workflow_id, owner_type, owner_id, rule_id, scheduled_for, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(key, workflowId, identity.ownerType, identity.ownerId, ruleId, scheduledFor, status, now()).changes === 1; },
+    finishOccurrence(key, result) { assertOpen(); db.prepare("UPDATE workflow_schedule_occurrences SET status = ?, actual_start = ?, finished_at = ?, execution_id = ?, error = ? WHERE occurrence_key = ?").run(result.status, result.actualStart || null, result.finishedAt || null, result.executionId || null, result.error || null, key); },
+    listOccurrences(limit = 50) { assertOpen(); return db.prepare("SELECT * FROM workflow_schedule_occurrences ORDER BY scheduled_for DESC LIMIT ?").all(Math.min(100, Math.max(1, Number(limit) || 50))); },
+    schedulerState(key) { assertOpen(); return db.prepare("SELECT state_value FROM workflow_scheduler_state WHERE state_key = ?").get(key)?.state_value || null; },
+    setSchedulerState(key, value) { assertOpen(); db.prepare("INSERT INTO workflow_scheduler_state (state_key, state_value) VALUES (?, ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value").run(key, value); },
     close() { if (!closed && ownsDatabase) db.close(); closed = true; },
   });
 }

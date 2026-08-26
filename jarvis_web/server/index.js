@@ -6,7 +6,7 @@ const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
 const { CredentialStore } = require("./credentialStore");
-const { AccessControlStore, workflowWorkspace } = require("./accessControl");
+const { AccessControlStore, sessionIdentity, workflowWorkspace } = require("./accessControl");
 const { enforceSecurity, registerSecurityRoutes } = require("./securityAccess");
 const { DriveSearchError } = require("./driveSearch");
 const { executeDriveDelete } = require("./driveFiles");
@@ -24,6 +24,8 @@ const { makeFacebookPageSelectorHtml, makeFacebookPopupHtml } = require("./faceb
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require("./openaiPrepareContent");
 const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
+const { SqliteSessionStore } = require("./sqliteSessionStore");
+const { createWorkflowScheduler } = require("./workflowScheduler");
 
 dotenv.config();
 
@@ -112,6 +114,8 @@ const googleOAuthConfigured = Boolean(
 );
 const facebookOAuthConfigured = Boolean(META_APP_ID && META_APP_SECRET && META_REDIRECT_URI && META_GRAPH_VERSION);
 const openAIConfigured = Boolean(OPENAI_API_KEY);
+const SESSION_MAX_AGE_DAYS = Math.min(3650, Math.max(1, Number(process.env.SESSION_MAX_AGE_DAYS) || 365));
+const persistentSessionStore = new SqliteSessionStore();
 
 app.use(
   cors({
@@ -126,6 +130,8 @@ app.use(
   session(sessionOptions({
     secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me",
     isProduction: IS_PRODUCTION,
+    store: persistentSessionStore,
+    maxAgeMs: SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
   }))
 );
 
@@ -252,6 +258,7 @@ let executionServices;
 let facebookExecutionContext;
 let workflowExecutor;
 let workflowStore;
+let workflowScheduler;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
@@ -592,6 +599,12 @@ app.post("/api/executions", (req, res) => {
   } catch { return res.status(500).json({ error: "Could not save workflow execution." }); }
 });
 
+app.get("/api/scheduler/status", (req, res) => {
+  const identity = sessionIdentity(req, Date.now(), accessControlStore);
+  if (accessControlStore?.securityState() !== "disabled" && identity?.role !== "admin" && identity?.role !== "owner") return res.status(403).json({ error: "Admin access is required." });
+  return workflowScheduler ? res.json({ scheduler: workflowScheduler.status() }) : res.status(503).json({ error: "Scheduler is not ready." });
+});
+
 app.get("/api/google/auth/start", async (req, res) => {
   const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
   const oauth2Client = createOAuthClient();
@@ -850,6 +863,7 @@ async function startServer() {
   }
 
   await credentialStore.open();
+  persistentSessionStore.attach(credentialStore.db);
   executionStore = new ExecutionStore(credentialStore.db);
   executionStore.open();
   accessControlStore = new AccessControlStore({ db: credentialStore.db });
@@ -871,7 +885,9 @@ async function startServer() {
       }
       return true;
     }, logger: console });
-  app.listen(PORT, () => {
+  workflowScheduler = createWorkflowScheduler({ workflowStore, workflowExecutor, executionStore, logger: console });
+  const server = app.listen(PORT, () => {
+    workflowScheduler.start();
     console.log("");
     console.log("=================================");
     console.log(" JARVIS BACKEND");
@@ -885,6 +901,13 @@ async function startServer() {
     console.log("=================================");
     console.log("");
   });
+  server.on("error", (error) => {
+    if (error?.code === "EADDRINUSE") console.error(`FATAL ERROR: Jarvis backend is already running on port ${PORT}.`);
+    else console.error("FATAL ERROR: Jarvis backend listener failed.");
+    workflowScheduler.stop();
+    process.exitCode = 1;
+  });
+  return server;
 }
 
 if (require.main === module || process.env.NODE_ENV === "production") {

@@ -14,6 +14,6 @@ test("Workflow Manager creates DRAFT workflows and keeps manager selection separ
   assert.match(appSource, /showWorkflowManager/); assert.match(appSource, /selectedManagedWorkflowId/); assert.match(appSource, /<WorkflowManager/); assert.doesNotMatch(appSource.slice(appSource.indexOf("<WorkflowManager"), appSource.indexOf("{workflowTab === \"EDITOR\"")), /setCanvasNodes|setConnections/);
 });
 
-test("Workflow Manager supports DRAFT, ACTIVE, and PAUSED presentation without status controls", () => {
-  assert.match(source, /workflow-manager-status/); assert.match(appSource, /workflow-manager-entry/); const managerWindow = source.slice(source.indexOf("workflow-manager-list"), source.indexOf("workflow-manager-selection")); assert.doesNotMatch(managerWindow, /PATCH|updateWorkflow|setStatus/);
+test("Workflow Manager supports DRAFT, ACTIVE, and PAUSED presentation with explicit schedule controls", () => {
+  assert.match(source, /workflow-manager-status/); assert.match(appSource, /workflow-manager-entry/); assert.match(source, /Activate Schedule/); assert.match(source, /Pause Schedule/); assert.match(source, /updateWorkflow\(fetch, apiBaseUrl, workflow\.id/);
 });

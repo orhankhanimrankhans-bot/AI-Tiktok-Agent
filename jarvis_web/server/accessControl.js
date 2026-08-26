@@ -79,6 +79,8 @@ class AccessControlStore {
     this.db.exec("CREATE TABLE IF NOT EXISTS jarvis_auth_sessions (id TEXT PRIMARY KEY, role TEXT NOT NULL, profile_id TEXT, auth_version INTEGER NOT NULL, login_at TEXT NOT NULL, last_activity_at TEXT NOT NULL, revoked_at TEXT)");
     this.db.exec("CREATE TABLE IF NOT EXISTS jarvis_password_resets (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, used_at TEXT, created_at TEXT NOT NULL)");
     this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_jarvis_child_profiles_active_email ON jarvis_child_profiles(lower(trim(email))) WHERE enabled = 1 AND email IS NOT NULL AND trim(email) <> ''");
+    this.db.prepare("DELETE FROM jarvis_auth_sessions WHERE revoked_at IS NOT NULL AND revoked_at < ?").run(new Date(Date.now() - 30 * DAY_MS).toISOString());
+    this.db.prepare("DELETE FROM jarvis_password_resets WHERE expires_at < ? OR used_at IS NOT NULL").run(Date.now());
   }
   settings() { return this.db.prepare("SELECT admin_password_hash, auto_lock_minutes, auth_version, owner_email, updated_at FROM jarvis_security_settings WHERE id = 1").get() || null; }
   securityState() { const value = this.settings(); return !value ? "disabled" : validStoredHash(value.admin_password_hash) ? "enabled" : "recovery_required"; }
