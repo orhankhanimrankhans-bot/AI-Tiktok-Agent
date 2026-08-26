@@ -5,6 +5,7 @@ import WorkflowManager from "./WorkflowManager.jsx";
 import SecurityAccess from "./SecurityAccess.jsx";
 import { useJarvisAuth } from "./JarvisAuth.jsx";
 import { getWorkflow, updateWorkflow } from "./workflowApi.js";
+import { buildLocalPublishPayload, publishLocalWorkflow, runSingleFlightPublish } from "./localWorkflowPublish.js";
 import { definitionFingerprint, editorDefinition, validateStoredWorkflow } from "./workflowEditorBinding.js";
 import JarvisDashboard from "./JarvisDashboard.jsx";
 import DataViewer from "./DataViewer.jsx";
@@ -2276,6 +2277,8 @@ function App() {
   const [editingFacebookCredentialId, setEditingFacebookCredentialId] = useState(null);
   const pendingFacebookCredentialNodeId = useRef(null);
   const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const publishInFlightRef = useRef(false);
   const [workflowNotice, setWorkflowNotice] = useState(null);
   const [executions, setExecutions] = useState([]);
   const [selectedExecution, setSelectedExecution] = useState(null);
@@ -2855,6 +2858,22 @@ function App() {
     }
   };
 
+  const publishWorkflow = () => runSingleFlightPublish(publishInFlightRef, async () => {
+    setIsPublishing(true); setWorkflowNotice({ status: "running", message: "Publishing workflow..." });
+    try {
+      const publishDefinition = buildLocalPublishPayload({ name: editorWorkflowSource === "server" ? activeServerWorkflow?.name : "My Workflow", nodes: canvasNodesRef.current, connections: connectionsRef.current });
+      const stored = editorWorkflowSource === "server" && activeServerWorkflow?.id
+        ? await updateWorkflow(fetch, API_BASE_URL, activeServerWorkflow.id, { nodes: publishDefinition.nodes, connections: publishDefinition.connections, schedule: publishDefinition.schedule, timezone: publishDefinition.timezone })
+        : await publishLocalWorkflow(fetch, API_BASE_URL, publishDefinition);
+      const workflow = validateStoredWorkflow(stored);
+      setEditorWorkflowSource("server"); setActiveServerWorkflow({ id: workflow.id, name: workflow.name, status: workflow.status, version: workflow.version, updatedAt: workflow.updatedAt });
+      setSelectedManagedWorkflowId(workflow.id); setWorkflowManagerRefreshKey((value) => value + 1);
+      editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections); setWorkflowDirty(false);
+      setWorkflowNotice({ status: "success", message: editorWorkflowSource === "local" ? "Published My Workflow as a server DRAFT. Activate Schedule explicitly when ready." : "Published changes to the linked server workflow." });
+    } catch (error) { setWorkflowNotice({ status: "error", message: error?.message || "Could not publish the workflow." }); }
+    finally { setIsPublishing(false); }
+  });
+
   const openNextNodePicker = (sourceNodeId) => {
     setConnectingFromNodeId(sourceNodeId);
     setProviderBrowser(null);
@@ -3211,8 +3230,8 @@ function App() {
 
                 <button onClick={saveWorkflow}>{workflowDirty ? "Save *" : "Save"}</button>
 
-                <button className="publish-button">
-                  Publish
+                <button className="publish-button" onClick={publishWorkflow} disabled={isPublishing}>
+                  {isPublishing ? "Publishing..." : "Publish"}
                 </button>
               </div>
             </div>
