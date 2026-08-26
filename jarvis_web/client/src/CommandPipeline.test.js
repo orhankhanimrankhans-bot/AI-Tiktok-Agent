@@ -24,10 +24,11 @@ test("neon routing deck keeps real workflow sources and neutral Jarvis destinati
   for (const name of ["Chat", "Voice", "WhatsApp", "TikTok", "Tools", "Memory"]) assert.match(component, new RegExp(`"${name}"`));
   assert.match(component, /<small>MODULE<\/small>/); assert.doesNotMatch(component, /CONNECTED|ONLINE|SUCCESS/);
   assert.match(styles, /Neon Command Pipeline routing deck/); assert.match(styles, /background-size: 22px 22px/); assert.match(styles, /vector-effect: non-scaling-stroke/);
+  assert.match(component, /className="module-engine-wire"/); assert.match(styles, /grid-template-columns: 200px 150px 175px 170px/); assert.match(styles, /min-height: 54px; height: 54px/);
 });
 
 test("Strong Engine restores the original lightweight vector atom orb at far right", () => {
-  assert.match(component, /Strong Engine activity orb/); assert.match(component, /<svg viewBox="0 0 160 160"/); assert.match(component, /<ellipse cx="80" cy="80" rx="58" ry="22"/); assert.match(component, /<circle cx="80" cy="80" r="12"/); assert.match(component, /<DestinationModules \/><StrongEngine state=\{state\}/); assert.match(styles, /\.jarvis-control-center \.pipeline-live-stage \{[^}]*grid-template-columns: minmax\(155px, 1\.15fr\) 138px minmax\(112px, \.78fr\) 174px/);
+  assert.match(component, /Strong Engine activity orb/); assert.match(component, /<svg viewBox="0 0 160 160"/); assert.match(component, /<ellipse cx="80" cy="80" rx="58" ry="22"/); assert.match(component, /<circle cx="80" cy="80" r="12"/); assert.match(component, /<DestinationModules \/><StrongEngine state=\{state\}/); assert.match(styles, /\.jarvis-control-center \.pipeline-live-stage \{[^}]*grid-template-columns: 220px 170px 180px 190px/);
   assert.match(styles, /Original Strong Engine atom orb restored/); assert.match(styles, /\.strong-engine-orb svg \{[^}]*display: block/); assert.doesNotMatch(component, /engine-shell|engine-core|engine-meridian/);
   assert.doesNotMatch(component, /WebGL|setInterval|requestAnimationFrame/);
 });
