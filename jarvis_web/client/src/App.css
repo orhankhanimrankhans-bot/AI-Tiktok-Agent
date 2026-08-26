@@ -3735,6 +3735,24 @@ button {
   .workflow-wire-layer .wire-tracer, .workflow-wire-layer .route-tracer, .pipeline-core-ring, .strong-engine-orb .engine-ring, .strong-engine-orb .atom-orbit, .pipeline-core-orb, .strong-engine-orb svg circle, .strong-engine-orb::before, .strong-engine-orb::after, .pipeline-workflow { animation: none !important; }
 }
 
+/* Approved clean Command Pipeline: workflows route directly through J/Route to Strong Engine. */
+.jarvis-control-center .pipeline-live-stage { grid-template-columns: minmax(220px, 270px) 210px 220px; gap: clamp(24px, 5vw, 72px); padding-inline: 22px; }
+.pipeline-workflow-bay { min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; align-content: stretch; }
+.jarvis-control-center .pipeline-workflow-stack { height: 236px; max-height: 236px; padding-right: 5px; }
+.pipeline-add-workflow { min-height: 32px; color: #8beafa; background: rgba(8, 42, 52, .72); border: 1px solid rgba(73, 220, 243, .42); border-radius: 5px; font-size: 7px; font-weight: 900; letter-spacing: .14em; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, color .18s ease; }
+.pipeline-add-workflow:hover, .pipeline-add-workflow:focus-visible { color: #eaffff; border-color: #55dff4; box-shadow: 0 0 14px rgba(55, 217, 238, .2); outline: none; }
+.pipeline-routing-hub { position: relative; z-index: 2; display: grid; justify-items: center; gap: 5px; text-align: center; }
+.pipeline-routing-hub > strong { color: #eaffff; font-size: 9px; letter-spacing: .15em; text-shadow: 0 0 9px rgba(55,217,238,.34); }
+.pipeline-routing-hub > small { color: var(--jarvis-dashboard-muted); font-size: 6px; letter-spacing: .1em; }
+.pipeline-state-indicator { min-width: 62px; padding: 7px 12px; color: var(--jarvis-dashboard-heading); background: rgba(7, 27, 35, .72); border: 1px solid var(--jarvis-dashboard-border); border-radius: 999px; font-size: 7px; font-weight: 900; letter-spacing: .14em; opacity: 1; }
+.pipeline-running .pipeline-state-indicator { color: #9ff4df; border-color: rgba(85,228,189,.58); box-shadow: 0 0 12px rgba(85,228,189,.12); }
+.pipeline-running .pipeline-routing-hub .pipeline-core-ring { border-color: rgba(85,228,189,.68); }.pipeline-running .pipeline-routing-hub .pipeline-core-orb { border-color: #69ebcb; box-shadow: inset 0 0 20px rgba(159,244,223,.22), 0 0 16px rgba(85,228,189,.55), 0 0 34px rgba(55,217,238,.2); }
+.pipeline-error .pipeline-state-indicator { color: #ffaca6; border-color: rgba(239,98,98,.6); }
+.pipeline-disconnected .pipeline-state-indicator { color: var(--jarvis-dashboard-muted); opacity: .72; }
+@media (max-width: 1450px) and (min-width: 1081px) { .jarvis-control-center .pipeline-live-stage { grid-template-columns: minmax(190px, 240px) 170px 180px; gap: 28px; }.jarvis-control-center .strong-engine { width: 180px; min-width: 180px; } }
+@media (max-width: 1080px) { .jarvis-control-center .pipeline-live-stage { grid-template-columns: minmax(180px, 1fr) 160px 180px; gap: 18px; }.jarvis-control-center .pipeline-routing-hub .pipeline-routing-core { width: 126px; min-width: 126px; height: 126px; min-height: 126px; } }
+@media (max-width: 760px) { .jarvis-control-center .pipeline-live-stage { grid-template-columns: 1fr; gap: 22px; padding-block: 18px; }.pipeline-workflow-bay { width: 100%; }.jarvis-control-center .pipeline-workflow-stack { height: min(236px, 38vh); }.pipeline-routing-hub, .jarvis-control-center .strong-engine { width: min(220px, 100%); }.pipeline-routing-hub { padding-top: 6px; } }
+
 /* Secure Admin / Child session gateway. */
 .jarvis-auth-screen { min-height: 100vh; display: grid; place-items: center; position: relative; overflow: hidden; color: #e9fbff; background: radial-gradient(circle at 50% 25%, #12354a 0, #07141f 38%, #03080e 100%); font-family: Inter, system-ui, sans-serif; }
 .auth-grid { position: absolute; inset: 0; opacity: .16; background-image: linear-gradient(#35d9ff 1px, transparent 1px), linear-gradient(90deg, #35d9ff 1px, transparent 1px); background-size: 42px 42px; transform: perspective(700px) rotateX(58deg) scale(1.5) translateY(28%); }
