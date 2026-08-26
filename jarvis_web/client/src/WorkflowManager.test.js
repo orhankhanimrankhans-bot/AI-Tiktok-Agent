@@ -30,3 +30,25 @@ test("selected actions remain compact for local and server workflows", () => {
 test("many workflow rows remain mapped inside the scroll area without displacing actions", () => {
   const bodyStart = source.indexOf('className="workflow-manager-body"'); const bodyEnd = source.indexOf("</div>\n      {selectedLocal", bodyStart); assert.ok(bodyStart >= 0 && bodyEnd > bodyStart); const body = source.slice(bodyStart, bodyEnd); assert.match(body, /workflows\.map\(\(workflow\)/); assert.doesNotMatch(body, /workflow-manager-selection/); assert.match(cssSource, /\.workflow-manager-row\s*\{[^}]*min-height:\s*72px[^}]*max-height:\s*104px/s); assert.match(cssSource, /@media \(max-width: 480px\)/); assert.match(cssSource, /\.workflow-manager-selection-actions \{ display: grid; grid-template-columns: 1fr; \}/);
 });
+
+test("only the workflow with a live execution receives the transient running treatment", () => {
+  assert.match(appSource, /runningWorkflowId=\{isWorkflowRunning \? \(editorWorkflowSource === "server" \? activeServerWorkflow\?\.id : LOCAL_WORKFLOW_MANAGER_ID\) : null\}/);
+  assert.match(source, /workflow\.id === runningWorkflowId \? " running" : ""/);
+  assert.match(source, /runningWorkflowId === localWorkflowId \? " running" : ""/);
+  assert.match(source, /workflow-manager-running-indicator/);
+  assert.match(source, />RUNNING</);
+  assert.doesNotMatch(source, /workflow\.status === "ACTIVE"[^\n]*running/);
+});
+
+test("running animation is presentation-only and preserves saved workflow statuses", () => {
+  assert.match(source, /workflow-manager-status \$\{String\(workflow\.status \|\| "DRAFT"\)\.toLowerCase\(\)\}/);
+  assert.match(source, /workflow\.status \|\| "DRAFT"/);
+  assert.match(cssSource, /\.workflow-manager-row\.running\s*\{[^}]*border-color:\s*#42ed91[^}]*animation:\s*workflow-manager-running-pulse 2s/s);
+  assert.match(cssSource, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.workflow-manager-row\.running, \.workflow-manager-running-indicator i\s*\{\s*animation:\s*none/s);
+});
+
+test("compact footer clears fixed session controls at desktop and laptop heights", () => {
+  assert.match(cssSource, /\.workflow-manager\s*\{[^}]*height:\s*100%[^}]*padding-bottom:\s*max\(50px, env\(safe-area-inset-bottom\)\)/s);
+  assert.match(cssSource, /\.workflow-manager-body\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.match(cssSource, /\.workflow-manager-selection\s*\{[^}]*flex:\s*0 0 auto[^}]*padding:\s*10px 16px 11px/s);
+});
