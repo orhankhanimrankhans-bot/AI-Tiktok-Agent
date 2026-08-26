@@ -14,7 +14,7 @@ function createEmailDelivery({ env = process.env, createTransport = nodemailer.c
       if (!this.configured) return false;
       const resetUrl = new URL("/", settings.baseUrl); resetUrl.searchParams.set("reset_token", token);
       const transport = createTransport({ host: settings.host, port: settings.port, secure: settings.secure, auth: { user: settings.user, pass: settings.password } });
-      await transport.sendMail({ from: settings.from, to: email, subject: "Jarvis Admin password reset", text: `A Jarvis Admin password reset was requested. Open this one-time link within 15 minutes:\n\n${resetUrl.toString()}\n\nIf you did not request this, ignore this message.` });
+      await transport.sendMail({ from: settings.from, to: email, subject: "Corex Admin password reset", text: `A Corex Admin password reset was requested. Open this one-time link within 15 minutes:\n\n${resetUrl.toString()}\n\nIf you did not request this, ignore this message.` });
       return true;
     },
   };

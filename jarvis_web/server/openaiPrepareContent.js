@@ -77,7 +77,7 @@ function normalizePreparedContent(value, hashtagCount) {
 }
 
 async function prepareContent({ body, apiKey, model = DEFAULT_OPENAI_MODEL, fetchImpl = fetch, timeoutMs = 30000 }) {
-  if (!apiKey) throw new PrepareContentError(503, "openai_not_configured", "OpenAI is not configured on the Jarvis server.");
+  if (!apiKey) throw new PrepareContentError(503, "openai_not_configured", "OpenAI is not configured on the Corex server.");
   const input = validatePrepareContentInput(body);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -87,10 +87,10 @@ async function prepareContent({ body, apiKey, model = DEFAULT_OPENAI_MODEL, fetc
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(makeOpenAIRequest(input, model)) });
   } catch (error) {
     if (error?.name === "AbortError") throw new PrepareContentError(504, "openai_timeout", "OpenAI did not respond in time.");
-    throw new PrepareContentError(502, "openai_unavailable", "Jarvis could not reach OpenAI.");
+    throw new PrepareContentError(502, "openai_unavailable", "Corex could not reach OpenAI.");
   } finally { clearTimeout(timer); }
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) throw new PrepareContentError(502, "openai_authentication_failed", "The Jarvis OpenAI configuration could not be authenticated.");
+    if (response.status === 401 || response.status === 403) throw new PrepareContentError(502, "openai_authentication_failed", "The Corex OpenAI configuration could not be authenticated.");
     if (response.status === 429) throw new PrepareContentError(429, "openai_rate_limited", "OpenAI is temporarily rate limited. Try again shortly.");
     throw new PrepareContentError(502, "openai_request_failed", "OpenAI could not prepare content right now.");
   }

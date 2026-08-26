@@ -7,7 +7,7 @@ try {
   ({ DatabaseSync } = require("node:sqlite"));
 } catch (error) {
   throw new Error(
-    "Jarvis credential storage requires a Node.js runtime with node:sqlite support.",
+    "Corex credential storage requires a Node.js runtime with node:sqlite support.",
     { cause: error }
   );
 }

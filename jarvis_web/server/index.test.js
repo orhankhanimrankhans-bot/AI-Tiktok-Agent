@@ -7,7 +7,7 @@ test("OAuth success popup returns credentialId without token data", () => {
   const credentialId = "gcred_1234567890123456789012";
   const html = makePopupResultHtml({
     status: "connected",
-    message: "user@example.com is connected to Jarvis.",
+    message: "user@example.com is connected to Corex.",
     credentialId,
     clientUrl: "http://localhost:5173",
   });

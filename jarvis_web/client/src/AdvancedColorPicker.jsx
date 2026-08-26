@@ -22,7 +22,7 @@ export default function AdvancedColorPicker({ label, initialColor, contrastBackg
   const lowContrast = contrastBackground && contrastRatio(hex, contrastBackground) < 4.5;
   return <div className="advanced-color-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
     <section className="advanced-color-dialog" role="dialog" aria-modal="true" aria-labelledby="advanced-color-title">
-      <header><div><span>JARVIS COLOR LAB</span><h2 id="advanced-color-title">{label}</h2></div><button type="button" onClick={onCancel} aria-label="Cancel color editing">×</button></header>
+      <header><div><span>COREX COLOR LAB</span><h2 id="advanced-color-title">{label}</h2></div><button type="button" onClick={onCancel} aria-label="Cancel color editing">×</button></header>
       <div className="advanced-color-main">
         <div className="color-visual-controls">
           <div ref={surfaceRef} className="color-sv-surface" style={{ "--picker-hue": `hsl(${hsv.h} 100% 50%)` }} role="slider" tabIndex="0"

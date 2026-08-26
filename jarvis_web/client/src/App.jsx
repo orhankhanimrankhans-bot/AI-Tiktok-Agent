@@ -153,7 +153,7 @@ const NODE_LIBRARY = [
     ["facebook-reactions", "Get Reactions"],
     ["facebook-trigger", "Facebook Trigger", "TRIGGER"],
     ["facebook-lead-ads-trigger", "Facebook Lead Ads Trigger", "TRIGGER"],
-  ].map(([id, name, type = "ACTION"]) => ({ id, provider: "Facebook", name, description: `${name} through the Jarvis Meta integration`, type, icon: "f" })),
+  ].map(([id, name, type = "ACTION"]) => ({ id, provider: "Facebook", name, description: `${name} through the Corex Meta integration`, type, icon: "f" })),
   {
     id: "google-search",
     provider: "Google Drive",
@@ -1277,10 +1277,10 @@ function GoogleCredentialModal({
             </select>
 
             <div className="credential-note">
-              OAuth tokens are stored on the Jarvis backend, not in this browser.
+              OAuth tokens are stored on the Corex backend, not in this browser.
             </div>
             </>}
-            {activeTab === "Sharing" && <div className="credential-metadata-panel"><h3>Credential visibility</h3><label htmlFor="google-credential-visibility">Visibility</label><select id="google-credential-visibility" value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="private">Private</option><option value="shared">Shared</option></select><p>Private credentials are available only to this Jarvis workspace. Sharing is metadata only until backend permissions are configured.</p></div>}
+            {activeTab === "Sharing" && <div className="credential-metadata-panel"><h3>Credential visibility</h3><label htmlFor="google-credential-visibility">Visibility</label><select id="google-credential-visibility" value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="private">Private</option><option value="shared">Shared</option></select><p>Private credentials are available only to this Corex workspace. Sharing is metadata only until backend permissions are configured.</p></div>}
             {activeTab === "Details" && <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Credential ID/reference</dt><dd>{credential?.id ?? "Created after Google sign-in"}</dd></div><div><dt>Provider</dt><dd>Google Drive</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{status}</dd></div><div><dt>Created</dt><dd>{credential?.createdAt ?? "Created after Google sign-in"}</dd></div><div><dt>Updated</dt><dd>{credential?.updatedAt ?? "Not saved yet"}</dd></div></dl></div>}
           </section>
         </div>
@@ -1354,14 +1354,14 @@ function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconne
           <aside className="credential-tabs"><button type="button" className="credential-tab-active">Connection</button><button type="button">Sharing</button><button type="button">Details</button></aside>
           <section className="credential-content">
             <div className="credential-content-top"><h3>Setup credential</h3><select aria-label="Authentication type" value={authMode} onChange={(event) => { setAuthMode(event.target.value); setAccessToken(""); setConnectionState("not_tested"); setConnectionMessage(""); }} disabled={Boolean(credential)}><option value="managed_oauth2">Managed Meta OAuth2</option><option value="manual_access_token">Access Token</option></select></div>
-            {!isManual && <>{credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button type="button" onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Jarvis backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
+            {!isManual && <>{credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button type="button" onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Corex backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
             {isManual && <div className="facebook-token-credential">
               <label htmlFor="facebook-access-token">Access Token</label>
               <div className="secret-input-row"><input id="facebook-access-token" type={showToken ? "text" : "password"} autoComplete="off" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); setConnectionState("not_tested"); setConnectionMessage(""); }} placeholder={isExistingManual ? "Enter a new token to replace the saved token" : "Enter a Facebook Graph API access token"} /><button type="button" onClick={() => setShowToken((visible) => !visible)} aria-label={showToken ? "Hide access token" : "Show access token"}>{showToken ? "Hide" : "Show"}</button></div>
               {isExistingManual && <p className="credential-note">Access token securely stored. The saved token is never sent back to this browser. Enter a new token only to replace it.</p>}
               <div className={`facebook-test-status status-${connectionState}`} role="status" aria-live="polite"><strong>{facebookConnectionStatus(connectionState)}</strong>{connectionState === "failed" && connectionMessage && <span>{connectionMessage}</span>}</div>
               <div className="facebook-token-actions"><button type="button" onClick={testAccessToken} disabled={!accessToken.trim() || connectionState === "testing"}>Test Connection</button></div>
-              <p className="credential-note">The token remains only in this modal until it is submitted securely to the Jarvis backend.</p>
+              <p className="credential-note">The token remains only in this modal until it is submitted securely to the Corex backend.</p>
             </div>}
           </section>
         </div>
@@ -2090,7 +2090,7 @@ function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecuteP
           <label>Language</label><input value={config.language} onChange={(event) => setConfig({ ...config, language: event.target.value })} />
           <label>Tone</label><select value={config.tone} onChange={(event) => setConfig({ ...config, tone: event.target.value })}>{PREPARE_CONTENT_TONES.map((tone) => <option key={tone}>{tone}</option>)}</select>
           <ToggleSetting label="Preserve Input" value={config.preserveInput !== false} onChange={() => setConfig({ ...config, preserveInput: config.preserveInput === false })} />
-          <small>Jarvis generates copy from filename and metadata only. It does not analyze the video.</small>
+          <small>Corex generates copy from filename and metadata only. It does not analyze the video.</small>
         </div> : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version="Prepare Content node version 1.0" />}</div>
       </section>
       <NodeOutputPanel output={output} onExecute={executeStep} />
@@ -2373,7 +2373,7 @@ function App() {
     );
 
     if (!popup) {
-      setCredentialToast("Popup was blocked. Allow popups for Jarvis and try again.");
+      setCredentialToast("Popup was blocked. Allow popups for Corex and try again.");
       window.setTimeout(() => setCredentialToast(""), 5000);
       return;
     }
@@ -2556,7 +2556,7 @@ function App() {
       }
       editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections);
     } catch (error) {
-      console.error("Could not load saved Jarvis workflow:", error);
+      console.error("Could not load saved Corex workflow:", error);
     }
   }, []);
 
@@ -3110,7 +3110,7 @@ function App() {
 
           <div>
             <div className="brand-name">
-              JARVIS
+              COREX
             </div>
 
             <div className="brand-subtitle">
@@ -3189,7 +3189,7 @@ function App() {
 
               <div className="workflow-title">
                 <div className="breadcrumb">
-                  Jarvis / Workflow
+                  COREX / Workflow
                 </div>
                 <button type="button" className="workflow-manager-entry" onClick={() => setShowWorkflowManager(true)}>Workflows</button>
 
@@ -3280,7 +3280,7 @@ function App() {
                     <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow">⌗</button>
                   </div>
                   {showAppearance && <aside className="appearance-popover" onPointerDown={(event) => event.stopPropagation()}>
-                    <header><div><span>APPEARANCE</span><strong>Jarvis Theme System</strong></div><button type="button" onClick={() => setShowAppearance(false)} aria-label="Close appearance">×</button></header>
+                    <header><div><span>APPEARANCE</span><strong>Corex Theme System</strong></div><button type="button" onClick={() => setShowAppearance(false)} aria-label="Close appearance">×</button></header>
                     <div><strong>Presets</strong><div className="theme-presets">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button"
                       className={canvasAppearance.preset === preset.id ? "selected" : ""} onClick={() => applyThemePreset(preset)}>
                       <span style={{ background: `linear-gradient(135deg, ${preset.canvasColor}, ${preset.canvasColorB})` }} />{preset.label}</button>)}</div></div>
@@ -3356,7 +3356,7 @@ function App() {
                         </div>
 
                         <div>
-                          Build with Jarvis AI
+                          Build with Corex AI
                         </div>
                       </button>
 
@@ -3479,8 +3479,8 @@ function App() {
 
                         <p>
                           {connectingFromNodeId
-                            ? "Choose the next action, integration, or Jarvis tool"
-                            : "Choose a trigger, integration, or Jarvis tool"}
+                            ? "Choose the next action, integration, or Corex tool"
+                            : "Choose a trigger, integration, or Corex tool"}
                         </p>
                       </div>
 

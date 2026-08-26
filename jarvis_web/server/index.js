@@ -447,7 +447,7 @@ app.get("/api/facebook/auth/callback", async (req, res) => {
         tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } }, state);
       return res.send(makeFacebookPageSelectorHtml({ selectionId: selection.id, pages: selection.pages, clientUrl: CLIENT_URL }));
     }
-    const message = `${saved.pageName} is connected to Jarvis.`;
+    const message = `${saved.pageName} is connected to Corex.`;
     if (mode === "popup") return res.send(makeFacebookPopupHtml({ status: "connected", message, credentialId: saved.id, clientUrl: CLIENT_URL }));
     const redirect = new URL(CLIENT_URL); redirect.searchParams.set("facebook_oauth", "connected"); redirect.searchParams.set("facebook_credential_id", saved.id); return res.redirect(redirect.toString());
   } catch (error) { return failure(error instanceof FacebookGraphError ? error.message : "Meta sign-in could not be completed."); }
@@ -780,8 +780,8 @@ app.get("/api/google/auth/callback", async (req, res) => {
         makePopupResultHtml({
           status: "connected",
           message: profile.email
-            ? `${profile.email} is connected to Jarvis.`
-            : "Your Google account is connected to Jarvis.",
+            ? `${profile.email} is connected to Corex.`
+            : "Your Google account is connected to Corex.",
           credentialId: credential.id,
         })
       );
@@ -890,7 +890,7 @@ async function startServer() {
     workflowScheduler.start();
     console.log("");
     console.log("=================================");
-    console.log(" JARVIS BACKEND");
+    console.log(" COREX BACKEND");
     console.log("=================================");
     console.log(`API: http://localhost:${PORT}`);
     console.log(`Client: ${CLIENT_URL}`);
@@ -902,8 +902,8 @@ async function startServer() {
     console.log("");
   });
   server.on("error", (error) => {
-    if (error?.code === "EADDRINUSE") console.error(`FATAL ERROR: Jarvis backend is already running on port ${PORT}.`);
-    else console.error("FATAL ERROR: Jarvis backend listener failed.");
+    if (error?.code === "EADDRINUSE") console.error(`FATAL ERROR: Corex backend is already running on port ${PORT}.`);
+    else console.error("FATAL ERROR: Corex backend listener failed.");
     workflowScheduler.stop();
     process.exitCode = 1;
   });
@@ -912,7 +912,7 @@ async function startServer() {
 
 if (require.main === module || process.env.NODE_ENV === "production") {
   startServer().catch((error) => {
-    console.error("FATAL ERROR: Jarvis backend startup failed:", error?.message || error);
+    console.error("FATAL ERROR: Corex backend startup failed:", error?.message || error);
     process.exit(1);
   });
 }

@@ -8,8 +8,8 @@ const pipeline = readFileSync(new URL("./CommandPipeline.jsx", import.meta.url),
 const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
-test("dashboard keeps a compact Jarvis Core and equal compact controls", () => {
-  assert.match(dashboard, /<h1>JARVIS CORE<\/h1>/); assert.match(dashboard, /className="isk-core-button"/); assert.match(dashboard, /<span>ISK<\/span>/);
+test("dashboard keeps a compact Corex Core and equal compact controls", () => {
+  assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="isk-core-button"/); assert.match(dashboard, /<span>ISK<\/span>/);
   for (const label of ["UPLOAD QUEUE", "WORKFLOW CONTROL", "FACEBOOK", "YOUTUBE", "STORAGE & MEDIA"]) assert.match(dashboard, new RegExp(label));
   assert.match(styles, /\.jarvis-core-header \{ min-height: 64px/); assert.match(styles, /\.operational-controls \{ grid-template-rows: repeat\(5, 48px\)/);
 });

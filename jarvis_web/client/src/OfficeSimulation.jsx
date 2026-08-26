@@ -141,7 +141,7 @@ export default function OfficeSimulation({ agentStates, activeWorkspace, tasks, 
   };
   return <section className="ai-office office-simulation office-hybrid" aria-label="AI Office"><header><div><span>LIVE OPERATIONS FLOOR</span><h2>AI OFFICE</h2></div><small>{tasks.filter((task) => task.status === "WORKING").length} ACTIVE TASKS</small></header>
     <div className={`office-scene${imageFailed ? " office-scene-fallback" : ""}`}>
-      {!imageFailed && <img className="office-scene-image" src={officeScene} alt="Dark futuristic Jarvis AI headquarters office" onError={() => setImageFailed(true)} />}
+      {!imageFailed && <img className="office-scene-image" src={officeScene} alt="Dark futuristic Corex AI headquarters office" onError={() => setImageFailed(true)} />}
       {imageFailed && <div className="office-image-fallback"><strong>AI OFFICE</strong><span>Visual scene unavailable. Live controls remain active.</span></div>}
       <div className="office-scene-vignette" aria-hidden="true" />
       {ROOM_BOUNDS.map((room) => <RoomHighlight key={room.id} room={room} active={(room.id === "human" && ((linkWorking && Boolean(activeWorkspace)) || (movementActive && MEMBERS.some((member) => member.id === handoff.destination)))) || (room.id === "coordinator" && movementActive && handoff.destination === "link") || (room.id === "amazon" && (activeWorkspace === "amazon" || (movementActive && handoff.destination === "amazon")))} />)}

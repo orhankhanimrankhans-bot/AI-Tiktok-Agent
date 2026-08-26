@@ -6,12 +6,12 @@ export function isForbiddenFacebookPair(pair = {}) {
 }
 export function assertSafeFacebookConfig(config = {}) {
   const inspect = (value) => {
-    if (typeof value === "string" && TOKEN_VALUE.test(value)) throw new Error("Facebook access tokens and Authorization fields must be configured only on the Jarvis server.");
+    if (typeof value === "string" && TOKEN_VALUE.test(value)) throw new Error("Facebook access tokens and Authorization fields must be configured only on the Corex server.");
     if (Array.isArray(value)) { value.forEach(inspect); return; }
     if (!value || typeof value !== "object") return;
-    if (isForbiddenFacebookPair(value)) throw new Error("Facebook access tokens and Authorization fields must be configured only on the Jarvis server.");
+    if (isForbiddenFacebookPair(value)) throw new Error("Facebook access tokens and Authorization fields must be configured only on the Corex server.");
     for (const [key, child] of Object.entries(value)) {
-      if (FORBIDDEN_NAME.test(key)) throw new Error("Facebook access tokens and Authorization fields must be configured only on the Jarvis server.");
+      if (FORBIDDEN_NAME.test(key)) throw new Error("Facebook access tokens and Authorization fields must be configured only on the Corex server.");
       inspect(child);
     }
   };

@@ -134,7 +134,7 @@ test("Appearance Studio allowlists the complete control center palette", () => {
 });
 
 test("theme system supports presets, custom solid and white-black two-color canvas", () => {
-  assert.deepEqual(THEME_PRESETS.map((preset) => preset.label), ["Jarvis Dark", "Midnight Blue", "Black", "Graphite", "White", "Silver", "Purple", "Blue", "Cyan", "Green", "Red", "Pink"]);
+  assert.deepEqual(THEME_PRESETS.map((preset) => preset.label), ["Corex Dark", "Midnight Blue", "Black", "Graphite", "White", "Silver", "Purple", "Blue", "Cyan", "Green", "Red", "Pink"]);
   const twoColor = safeAppearance({ preset: "custom", canvasStyle: "two-color", canvasColor: "#ffffff", canvasColorB: "#000000",
     headerColor: "#123456", accentColor: "#00ddee" });
   assert.equal(canvasBackground(twoColor), "linear-gradient(135deg, #ffffff 0%, #000000 100%)");

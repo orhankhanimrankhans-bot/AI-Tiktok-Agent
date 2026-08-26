@@ -17,7 +17,7 @@ export function safeFacebookCredentialError(error) {
   if (status === 429) return "Meta is rate limiting connection tests. Wait a moment and try again.";
   if (status === 401 || status === 403) return "The token was rejected. Check its permissions and try again.";
   if (status === 400) return "The token or credential details are invalid. Check them and try again.";
-  if (status >= 500) return "Jarvis could not reach Meta. Try again later.";
+  if (status >= 500) return "Corex could not reach Meta. Try again later.";
   return "The connection could not be tested. Try again.";
 }
 
