@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict"); const test = require("node:test");
-const { containsForbiddenSecretFields, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
+const { containsForbiddenSecretFields, executeCredentialMe, executeCredentialPages, FacebookGraphError, FacebookGraphService, REEL_PUBLISH_PERMISSION } = require("./facebookGraph");
 function response(data, status = 200) { return { ok: status < 400, status, json: async () => data }; }
 test("Meta /me and /me/accounts return identity and Pages without tokens", async () => {
   const calls = []; const service = new FacebookGraphService({ version: "v25.0", fetchImpl: async (url, options) => { calls.push([url, options]); return String(url).includes("me/accounts") ? response({ data: [{ id: "123", name: "Page", access_token: "page-secret" }] }) : response({ id: "42", name: "User" }); } });
@@ -10,6 +10,38 @@ test("Meta /me and /me/accounts return identity and Pages without tokens", async
 test("Meta errors are permission-aware and redact tokens", async () => {
   const service = new FacebookGraphService({ version: "v25.0", fetchImpl: async () => response({ error: { code: 200, message: "Token user-secret lacks permission" } }, 403) });
   await assert.rejects(() => service.pages("user-secret"), (error) => error instanceof FacebookGraphError && /pages_show_list/.test(error.message) && !/user-secret/.test(error.message));
+});
+test("managed OAuth permission preflight requires a live pages_manage_posts grant", async () => {
+  const calls = []; const service = new FacebookGraphService({ version: "v26.0", fetchImpl: async (url) => {
+    calls.push(String(url)); return response({ data: [{ permission: "pages_show_list", status: "granted" },
+      { permission: REEL_PUBLISH_PERMISSION, status: "declined" }] });
+  } });
+  await assert.rejects(() => service.requireReelPublishingPermission("user-token-secret"), (error) => {
+    assert.equal(error.code, "facebook_missing_permission"); assert.equal(error.permission, REEL_PUBLISH_PERMISSION);
+    assert.deepEqual(error.diagnostic, { stage: "authorization", requiredPermission: REEL_PUBLISH_PERMISSION });
+    assert.doesNotMatch(JSON.stringify(error), /user-token-secret|Authorization/); return true;
+  });
+  assert.equal(new URL(calls[0]).pathname, "/v26.0/me/permissions");
+});
+test("managed OAuth permission preflight accepts pages_manage_posts", async () => {
+  const service = new FacebookGraphService({ version: "v26.0", fetchImpl: async () => response({ data: [
+    { permission: "pages_show_list", status: "granted" }, { permission: REEL_PUBLISH_PERMISSION, status: "granted" }] }) });
+  assert.deepEqual(await service.requireReelPublishingPermission("user-token-secret"),
+    { grantedPermissions: ["pages_show_list", REEL_PUBLISH_PERMISSION] });
+});
+test("meta_200 preserves only safe structured authorization diagnostics", async () => {
+  const token = "user-token-secret"; const service = new FacebookGraphService({ version: "v26.0", fetchImpl: async () => response({ error: {
+    code: 200, error_subcode: 2018065, type: "OAuthException", is_transient: false, fbtrace_id: "Trace_200",
+    error_user_title: "Authorization required", error_user_msg: `Reconnect ${token}`,
+    message: `Cannot call API on behalf of ${token}`, access_token: token } }, 400) });
+  await assert.rejects(() => service.pages(token), (error) => {
+    assert.equal(error.statusCode, 403); assert.equal(error.code, "meta_200"); assert.equal(error.diagnostic.httpStatus, 400);
+    assert.equal(error.diagnostic.metaCode, 200); assert.equal(error.diagnostic.metaSubcode, 2018065);
+    assert.equal(error.diagnostic.metaType, "OAuthException"); assert.equal(error.diagnostic.isTransient, false);
+    assert.equal(error.diagnostic.traceId, "Trace_200"); assert.equal(error.diagnostic.errorUserTitle, "Authorization required");
+    assert.equal(error.diagnostic.requiredPermission, "pages_show_list");
+    assert.doesNotMatch(JSON.stringify(error.diagnostic), /user-token-secret|access_token|Authorization:\s*Bearer/i); return true;
+  });
 });
 test("server rejects nested client-supplied Facebook secret fields", () => {
   assert.equal(containsForbiddenSecretFields({ credentialId: "fcred_safe", nested: { access_token: "secret" } }), true);

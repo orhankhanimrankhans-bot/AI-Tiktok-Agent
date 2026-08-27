@@ -1,7 +1,7 @@
 export const NODE_STATUSES = ["idle", "running", "success", "error"];
 
 const STRUCTURED_EXECUTION_ERROR = Symbol("structuredExecutionError");
-const DIAGNOSTIC_KEYS = ["stage", "reasonCode", "metaCode", "metaSubcode", "httpStatus", "responseKind", "phaseStatus", "publishStatus", "copyrightStatus", "reason", "isTransient", "traceId"];
+const DIAGNOSTIC_KEYS = ["stage", "reasonCode", "metaCode", "metaSubcode", "metaType", "httpStatus", "responseKind", "phaseStatus", "publishStatus", "copyrightStatus", "reason", "isTransient", "traceId", "errorUserTitle", "requiredPermission", "expectedPageId", "actualPageId", "expectedPageName", "actualPageName"];
 const UPLOAD_RESPONSE_KINDS = new Set(["graph_error", "success_false", "missing_success", "empty", "non_json"]);
 
 function safeCode(value, limit = 64) {

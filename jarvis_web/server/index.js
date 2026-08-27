@@ -383,7 +383,7 @@ app.get("/api/facebook/auth/start", (req, res) => {
   const url = new URL(`https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`);
   url.searchParams.set("client_id", META_APP_ID); url.searchParams.set("redirect_uri", META_REDIRECT_URI);
   url.searchParams.set("state", state); url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "public_profile,email,pages_show_list,pages_read_engagement");
+  url.searchParams.set("scope", "public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts");
   return res.redirect(url.toString());
 });
 
@@ -399,8 +399,7 @@ app.post("/api/facebook/auth/page-selection", (req, res) => {
     const existing = facebookCredentialStore.findByPage({ accountId: selected.accountId, pageId: selected.page.id }, { owner });
     const saved = facebookCredentialStore.save({ id: selected.credentialId || existing?.id || FacebookCredentialStore.generateId(), accountId: selected.accountId,
       accountName: selected.accountName, pageId: selected.page.id, pageName: selected.page.name, name: existing?.name,
-      tokens: { userAccessToken: selected.tokens.userAccessToken, tokenType: selected.tokens.tokenType,
-        expiresIn: selected.tokens.expiresIn, pageAccessTokens: { [selected.page.id]: pageToken } } }, owner);
+      tokens: { ...selected.tokens, pageAccessTokens: { [selected.page.id]: pageToken } } }, owner);
     return res.json(saved);
   } catch { return res.status(500).json({ error: "Facebook Page selection could not be completed." }); }
 });
@@ -422,9 +421,14 @@ app.get("/api/facebook/auth/callback", async (req, res) => {
     const previous = state.intent === "reconnect" ? facebookCredentialStore.get(state.credentialId, { includeTokens: true, owner: state }) : null;
     if (state.intent === "reconnect" && previous?.accountId !== String(profile.id)) return failure("Reconnect must use the same Meta account. Create a new credential for another account.");
     const available = await service.pages(tokenData.access_token);
+    const permissionState = await service.permissions(tokenData.access_token);
     const pages = available.pages.filter((page) => page?.id && available.pageTokens?.[page.id]);
     if (!pages.length) return failure("No Facebook Pages were available for this Meta account.");
-    const commonTokens = { userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn: tokenData.expires_in || null };
+    const authorizedAt = new Date().toISOString();
+    const expiresIn = Number.isFinite(Number(tokenData.expires_in)) ? Number(tokenData.expires_in) : null;
+    const commonTokens = { userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn,
+      authorizedAt, expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
+      grantedPermissions: permissionState.grantedPermissions };
     let saved;
     if (state.intent === "reconnect") {
       const selected = previous?.pageId ? pages.find((page) => String(page.id) === previous.pageId) : pages.length === 1 ? pages[0] : null;

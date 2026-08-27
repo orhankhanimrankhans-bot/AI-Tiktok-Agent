@@ -7,6 +7,7 @@ import {
   createScheduleManualOutput,
   executeUpstreamLinear,
   executeWithLifecycle,
+  sanitizeExecutionDiagnostic,
   upstreamInputError,
 } from "./workflowExecution.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
@@ -192,6 +193,16 @@ test("structured diagnostics redact credentials, URLs, and internal paths", asyn
   assert.match(serialized, /Authorization \[REDACTED\]/);
   assert.doesNotMatch(serialized, /secret-token|rupload\.facebook|C:\\private|never-copy|uploadUrl|raw/);
   assert.equal(failed.output.diagnostic.httpStatus, undefined); assert.equal(failed.output.diagnostic.responseKind, undefined);
+});
+test("authorization diagnostics preserve only safe permission and Page identity metadata", () => {
+  const diagnostic = sanitizeExecutionDiagnostic({ stage: "authorization", requiredPermission: "pages_manage_posts",
+    metaCode: 200, metaSubcode: 2018065, metaType: "OAuthException", errorUserTitle: "Authorization required",
+    expectedPageId: "123456", actualPageId: "999999", expectedPageName: "Expected Page", actualPageName: "Wrong Page",
+    accessToken: "never-return", raw: { Authorization: "Bearer never-return" } });
+  assert.deepEqual(diagnostic, { stage: "authorization", requiredPermission: "pages_manage_posts", metaCode: 200,
+    metaSubcode: 2018065, metaType: "OAuthException", errorUserTitle: "Authorization required", expectedPageId: "123456",
+    actualPageId: "999999", expectedPageName: "Expected Page", actualPageName: "Wrong Page" });
+  assert.doesNotMatch(JSON.stringify(diagnostic), /never-return|accessToken|Bearer|"raw"/);
 });
 
 test("Run Workflow keeps safe diagnostics on the failed node", async () => {

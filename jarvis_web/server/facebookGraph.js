@@ -4,6 +4,7 @@ class FacebookGraphError extends Error {
   }
 }
 const PERMISSIONS = { pages: "pages_show_list", page_metadata: "pages_read_engagement" };
+const REEL_PUBLISH_PERMISSION = "pages_manage_posts";
 const FORBIDDEN_SECRET_KEY = /^(authorization|access[_-]?token|page[_-]?access[_-]?token|client[_-]?secret|app[_-]?secret|appsecret_proof|token)$/i;
 function containsForbiddenSecretFields(value) {
   if (Array.isArray(value)) return value.some(containsForbiddenSecretFields);
@@ -16,11 +17,25 @@ function sanitizeMetaMessage(message, secrets = []) {
   return value.replace(/access_token=[^&\s]+/gi, "access_token=[REDACTED]")
     .replace(/(?:Bearer|OAuth)\s+[^\s]+/gi, "Authorization [REDACTED]").slice(0, 600);
 }
+function safeMetaDiagnostic(meta, responseStatus, { stage = "graph", requiredPermission = "", secrets = [] } = {}) {
+  const diagnostic = { stage };
+  if (Number.isInteger(responseStatus) && responseStatus >= 100 && responseStatus <= 599) diagnostic.httpStatus = responseStatus;
+  if (Number.isSafeInteger(meta?.code) || typeof meta?.code === "string") diagnostic.metaCode = meta.code;
+  if (Number.isSafeInteger(meta?.error_subcode) || typeof meta?.error_subcode === "string") diagnostic.metaSubcode = meta.error_subcode;
+  if (typeof meta?.type === "string" && meta.type.trim()) diagnostic.metaType = sanitizeMetaMessage(meta.type, secrets).slice(0, 80);
+  if (typeof meta?.is_transient === "boolean") diagnostic.isTransient = meta.is_transient;
+  if (typeof meta?.fbtrace_id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(meta.fbtrace_id)) diagnostic.traceId = meta.fbtrace_id;
+  if (typeof meta?.error_user_title === "string" && meta.error_user_title.trim()) diagnostic.errorUserTitle = sanitizeMetaMessage(meta.error_user_title, secrets).slice(0, 160);
+  const reason = meta?.error_user_msg || meta?.message;
+  if (typeof reason === "string" && reason.trim()) diagnostic.reason = sanitizeMetaMessage(reason, secrets).slice(0, 600);
+  if (requiredPermission) diagnostic.requiredPermission = requiredPermission;
+  return diagnostic;
+}
 function validateGraphVersion(version) { if (!/^v\d{1,2}\.\d{1,2}$/.test(version)) throw new FacebookGraphError(500, "invalid_graph_version", "Meta Graph API version is not configured safely."); return version; }
 function validatePageId(pageId) { const value = String(pageId || "").trim(); if (!/^\d{3,30}$/.test(value)) throw new FacebookGraphError(400, "invalid_page_id", "Enter a valid numeric Facebook Page ID."); return value; }
 function metaErrorStatus(responseStatus, code) {
   if (responseStatus === 401 || code === "190") return 401;
-  if (responseStatus === 403) return 403;
+  if (responseStatus === 403 || ["10", "200", "299"].includes(code)) return 403;
   if (responseStatus === 429) return 429;
   if (responseStatus === 400 || code === "100") return 400;
   return 502;
@@ -28,8 +43,8 @@ function metaErrorStatus(responseStatus, code) {
 
 class FacebookGraphService {
   constructor({ version, fetchImpl = fetch }) { this.version = validateGraphVersion(version); this.fetch = fetchImpl; this.baseUrl = `https://graph.facebook.com/${version}`; }
-  async request(path, token, params = {}, permission = "") {
-    if (!/^(me|me\/accounts|\d{3,30})$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
+  async request(path, token, params = {}, permission = "", stage = "graph") {
+    if (!/^(me|me\/accounts|me\/permissions|\d{3,30})$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
     const url = new URL(`${this.baseUrl}/${path}`); for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     let response; try { response = await this.fetch(url, { redirect: "error", headers: { Authorization: `Bearer ${token}` } }); }
     catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
@@ -39,7 +54,8 @@ class FacebookGraphService {
       const required = ["10", "200", "299"].includes(code) ? permission : "";
       const prefix = required ? `Permission required: ${required}. ` : "";
       throw new FacebookGraphError(metaErrorStatus(response.status, code),
-        `meta_${code}`, `${prefix}${sanitizeMetaMessage(meta.message, [token])}`, required);
+        `meta_${code}`, `${prefix}${sanitizeMetaMessage(meta.message, [token])}`, required,
+        safeMetaDiagnostic(meta, response.status, { stage, requiredPermission: required, secrets: [token] }));
     }
     return data;
   }
@@ -57,8 +73,22 @@ class FacebookGraphService {
     const pageTokens = {}; const pages = (data.data || []).map((page) => { if (page.id && page.access_token) pageTokens[page.id] = page.access_token; const { access_token, ...safe } = page; return safe; });
     return { pages, pageTokens };
   }
+  async permissions(token) {
+    const data = await this.request("me/permissions", token, {}, REEL_PUBLISH_PERMISSION, "authorization");
+    const granted = (Array.isArray(data.data) ? data.data : []).filter((item) => item?.status === "granted" && typeof item.permission === "string").map((item) => item.permission);
+    return { grantedPermissions: [...new Set(granted)] };
+  }
+  async requireReelPublishingPermission(token) {
+    const result = await this.permissions(token);
+    if (!result.grantedPermissions.includes(REEL_PUBLISH_PERMISSION)) {
+      throw new FacebookGraphError(403, "facebook_missing_permission",
+        "Reconnect Facebook and grant pages_manage_posts before publishing. In Development mode, the Facebook user must also have an App role.",
+        REEL_PUBLISH_PERMISSION, { stage: "authorization", requiredPermission: REEL_PUBLISH_PERMISSION });
+    }
+    return result;
+  }
   pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,followers_count,link,picture" }, PERMISSIONS.page_metadata); }
-  async postReelForm(token, params) {
+  async postReelForm(token, params, stage = "publishing") {
     const url = new URL(`${this.baseUrl}/me/video_reels`);
     let response; try { response = await this.fetch(url, { method: "POST", redirect: "error",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(params) }); }
@@ -66,12 +96,13 @@ class FacebookGraphService {
     let data = {}; try { data = await response.json(); } catch { /* safe generic error below */ }
     if (!response.ok || data.error) {
       const meta = data.error || {}; const code = String(meta.code || response.status || "unknown");
-      throw new FacebookGraphError(metaErrorStatus(response.status, code), `meta_${code}`, sanitizeMetaMessage(meta.message, [token]));
+      throw new FacebookGraphError(metaErrorStatus(response.status, code), `meta_${code}`, sanitizeMetaMessage(meta.message, [token]), "",
+        safeMetaDiagnostic(meta, response.status, { stage, secrets: [token] }));
     }
     return data;
   }
   async startPageReelUpload(token) {
-    const data = await this.postReelForm(token, { upload_phase: "start" });
+    const data = await this.postReelForm(token, { upload_phase: "start" }, "start");
     if (!/^\d{3,30}$/.test(String(data.video_id || "")) || !data.upload_url) {
       throw new FacebookGraphError(502, "invalid_reel_start_response", "Meta returned an invalid Reel upload session.");
     }
@@ -81,7 +112,7 @@ class FacebookGraphService {
     const body = { video_id: validatePageId(videoId), upload_phase: "finish", video_state: "PUBLISHED" };
     if (title) body.title = title;
     if (description) body.description = description;
-    return this.postReelForm(token, body);
+    return this.postReelForm(token, body, "finish");
   }
   reelStatus(token, videoId) { return this.request(validatePageId(videoId), token, { fields: "status" }); }
 }
@@ -111,4 +142,4 @@ function credentialPageToken(credential, pageId) {
 }
 
 module.exports = { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages,
-  FacebookGraphError, FacebookGraphService, sanitizeMetaMessage, validatePageId };
+  FacebookGraphError, FacebookGraphService, REEL_PUBLISH_PERMISSION, safeMetaDiagnostic, sanitizeMetaMessage, validatePageId };

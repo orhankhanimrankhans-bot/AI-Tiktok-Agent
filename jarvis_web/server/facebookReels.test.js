@@ -37,11 +37,33 @@ test("Reel Graph validation errors prove Meta was reached and remain redacted", 
 });
 
 test("Managed OAuth publishing resolves exactly one Page token", async () => {
-  const calls = []; const service = { pages: async (token) => { calls.push(["pages", token]); return { pageTokens: { "123456": "oauth-page-token" } }; },
+  const calls = []; const service = { requireReelPublishingPermission: async (token) => { calls.push(["permissions", token]); },
+    pages: async (token) => { calls.push(["pages", token]); return { pageTokens: { "123456": "oauth-page-token" } }; },
     pageIdentity: async (token) => { calls.push(["identity", token]); return { id: "123456", name: "OAuth Page" }; } };
-  const page = await pageContext(service, { authMode: "oauth", tokens: { userAccessToken: "oauth-user-token" } });
+  const page = await pageContext(service, { authMode: "oauth", pageId: "123456", pageName: "OAuth Page", tokens: { userAccessToken: "oauth-user-token" } });
   assert.deepEqual(page, { token: "oauth-page-token", pageId: "123456", pageName: "OAuth Page" });
-  assert.deepEqual(calls, [["pages", "oauth-user-token"], ["identity", "oauth-page-token"]]);
+  assert.deepEqual(calls, [["permissions", "oauth-user-token"], ["pages", "oauth-user-token"], ["identity", "oauth-page-token"]]);
+});
+test("missing managed publishing permission fails before Page lookup or upload", async () => {
+  const calls = []; const service = { requireReelPublishingPermission: async () => { calls.push("permissions");
+    throw new FacebookGraphError(403, "facebook_missing_permission", "Reconnect Facebook.", "pages_manage_posts",
+      { stage: "authorization", requiredPermission: "pages_manage_posts" }); },
+    pages: async () => { calls.push("pages"); }, pageIdentity: async () => { calls.push("identity"); } };
+  await assert.rejects(() => pageContext(service, { authMode: "oauth", pageId: "123456", tokens: { userAccessToken: "oauth-user-token" } }),
+    (error) => error.code === "facebook_missing_permission" && error.diagnostic.requiredPermission === "pages_manage_posts");
+  assert.deepEqual(calls, ["permissions"]);
+});
+test("Page token identity must exactly match the credential Page", async () => {
+  const matching = await pageContext({ pageIdentity: async () => ({ id: "123456", name: "Expected Page" }) },
+    { authMode: "manual_access_token", pageId: "123456", pageName: "Expected Page", tokens: { pageAccessToken: TOKEN } });
+  assert.equal(matching.pageId, "123456");
+  await assert.rejects(() => pageContext({ pageIdentity: async () => ({ id: "999999", name: "Wrong Page" }) },
+    { authMode: "manual_access_token", pageId: "123456", pageName: "Expected Page", tokens: { pageAccessToken: TOKEN } }), (error) => {
+    assert.equal(error.code, "facebook_page_mismatch");
+    assert.deepEqual(error.diagnostic, { stage: "authorization", expectedPageId: "123456", actualPageId: "999999",
+      expectedPageName: "Expected Page", actualPageName: "Wrong Page" });
+    assert.doesNotMatch(JSON.stringify(error.diagnostic), /page-token|Authorization/); return true;
+  });
 });
 
 test("upload URL validation blocks SSRF and credentials", () => {
@@ -82,7 +104,7 @@ test("publish flow returns metadata only after published processing state", asyn
   };
   try {
     const result = await publishPageReel({ request: request(), binaryDir: dir, service,
-      credential: { authMode: "manual_access_token", tokens: { pageAccessToken: TOKEN } }, sleep: async () => {},
+      credential: { authMode: "manual_access_token", pageId: "1307346875785068", pageName: "TinyTech", tokens: { pageAccessToken: TOKEN } }, sleep: async () => {},
       uploadFetch: async (_url, options) => { for await (const _chunk of options.body) { /* consume stream */ } return response({ success: true }); } });
     assert.equal(result.status, "published"); assert.equal(result.pageName, "TinyTech"); assert.equal(result.fileName, "clip.mp4");
     assert.deepEqual(calls.map((call) => call[0]), ["identity", "start", "finish", "status"]);

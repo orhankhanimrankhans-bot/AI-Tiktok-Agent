@@ -84,21 +84,25 @@ async function pageContext(service, credential) {
   if (!credential || !["manual_access_token", "oauth"].includes(credential.authMode)) {
     throw reelError(400, "unsupported_credential", "Select a supported Facebook credential.");
   }
+  const expectedPageId = String(credential?.pageId || "");
+  if (!/^\d{3,30}$/.test(expectedPageId)) throw reelError(400, "facebook_page_not_configured", "The Facebook credential does not have a valid selected Page.");
   let token;
   if (credential?.authMode === "manual_access_token") token = credential?.tokens?.pageAccessToken;
   else {
-    const stored = Object.values(credential?.tokens?.pageAccessTokens || {}).filter(Boolean);
-    if (stored.length === 1) token = stored[0];
-    else {
+    await service.requireReelPublishingPermission(credential?.tokens?.userAccessToken);
+    token = credential?.tokens?.pageAccessTokens?.[expectedPageId];
+    if (!token) {
       const discovered = await service.pages(credential?.tokens?.userAccessToken);
-      const discoveredTokens = Object.values(discovered.pageTokens || {}).filter(Boolean);
-      if (discoveredTokens.length !== 1) throw reelError(409, "ambiguous_oauth_page", "Managed Meta OAuth publishing requires a credential with exactly one available Facebook Page.");
-      token = discoveredTokens[0];
+      token = discovered.pageTokens?.[expectedPageId];
     }
   }
   if (!token) throw reelError(404, "credential_disconnected", "Facebook credential was not found or is disconnected.");
   const page = await service.pageIdentity(token);
   if (!/^\d{3,30}$/.test(String(page.id || "")) || !String(page.name || "").trim()) throw reelError(400, "wrong_token_type", "The credential did not identify a usable Facebook Page.");
+  if (String(page.id) !== expectedPageId) {
+    throw reelError(409, "facebook_page_mismatch", "Facebook authorization resolved a different Page than the credential selected.",
+      { stage: "authorization", expectedPageId, actualPageId: String(page.id), expectedPageName: String(credential.pageName || ""), actualPageName: String(page.name) });
+  }
   return { token, pageId: String(page.id), pageName: String(page.name) };
 }
 

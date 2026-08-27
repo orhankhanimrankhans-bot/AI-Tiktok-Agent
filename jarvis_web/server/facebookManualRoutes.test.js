@@ -20,6 +20,15 @@ test("OAuth creation selects one Page-scoped credential and reconnect updates on
   assert.match(source, /state\.intent === "reconnect"[\s\S]*previous\.id/);
   assert.doesNotMatch(source, /pages\.map\(\(page\) => facebookCredentialStore\.save/);
 });
+test("managed OAuth retains read scopes, requests pages_manage_posts, and stores safe encrypted authorization metadata", () => {
+  const auth = source.slice(source.indexOf('app.get("/api/facebook/auth/start"'), source.indexOf('app.post("/api/facebook/auth/page-selection"'));
+  for (const permission of ["public_profile", "email", "pages_show_list", "pages_read_engagement", "pages_manage_posts"]) assert.match(auth, new RegExp(permission));
+  const callback = source.slice(source.indexOf('app.get("/api/facebook/auth/callback"'), source.indexOf("function deleteFacebookCredential"));
+  assert.match(callback, /service\.permissions\(tokenData\.access_token\)/);
+  assert.match(callback, /authorizedAt/); assert.match(callback, /expiresAt/); assert.match(callback, /grantedPermissions/);
+  assert.match(source, /tokens: \{ \.\.\.selected\.tokens, pageAccessTokens: \{ \[selected\.page\.id\]: pageToken \} \}/);
+  assert.doesNotMatch(callback, /authorization_timestamp|granted_scopes_json|ALTER TABLE|CREATE TABLE/);
+});
 
 test("Page selection accepts safe identifiers only and never returns token material", () => {
   const route = source.slice(source.indexOf('app.post("/api/facebook/auth/page-selection"'), source.indexOf('app.get("/api/facebook/auth/callback"'));
