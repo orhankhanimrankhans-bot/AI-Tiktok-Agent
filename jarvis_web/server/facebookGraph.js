@@ -59,7 +59,7 @@ class FacebookGraphService {
     }
     return data;
   }
-  me(token) { return this.request("me", token, { fields: "id,name,email" }); }
+  me(token) { return this.request("me", token, { fields: "id,name" }); }
   pageIdentity(token) { return this.request("me", token, { fields: "id,name" }); }
   async inspectPageToken(token) {
     const page = await this.pageIdentity(token);

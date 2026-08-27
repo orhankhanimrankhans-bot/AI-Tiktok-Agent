@@ -80,15 +80,24 @@ test("manual Page credentials reject user-only me/accounts before calling Meta",
   assert.equal(calls, 0);
 });
 
-test("OAuth credential execution preserves user me and me/accounts behavior", async () => {
+test("OAuth credential execution succeeds with id and name only", async () => {
   const calls = []; const service = new FacebookGraphService({ version: "v26.0", fetchImpl: async (url) => {
-    calls.push(String(url)); return String(url).includes("me/accounts") ? response({ data: [{ id: "789", name: "OAuth Page" }] }) : response({ id: "42", name: "OAuth User", email: "user@example.com" });
+    calls.push(String(url)); return String(url).includes("me/accounts") ? response({ data: [{ id: "789", name: "OAuth Page" }] }) : response({ id: "42", name: "OAuth User" });
   } });
   const credential = { authMode: "oauth", tokens: { userAccessToken: "oauth-user-token" } };
-  assert.equal((await executeCredentialMe(service, credential)).email, "user@example.com");
+  assert.deepEqual(await executeCredentialMe(service, credential), { id: "42", name: "OAuth User" });
   assert.deepEqual((await executeCredentialPages(service, credential)).pages, [{ id: "789", name: "OAuth Page" }]);
-  assert.equal(new URL(calls[0]).searchParams.get("fields"), "id,name,email");
+  assert.equal(new URL(calls[0]).searchParams.get("fields"), "id,name");
   assert.equal(new URL(calls[1]).pathname, "/v26.0/me/accounts");
+});
+test("managed identity remains backward compatible when Meta returns optional email metadata", async () => {
+  const service = new FacebookGraphService({ version: "v26.0", fetchImpl: async (url) => {
+    assert.equal(new URL(url).searchParams.get("fields"), "id,name");
+    return response({ id: "42", name: "OAuth User", email: "legacy@example.com" });
+  } });
+  const result = await executeCredentialMe(service, { authMode: "oauth", tokens: { userAccessToken: "oauth-user-token" } });
+  assert.deepEqual(result, { id: "42", name: "OAuth User", email: "legacy@example.com" });
+  assert.doesNotMatch(JSON.stringify(result), /oauth-user-token|Authorization/);
 });
 
 test("manual Page token inspection returns a safe invalid-token failure", async () => {
