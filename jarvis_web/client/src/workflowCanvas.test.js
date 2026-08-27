@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { CANVAS_APPEARANCE_KEY, CANVAS_NODE_HEIGHT, CANVAS_NODE_WIDTH, THEME_PRESETS, canvasBackground, canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionPathToPoint, connectionVisualState,
-  fitCanvasViewport, insertNodeBetween, moveNodeFromPointer, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, validateConnectionCandidate, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
+  fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, validateConnectionCandidate, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 
 test("dragging updates logical node position without zoom jumps", () => {
   const moved = moveNodeFromPointer({ id: "drive", x: 100, y: 80 }, { nodeX: 100, nodeY: 80, pointerX: 200, pointerY: 100 }, { x: 260, y: 140 }, 0.5);
@@ -198,6 +198,27 @@ test("direct connection validator rejects self, duplicate, merge, cycle, and nes
 test("temporary wire coordinates honor canvas pan and zoom", () => {
   assert.deepEqual(canvasPointFromClient({ clientX: 170, clientY: 140 }, { left: 20, top: 40 }, { x: 50, y: 20, zoom: 0.5 }), { x: 200, y: 160 });
   assert.match(connectionPathToPoint({ x: 100, y: 80 }, { x: 500, y: 220 }), /^M 248 154 C/);
+});
+
+test("persisted ACTIVE server workflow decorates nodes, connections, and ports while idle", () => {
+  const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.equal(isPersistedWorkflowActive("server", { status: "ACTIVE" }), true);
+  assert.equal(isPersistedWorkflowActive("server", { status: "DRAFT" }), false);
+  assert.equal(isPersistedWorkflowActive("server", { status: "PAUSED" }), false);
+  assert.equal(isPersistedWorkflowActive("local", { status: "ACTIVE" }), false);
+  assert.match(source, /activeServerWorkflowPresentation = isPersistedWorkflowActive\(editorWorkflowSource, activeServerWorkflow\)/);
+  assert.match(source, /workflow-canvas[^`]*active-server-workflow/);
+  assert.match(source, /workflow-connections[^`]*active/);
+  assert.match(styles, /\.workflow-connections\.active \.workflow-connection-path\s*\{[^}]*stroke:\s*#48f08f[^}]*animation:\s*active-workflow-connection-flow 2s/s);
+  assert.match(styles, /\.workflow-canvas\.active-server-workflow \.workflow-node\s*\{[^}]*border-color:\s*#48f08f/s);
+  assert.match(styles, /\.workflow-canvas\.active-server-workflow \.node-port\s*\{[^}]*border-color:\s*#48f08f/s);
+});
+
+test("reduced motion keeps ACTIVE green styling and disables only animation", () => {
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.match(styles, /\.workflow-connections\.active marker path\s*\{[^}]*fill:\s*#48f08f/s);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.workflow-connections\.active \.workflow-connection-path[^}]*animation:\s*none !important/s);
 });
 
 test("viewport paints at browser resolution without rasterizing the full scene", () => {

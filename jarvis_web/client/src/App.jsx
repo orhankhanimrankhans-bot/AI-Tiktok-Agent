@@ -31,7 +31,7 @@ import {
 } from "./workflowExecution.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
 import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
-  canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, moveNodeFromPointer,
+  canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 
@@ -3096,6 +3096,7 @@ function App() {
   const endConnectionDrag = (event) => { const drag = connectionDragRef.current; if (!drag || drag.pointerId !== event.pointerId) return; const targetId = connectionTargetAt(event.clientX, event.clientY); const result = targetId && validateConnectionCandidate(canvasNodesRef.current, connectionsRef.current, drag.sourceId, targetId); if (result?.ok) { const next = [...connectionsRef.current, { id: `connection-${Date.now()}`, source: drag.sourceId, target: targetId }]; connectionsRef.current = next; setConnections(next); setWorkflowDirty(true); } suppressPortClickRef.current = drag.moved; connectionDragRef.current = null; setConnectionDrag(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); };
 
   const workflowStatus = isWorkflowRunning ? "running" : "idle";
+  const activeServerWorkflowPresentation = isPersistedWorkflowActive(editorWorkflowSource, activeServerWorkflow);
   const dashboardGraph = buildDashboardGraph(canvasNodes, connections);
   const visibleTopPage = topPage === "WORKFLOW" && !can("view_workflow") ? (can("dashboard") ? "DASHBOARD" : "TOOLS") : topPage === "DASHBOARD" && !can("dashboard") ? (can("view_workflow") ? "WORKFLOW" : "TOOLS") : topPage;
 
@@ -3243,7 +3244,7 @@ function App() {
               <div className="editor-layout">
 
                 <div
-                  className={`workflow-canvas${connectionDrag ? " connection-dragging" : ""}`}
+                  className={`workflow-canvas${connectionDrag ? " connection-dragging" : ""}${activeServerWorkflowPresentation ? " active-server-workflow" : ""}`}
                   ref={workflowCanvasRef}
                   style={{ background: canvasBackground(canvasAppearance), color: readableForeground(canvasAppearance.canvasColor) }}
                   onPointerDown={startCanvasPan}
@@ -3301,7 +3302,7 @@ function App() {
 
                   <div className="canvas-viewport" style={canvasViewportStyle(canvasViewport, window.devicePixelRatio)}>
                   {canvasNodes.length > 0 && (
-                    <svg className="workflow-connections" aria-label="Workflow connections">
+                    <svg className={`workflow-connections${activeServerWorkflowPresentation ? " active" : ""}`} aria-label="Workflow connections">
                       <defs><marker id="workflow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>
                       {connections.map((connection) => {
                         const source = canvasNodes.find((node) => node.id === connection.source);

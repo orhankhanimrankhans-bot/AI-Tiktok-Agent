@@ -201,6 +201,10 @@ export function canvasPointFromClient({ clientX, clientY }, bounds, viewport) {
   };
 }
 
+export function isPersistedWorkflowActive(editorWorkflowSource, activeServerWorkflow) {
+  return editorWorkflowSource === "server" && activeServerWorkflow?.status === "ACTIVE";
+}
+
 export function canvasViewportStyle(viewport, devicePixelRatio = 1) {
   const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
   const snap = (value) => Math.round(Number(value || 0) * ratio) / ratio;

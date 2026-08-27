@@ -3787,3 +3787,13 @@ button {
 .jarvis-app[data-can-edit-workflow="false"] .edge-insert-button,
 .jarvis-app[data-can-edit-workflow="false"] .node-port,
 .jarvis-app[data-can-edit-workflow="false"] .node-menu { display: none !important; }
+
+/* Persisted ACTIVE server workflow presentation; independent from execution state. */
+.workflow-canvas.active-server-workflow .workflow-node { border-color: #48f08f; box-shadow: 0 0 0 1px rgba(72, 240, 143, .28), 0 0 12px rgba(72, 240, 143, .2); animation: active-workflow-node-pulse 2s ease-in-out infinite; }
+.workflow-canvas.active-server-workflow .node-port { border-color: #48f08f !important; background: #123b29; box-shadow: 0 0 0 2px rgba(72, 240, 143, .16), 0 0 9px rgba(72, 240, 143, .42); animation: active-workflow-port-pulse 2s ease-in-out infinite; }
+.workflow-connections.active .workflow-connection-path { stroke: #48f08f !important; stroke-width: 2.25; stroke-linecap: round; stroke-dasharray: 10 7; opacity: 1; filter: drop-shadow(0 0 4px rgba(72, 240, 143, .72)); animation: active-workflow-connection-flow 2s linear infinite; }
+.workflow-connections.active marker path { fill: #48f08f; filter: drop-shadow(0 0 3px rgba(72, 240, 143, .72)); }
+@keyframes active-workflow-node-pulse { 50% { border-color: #82ffb9; box-shadow: 0 0 0 2px rgba(72, 240, 143, .34), 0 0 20px rgba(72, 240, 143, .3); } }
+@keyframes active-workflow-port-pulse { 50% { box-shadow: 0 0 0 3px rgba(72, 240, 143, .2), 0 0 13px rgba(72, 240, 143, .58); } }
+@keyframes active-workflow-connection-flow { to { stroke-dashoffset: -34; } }
+@media (prefers-reduced-motion: reduce) { .workflow-canvas.active-server-workflow .workflow-node, .workflow-canvas.active-server-workflow .node-port, .workflow-connections.active .workflow-connection-path { animation: none !important; } }
