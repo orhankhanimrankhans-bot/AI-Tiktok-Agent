@@ -9,9 +9,12 @@ const requestLocal = source.slice(source.indexOf("  const requestOpenLocalWorkfl
 const run = source.slice(source.indexOf("  const runWorkflow = async () =>"), source.indexOf("  const saveWorkflow = async () =>"));
 const save = source.slice(source.indexOf("  const saveWorkflow = async () =>"), source.indexOf("  const openNextNodePicker"));
 
-test("Local Workflow is a passive manager entry with an explicit open action", () => {
-  assert.match(manager, /My Workflow/); assert.match(manager, /LOCAL/); assert.match(manager, /Open Local Workflow/); assert.match(manager, /onSelectLocalWorkflow/); assert.match(manager, /This selection does not replace the current editor\./);
-  assert.match(source, /setSelectedManagedWorkflowId\(LOCAL_WORKFLOW_MANAGER_ID\)/);
+test("Workflow Manager lists persisted records only and New Workflow starts an unlinked local draft", () => {
+  assert.doesNotMatch(manager, /Local browser workflow|Open Local Workflow|onSelectLocalWorkflow/);
+  assert.match(manager, /onClick=\{startNew\}/);
+  assert.match(source, /const startNewWorkflow = async \(\) =>/);
+  assert.match(source, /setEditorWorkflowSource\("local"\)/);
+  assert.match(source, /localStorage\.removeItem\(WORKFLOW_STORAGE_KEY\)/);
 });
 
 test("opening Local Workflow restores the existing local storage definition and clears only editor binding", () => {
@@ -19,8 +22,8 @@ test("opening Local Workflow restores the existing local storage definition and 
   assert.match(openLocal, /setCanvasNodes\(definition\.nodes\)/); assert.match(openLocal, /setConnections\(definition\.connections\)/); assert.match(openLocal, /setEditorWorkflowSource\("local"\)/); assert.match(openLocal, /setActiveServerWorkflow\(null\)/); assert.doesNotMatch(openLocal, /getWorkflow|updateWorkflow|deleteWorkflow|fetch\(/);
 });
 
-test("dirty local return requires explicit discard and cancel leaves the server editor intact", () => {
-  assert.match(requestLocal, /hasUnsavedEditorChanges\(\)/); assert.match(requestLocal, /setPendingOpenWorkflowId\(LOCAL_WORKFLOW_MANAGER_ID\)/); assert.match(manager, /onCancelOpen/); assert.match(manager, /onDiscardAndOpenLocal/); assert.match(openLocal, /setPendingOpenWorkflowId\(null\)/);
+test("legacy local return remains guarded without creating a manager row", () => {
+  assert.match(requestLocal, /hasUnsavedEditorChanges\(\)/); assert.match(requestLocal, /setPendingOpenWorkflowId\(LOCAL_WORKFLOW_MANAGER_ID\)/); assert.doesNotMatch(manager, /onDiscardAndOpenLocal/); assert.match(openLocal, /setPendingOpenWorkflowId\(null\)/);
 });
 
 test("returning local preserves the existing local Save and local-workflow Run paths without automation", () => {

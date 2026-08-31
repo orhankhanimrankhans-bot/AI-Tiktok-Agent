@@ -26,7 +26,13 @@ export function buildLocalPublishPayload({ name = "My Workflow", nodes, connecti
 
 export async function publishLocalWorkflow(fetchImpl, apiBaseUrl, workflow) {
   const payload = buildLocalPublishPayload(workflow);
-  const response = await fetchImpl(`${apiBaseUrl}/api/workflows`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const linkedId = typeof workflow?.serverWorkflowId === "string" && /^wf_[A-Za-z0-9_-]{8,255}$/.test(workflow.serverWorkflowId) ? workflow.serverWorkflowId : null;
+  const body = linkedId
+    ? { name: payload.name, nodes: payload.nodes, connections: payload.connections, schedule: payload.schedule, timezone: payload.timezone }
+    : payload;
+  const response = await fetchImpl(linkedId ? `${apiBaseUrl}/api/workflows/${encodeURIComponent(linkedId)}` : `${apiBaseUrl}/api/workflows`, {
+    method: linkedId ? "PATCH" : "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
   if (!response.ok) throw safePublishError(response);
   return response.json();
 }

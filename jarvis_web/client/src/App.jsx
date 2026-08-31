@@ -84,6 +84,10 @@ function FacebookIcon({ className = "" }) {
   );
 }
 
+function storeWorkflowLinkage(workflow) {
+  localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(workflowForStorage(workflow)));
+}
+
 function YouTubeIcon({ className = "" }) {
   return <span className={`youtube-mark ${className}`} aria-hidden="true"><svg viewBox="0 0 32 24" focusable="false"><rect x="1" y="1" width="30" height="22" rx="7" fill="#ff0033" /><path d="m13 7 8 5-8 5z" fill="#fff" /></svg></span>;
 }
@@ -2653,19 +2657,30 @@ function App() {
   }, []);
 
   useEffect(() => {
-    try {
-      const workflow = loadStoredLocalWorkflow();
-      if (!workflow) return;
-      if (Array.isArray(workflow?.nodes)) {
-        setCanvasNodes(workflow.nodes);
-      }
-      if (Array.isArray(workflow?.connections)) {
-        setConnections(workflow.connections);
-      }
-      editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections);
-    } catch (error) {
-      console.error("Could not load saved Corex workflow:", error);
-    }
+    let cancelled = false;
+    const restoreWorkflow = async () => {
+      try {
+        const localWorkflow = loadStoredLocalWorkflow();
+        if (!localWorkflow) return;
+        let workflow = localWorkflow;
+        if (localWorkflow.serverWorkflowId) {
+          try {
+            const stored = validateStoredWorkflow(await getWorkflow(fetch, API_BASE_URL, localWorkflow.serverWorkflowId));
+            if (cancelled) return;
+            workflow = stored; setEditorWorkflowSource("server");
+            setActiveServerWorkflow({ id: stored.id, name: stored.name, status: stored.status, version: stored.version, updatedAt: stored.updatedAt });
+            setSelectedManagedWorkflowId(stored.id);
+          } catch {
+            // Keep the local definition available if the linked server workflow is temporarily unavailable.
+          }
+        }
+        if (cancelled) return;
+        setCanvasNodes(workflow.nodes); setConnections(workflow.connections);
+        editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections);
+      } catch (error) { console.error("Could not load saved Corex workflow:", error); }
+    };
+    void restoreWorkflow();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -2890,6 +2905,33 @@ function App() {
     openLocalWorkflow();
   };
 
+  const startNewWorkflow = async () => {
+    canvasNodesRef.current = []; connectionsRef.current = [];
+    setCanvasNodes([]); setConnections([]); setEditingNode(null); setSelectedConnectionId(null);
+    setEditorWorkflowSource("local"); setActiveServerWorkflow(null); setSelectedManagedWorkflowId(null);
+    editorDefinitionBaselineRef.current = definitionFingerprint([], []); setWorkflowDirty(false);
+    localStorage.removeItem(WORKFLOW_STORAGE_KEY); setShowWorkflowManager(false);
+    setWorkflowNotice({ status: "success", message: "Started a new workflow. Add nodes, then publish it when ready." });
+    return { id: LOCAL_WORKFLOW_MANAGER_ID };
+  };
+
+  const handleManagedWorkflowUpdated = (workflow) => {
+    if (activeServerWorkflow?.id !== workflow.id) return;
+    setActiveServerWorkflow((current) => ({ ...current, name: workflow.name, status: workflow.status, version: workflow.version, updatedAt: workflow.updatedAt }));
+    const local = loadStoredLocalWorkflow();
+    if (local?.serverWorkflowId === workflow.id) storeWorkflowLinkage({ ...local, name: workflow.name, savedAt: new Date().toISOString() });
+  };
+
+  const handleManagedWorkflowDeleted = (workflow) => {
+    if (activeServerWorkflow?.id !== workflow.id) return;
+    canvasNodesRef.current = []; connectionsRef.current = [];
+    setCanvasNodes([]); setConnections([]); setEditingNode(null); setSelectedConnectionId(null);
+    setEditorWorkflowSource("local"); setActiveServerWorkflow(null); setSelectedManagedWorkflowId(null);
+    editorDefinitionBaselineRef.current = definitionFingerprint([], []); setWorkflowDirty(false);
+    localStorage.removeItem(WORKFLOW_STORAGE_KEY);
+    setWorkflowNotice({ status: "success", message: `Deleted ${workflow.name}.` });
+  };
+
   const runWorkflow = async () => {
     if (isWorkflowRunning) return;
     setIsWorkflowRunning(true);
@@ -2948,6 +2990,7 @@ function App() {
         const definition = editorDefinition(canvasNodesRef.current, connectionsRef.current);
         const saved = validateStoredWorkflow(await updateWorkflow(fetch, API_BASE_URL, activeServerWorkflow.id, definition));
         setActiveServerWorkflow({ id: saved.id, name: saved.name, status: saved.status, version: saved.version, updatedAt: saved.updatedAt });
+        storeWorkflowLinkage({ version: 2, name: saved.name, nodes: definition.nodes, connections: definition.connections, savedAt: new Date().toISOString(), serverWorkflowId: saved.id });
         editorDefinitionBaselineRef.current = definitionFingerprint(definition.nodes, definition.connections);
         setWorkflowManagerRefreshKey((value) => value + 1); setWorkflowNotice({ status: "success", message: "Workflow saved." }); setWorkflowDirty(false);
       } catch { setWorkflowNotice({ status: "error", message: "Could not save workflow." }); }
@@ -2979,14 +3022,14 @@ function App() {
   const publishWorkflow = () => runSingleFlightPublish(publishInFlightRef, async () => {
     setIsPublishing(true); setWorkflowNotice({ status: "running", message: "Publishing workflow..." });
     try {
-      const publishDefinition = buildLocalPublishPayload({ name: editorWorkflowSource === "server" ? activeServerWorkflow?.name : "My Workflow", nodes: canvasNodesRef.current, connections: connectionsRef.current });
-      const stored = editorWorkflowSource === "server" && activeServerWorkflow?.id
-        ? await updateWorkflow(fetch, API_BASE_URL, activeServerWorkflow.id, { nodes: publishDefinition.nodes, connections: publishDefinition.connections, schedule: publishDefinition.schedule, timezone: publishDefinition.timezone })
-        : await publishLocalWorkflow(fetch, API_BASE_URL, publishDefinition);
+      const publishDefinition = buildLocalPublishPayload({ name: editorWorkflowSource === "server" ? activeServerWorkflow?.name : loadStoredLocalWorkflow()?.name || "My Workflow", nodes: canvasNodesRef.current, connections: connectionsRef.current });
+      const stored = await publishLocalWorkflow(fetch, API_BASE_URL, { ...publishDefinition, serverWorkflowId: editorWorkflowSource === "server" ? activeServerWorkflow?.id : loadStoredLocalWorkflow()?.serverWorkflowId });
       const workflow = validateStoredWorkflow(stored);
       setEditorWorkflowSource("server"); setActiveServerWorkflow({ id: workflow.id, name: workflow.name, status: workflow.status, version: workflow.version, updatedAt: workflow.updatedAt });
+
       setSelectedManagedWorkflowId(workflow.id); setWorkflowManagerRefreshKey((value) => value + 1);
       editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections); setWorkflowDirty(false);
+      storeWorkflowLinkage({ version: 2, name: workflow.name, nodes: workflow.nodes, connections: workflow.connections, savedAt: new Date().toISOString(), serverWorkflowId: workflow.id });
       setWorkflowNotice({ status: "success", message: editorWorkflowSource === "local" ? "Published My Workflow as a server DRAFT. Activate Schedule explicitly when ready." : "Published changes to the linked server workflow." });
     } catch (error) { setWorkflowNotice({ status: "error", message: error?.message || "Could not publish the workflow." }); }
     finally { setIsPublishing(false); }
@@ -3356,7 +3399,7 @@ function App() {
             </div>
 
             {workflowNotice && <div className={`workflow-notice ${workflowNotice.status}`} role="status">{workflowNotice.message}</div>}
-            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} activeWorkflowId={activeServerWorkflow?.id || null} runningWorkflowId={isWorkflowRunning ? (editorWorkflowSource === "server" ? activeServerWorkflow?.id : LOCAL_WORKFLOW_MANAGER_ID) : null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} localWorkflowId={LOCAL_WORKFLOW_MANAGER_ID} onSelectLocalWorkflow={() => setSelectedManagedWorkflowId(LOCAL_WORKFLOW_MANAGER_ID)} onOpenLocalWorkflow={requestOpenLocalWorkflow} onDiscardAndOpenLocal={openLocalWorkflow} />}
+            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} onNewWorkflow={startNewWorkflow} onWorkflowUpdated={handleManagedWorkflowUpdated} onWorkflowDeleted={handleManagedWorkflowDeleted} activeWorkflowId={activeServerWorkflow?.id || null} runningWorkflowId={isWorkflowRunning && editorWorkflowSource === "server" ? activeServerWorkflow?.id : null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} />}
 
             {workflowTab === "EDITOR" && (
               <div className="editor-layout">

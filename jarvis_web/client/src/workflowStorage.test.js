@@ -13,3 +13,8 @@ test("Facebook secrets cannot enter workflow storage", () => {
   const saved = workflowForStorage({ version: 2, nodes: [{ id: "fb", provider: "Facebook", config: { headers: [{ name: "Authorization", value: "Bearer secret" }] } }], connections: [] });
   assert.doesNotMatch(JSON.stringify(saved), /Authorization|Bearer secret/);
 });
+test("published local workflow linkage survives reload without changing the server ID", () => {
+  const linked = normalizeSavedWorkflow({ version: 2, name: "Production", serverWorkflowId: "wf_linked123", nodes: [], connections: [] });
+  assert.equal(linked.serverWorkflowId, "wf_linked123");
+  assert.equal(normalizeSavedWorkflow({ serverWorkflowId: "not-an-id", nodes: [], connections: [] }).serverWorkflowId, null);
+});
