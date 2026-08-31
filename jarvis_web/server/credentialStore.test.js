@@ -10,6 +10,8 @@ const {
   decryptTokens,
   deriveEncryptionKey,
   encryptTokens,
+  GOOGLE_DRIVE_PROVIDER,
+  YOUTUBE_PROVIDER,
 } = require("./credentialStore");
 
 const TEST_SECRET = "test-only-secret-with-sufficient-entropy-123456";
@@ -96,6 +98,22 @@ test("legacy credentials migrate to Admin and Google credentials are workspace i
   assert.equal((await store.get(adminId, { includeTokens: true, owner: admin })).tokens.refresh_token, "admin-secret");
   const columns = store.db.prepare("PRAGMA table_info(google_credentials)").all().map((column) => column.name);
   assert.ok(columns.includes("owner_type") && columns.includes("owner_id"));
+});
+
+test("Drive and YouTube credentials remain provider and workspace isolated", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "corex-youtube-owner-"));
+  const store = new CredentialStore({ dbPath: path.join(tempDir, "credentials.sqlite3"), encryptionSecret: TEST_SECRET }); await store.open();
+  t.after(async () => { await store.close(); fs.rmSync(tempDir, { recursive: true, force: true }); });
+  const ownerA = { ownerType: "additional", ownerId: "workspace_a" }; const ownerB = { ownerType: "additional", ownerId: "workspace_b" };
+  const driveId = CredentialStore.generateId(); const youtubeId = CredentialStore.generateId();
+  await store.save({ id: driveId, provider: GOOGLE_DRIVE_PROVIDER, accountEmail: "same@example.com", tokens: { refresh_token: "drive-secret" } }, ownerA);
+  await store.save({ id: youtubeId, provider: YOUTUBE_PROVIDER, accountEmail: "same@example.com", tokens: { refresh_token: "youtube-secret" } }, ownerA);
+  assert.deepEqual((await store.list(ownerA, { provider: GOOGLE_DRIVE_PROVIDER })).map((item) => item.id), [driveId]);
+  assert.deepEqual((await store.list(ownerA, { provider: YOUTUBE_PROVIDER })).map((item) => item.id), [youtubeId]);
+  assert.equal(await store.get(youtubeId, { owner: ownerA, provider: GOOGLE_DRIVE_PROVIDER }), null);
+  assert.equal(await store.get(youtubeId, { owner: ownerB, provider: YOUTUBE_PROVIDER }), null);
+  assert.equal(Object.hasOwn(await store.get(youtubeId, { owner: ownerA, provider: YOUTUBE_PROVIDER }), "tokens"), false);
+  assert.equal((await store.get(youtubeId, { owner: ownerA, provider: YOUTUBE_PROVIDER, includeTokens: true })).tokens.refresh_token, "youtube-secret");
 });
 
 test("legacy SESSION_SECRET credentials migrate once to the current encryption key", async (t) => {

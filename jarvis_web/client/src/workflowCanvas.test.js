@@ -200,6 +200,17 @@ test("temporary wire coordinates honor canvas pan and zoom", () => {
   assert.match(connectionPathToPoint({ x: 100, y: 80 }, { x: 500, y: 220 }), /^M 248 154 C/);
 });
 
+test("canvas permits only the Prepare Content Facebook and YouTube fork joined by Move File", () => {
+  const nodes = [{ id: "p", name: "Prepare Content" }, { id: "f", name: "Facebook Graph API" }, { id: "y", name: "YouTube" }, { id: "m", name: "Move File" }, { id: "x", name: "Limit" }];
+  const firstBranch = [{ id: "pf", source: "p", target: "f" }];
+  assert.equal(validateConnectionCandidate(nodes, firstBranch, "p", "y").ok, true);
+  const publishers = [...firstBranch, { id: "py", source: "p", target: "y" }, { id: "fm", source: "f", target: "m" }];
+  assert.equal(validateConnectionCandidate(nodes, publishers, "y", "m").ok, true);
+  assert.equal(validateConnectionCandidate(nodes, firstBranch, "p", "x").ok, false);
+  assert.equal(validateConnectionCandidate(nodes, [{ id: "xm", source: "x", target: "m" }], "y", "m").ok, false);
+  assert.equal(nodeConnectionHealth({ name: "YouTube", config: { credentialId: "yt-ready" } }, { youtubeCredentials: [{ id: "yt-ready", connected: true }] }), "connected");
+});
+
 test("persisted ACTIVE server workflow decorates nodes, connections, and ports while idle", () => {
   const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");

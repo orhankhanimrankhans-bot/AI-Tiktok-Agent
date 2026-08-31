@@ -5,7 +5,7 @@ const dotenv = require("dotenv");
 const session = require("express-session");
 const crypto = require("crypto");
 const { google } = require("googleapis");
-const { CredentialStore } = require("./credentialStore");
+const { CredentialStore, GOOGLE_DRIVE_PROVIDER, YOUTUBE_PROVIDER } = require("./credentialStore");
 const { AccessControlStore, sessionIdentity, workflowWorkspace } = require("./accessControl");
 const { enforceSecurity, registerSecurityRoutes } = require("./securityAccess");
 const { DriveSearchError } = require("./driveSearch");
@@ -28,6 +28,7 @@ const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require(".
 const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
 const { SqliteSessionStore } = require("./sqliteSessionStore");
 const { createWorkflowScheduler } = require("./workflowScheduler");
+const { YouTubeUploadError } = require("./youtubeUpload");
 
 dotenv.config();
 
@@ -170,9 +171,9 @@ function base64urlEncode(buf) {
 
 // Create a signed OAuth state token.
 // Returns a JWT-like string: base64url(payload).base64url(signature)
-function createSignedOAuthState({ mode, nonce, iat, intent, credentialId = null, ownerType, ownerId }) {
+function createSignedOAuthState({ mode, nonce, iat, intent, credentialId = null, ownerType, ownerId, provider = GOOGLE_DRIVE_PROVIDER }) {
   // Payload: mode + nonce + issued timestamp
-  const payloadStr = JSON.stringify({ mode, nonce, iat, intent, credentialId, ownerType, ownerId });
+  const payloadStr = JSON.stringify({ mode, nonce, iat, intent, credentialId, ownerType, ownerId, provider });
   // HMAC-SHA256 signature of the payload string using SESSION_SECRET
   const hmac = crypto.createHmac("sha256", process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me");
   hmac.update(payloadStr);
@@ -216,6 +217,7 @@ function verifySignedOAuthState(stateToken) {
   if (!["create", "reconnect"].includes(payload.intent)) return null;
   if (payload.intent === "reconnect" && !CredentialStore.isValidId(payload.credentialId)) return null;
   if (payload.intent === "create" && payload.credentialId !== null) return null;
+  if (![GOOGLE_DRIVE_PROVIDER, YOUTUBE_PROVIDER].includes(payload.provider || GOOGLE_DRIVE_PROVIDER)) return null;
   if (!["admin", "child", "additional"].includes(payload.ownerType) || typeof payload.ownerId !== "string" || !payload.ownerId || payload.ownerId.length > 200) return null;
 
   // Check expiration: 10 minutes
@@ -264,11 +266,12 @@ let workflowScheduler;
 let facebookVerificationWorker;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
-function makePopupResultHtml({ status, message = "", credentialId = null }) {
+function makePopupResultHtml({ status, message = "", credentialId = null, service = "drive" }) {
   return renderPopupResultHtml({
     status,
     message,
     credentialId,
+    service,
     clientUrl: CLIENT_URL,
   });
 }
@@ -487,7 +490,7 @@ app.post("/api/facebook/reels/publish", publishFacebookReel);
 app.get("/api/google/credentials", async (req, res) => {
   try {
     const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
-    return res.json({ credentials: await credentialStore.list(owner) });
+    return res.json({ credentials: await credentialStore.list(owner, { provider: GOOGLE_DRIVE_PROVIDER }) });
   } catch (error) {
     console.error("Could not list Google credentials:", error?.message || error);
     return res.status(500).json({ error: "Could not list Google credentials." });
@@ -500,7 +503,7 @@ app.get("/api/google/credentials/:credentialId", async (req, res) => {
   }
   try {
     const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
-    const credential = await credentialStore.get(req.params.credentialId, { owner });
+    const credential = await credentialStore.get(req.params.credentialId, { owner, provider: GOOGLE_DRIVE_PROVIDER });
     if (!credential) return res.status(404).json({ error: "Credential not found." });
     return res.json(credential);
   } catch (error) {
@@ -606,13 +609,37 @@ app.post("/api/executions", (req, res) => {
   } catch { return res.status(500).json({ error: "Could not save workflow execution." }); }
 });
 
+app.get("/api/youtube/credentials", async (req, res) => {
+  try { const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    return res.json({ credentials: await credentialStore.list(owner, { provider: YOUTUBE_PROVIDER }) });
+  } catch { return res.status(500).json({ error: "Could not list YouTube credentials." }); }
+});
+
+app.get("/api/youtube/credentials/:credentialId", async (req, res) => {
+  if (!CredentialStore.isValidId(req.params.credentialId)) return res.status(400).json({ error: "Invalid credential ID." });
+  try { const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    const credential = await credentialStore.get(req.params.credentialId, { owner, provider: YOUTUBE_PROVIDER });
+    return credential ? res.json(credential) : res.status(404).json({ error: "YouTube credential not found." });
+  } catch { return res.status(500).json({ error: "Could not read YouTube credential." }); }
+});
+
+app.post("/api/youtube/videos/upload", async (req, res) => {
+  try { const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    return res.json(await executionServices.youtube.uploadVideo(req.body, owner));
+  } catch (error) {
+    if (error instanceof YouTubeUploadError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
+    console.error("YouTube upload failed safely.");
+    return res.status(500).json({ status: "error", code: "youtube_server_error", error: "YouTube upload could not be completed." });
+  }
+});
+
 app.get("/api/scheduler/status", (req, res) => {
   const identity = sessionIdentity(req, Date.now(), accessControlStore);
   if (accessControlStore?.securityState() !== "disabled" && identity?.role !== "admin" && identity?.role !== "owner") return res.status(403).json({ error: "Admin access is required." });
   return workflowScheduler ? res.json({ scheduler: workflowScheduler.status() }) : res.status(503).json({ error: "Scheduler is not ready." });
 });
 
-app.get("/api/google/auth/start", async (req, res) => {
+async function startGoogleOAuth(req, res, provider = GOOGLE_DRIVE_PROVIDER) {
   const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
   const oauth2Client = createOAuthClient();
 
@@ -634,14 +661,14 @@ app.get("/api/google/auth/start", async (req, res) => {
   if (requestedCredentialId && !CredentialStore.isValidId(requestedCredentialId)) {
     return res.status(400).json({ status: "error", message: "Invalid credential ID." });
   }
-  if (requestedCredentialId && !(await credentialStore.get(requestedCredentialId, { owner }))) {
+  if (requestedCredentialId && !(await credentialStore.get(requestedCredentialId, { owner, provider }))) {
     return res.status(404).json({ status: "error", message: "Credential not found." });
   }
 
   // Create a signed state token (survives across Node processes)
   const iat = Math.floor(Date.now() / 60000); // minutes since epoch
   const stateToken = createSignedOAuthState({
-    mode, nonce, iat, intent, credentialId: requestedCredentialId, ownerType: owner.ownerType, ownerId: owner.ownerId,
+    mode, nonce, iat, intent, credentialId: requestedCredentialId, ownerType: owner.ownerType, ownerId: owner.ownerId, provider,
   });
 
   // Pass the signed state token to Google as the OAuth state parameter
@@ -671,14 +698,19 @@ app.get("/api/google/auth/start", async (req, res) => {
         "openid",
         "email",
         "profile",
-        "https://www.googleapis.com/auth/drive",
+        provider === YOUTUBE_PROVIDER
+          ? "https://www.googleapis.com/auth/youtube.upload"
+          : "https://www.googleapis.com/auth/drive",
       ],
       state: stateToken, // <- pass signed token instead of raw hex
     });
 
     return res.redirect(authorizationUrl);
   });
-});
+}
+
+app.get("/api/google/auth/start", (req, res) => startGoogleOAuth(req, res, GOOGLE_DRIVE_PROVIDER));
+app.get("/api/youtube/auth/start", (req, res) => startGoogleOAuth(req, res, YOUTUBE_PROVIDER));
 
 app.get("/api/google/auth/callback", async (req, res) => {
   // --- Signed OAuth State Token Verification ---
@@ -692,7 +724,7 @@ app.get("/api/google/auth/callback", async (req, res) => {
   const sendFailure = (message) => {
     if (finalMode === "popup") {
       return res.status(400).send(
-        makePopupResultHtml({ status: "error", message })
+        makePopupResultHtml({ status: "error", message, service: verifiedState?.provider === YOUTUBE_PROVIDER ? "youtube" : "drive" })
       );
     }
     const redirect = new URL(CLIENT_URL);
@@ -711,6 +743,7 @@ app.get("/api/google/auth/callback", async (req, res) => {
   if (!verifiedState) {
     return sendFailure("OAuth state validation failed.");
   }
+  const oauthProvider = verifiedState.provider || GOOGLE_DRIVE_PROVIDER;
 
   // --- CSRF protection: compare the state Google returned with the nonce from our signed token ---
   // Google echoes back the exact state parameter we sent. Since our state is the signed token,
@@ -770,13 +803,14 @@ app.get("/api/google/auth/callback", async (req, res) => {
     }
 
     const previous = verifiedState.intent === "reconnect"
-      ? await credentialStore.get(verifiedState.credentialId, { includeTokens: true, owner: verifiedState })
-      : await credentialStore.findByAccountEmail(profile.email, { includeTokens: true, owner: verifiedState });
+      ? await credentialStore.get(verifiedState.credentialId, { includeTokens: true, owner: verifiedState, provider: oauthProvider })
+      : await credentialStore.findByAccountEmail(profile.email, { includeTokens: true, owner: verifiedState, provider: oauthProvider });
     const credentialId = verifiedState.intent === "reconnect"
       ? verifiedState.credentialId
       : previous?.id || CredentialStore.generateId();
     const credential = await credentialStore.save({
       id: credentialId,
+      provider: oauthProvider,
       accountEmail: profile.email,
       accountName: profile.name,
       tokens: { ...(previous?.tokens || {}), ...tokens },
@@ -790,12 +824,13 @@ app.get("/api/google/auth/callback", async (req, res) => {
             ? `${profile.email} is connected to Corex.`
             : "Your Google account is connected to Corex.",
           credentialId: credential.id,
+          service: oauthProvider === YOUTUBE_PROVIDER ? "youtube" : "drive",
         })
       );
     }
 
     const redirect = new URL(CLIENT_URL);
-    redirect.searchParams.set("google_oauth", "connected");
+    redirect.searchParams.set(oauthProvider === YOUTUBE_PROVIDER ? "youtube_oauth" : "google_oauth", "connected");
     redirect.searchParams.set("credential_id", credential.id);
     return res.redirect(redirect.toString());
   } catch (error) {
@@ -806,7 +841,7 @@ app.get("/api/google/auth/callback", async (req, res) => {
   }
 });
 
-async function deleteGoogleCredential(req, res) {
+async function deleteGoogleCredential(req, res, provider = GOOGLE_DRIVE_PROVIDER) {
   const { credentialId } = req.params;
   if (!CredentialStore.isValidId(credentialId)) {
     return res.status(400).json({ error: "Invalid credential ID." });
@@ -814,7 +849,7 @@ async function deleteGoogleCredential(req, res) {
 
   try {
     const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
-    const credential = await credentialStore.get(credentialId, { includeTokens: true, owner });
+    const credential = await credentialStore.get(credentialId, { includeTokens: true, owner, provider });
     if (!credential) return res.status(404).json({ error: "Credential not found." });
     const oauth2Client = createOAuthClient();
 
@@ -838,13 +873,15 @@ async function deleteGoogleCredential(req, res) {
     console.error("Google disconnect failed safely.");
     return res.status(500).json({
       ok: false,
-      error: "Could not disconnect Google Drive.",
+      error: provider === YOUTUBE_PROVIDER ? "Could not disconnect YouTube." : "Could not disconnect Google Drive.",
     });
   }
 }
 
-app.post("/api/google/credentials/:credentialId/disconnect", deleteGoogleCredential);
-app.delete("/api/google/credentials/:credentialId", deleteGoogleCredential);
+app.post("/api/google/credentials/:credentialId/disconnect", (req, res) => deleteGoogleCredential(req, res, GOOGLE_DRIVE_PROVIDER));
+app.delete("/api/google/credentials/:credentialId", (req, res) => deleteGoogleCredential(req, res, GOOGLE_DRIVE_PROVIDER));
+app.post("/api/youtube/credentials/:credentialId/disconnect", (req, res) => deleteGoogleCredential(req, res, YOUTUBE_PROVIDER));
+app.delete("/api/youtube/credentials/:credentialId", (req, res) => deleteGoogleCredential(req, res, YOUTUBE_PROVIDER));
 
 
 // Serve the production React/Vite frontend.
@@ -880,7 +917,10 @@ async function startServer() {
   facebookCredentialStore.open();
   const facebookPublicationStore = new FacebookPublicationStore(credentialStore.db); facebookPublicationStore.open();
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
-  executionServices = createExecutionServices({ credentialStore, createOAuthClient, createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }), facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
+  executionServices = createExecutionServices({ credentialStore, createOAuthClient,
+    createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
+    createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
+    facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
   registerWorkflowRoutes(app, { workflowStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore),
@@ -888,7 +928,10 @@ async function startServer() {
       for (const node of Array.isArray(nodes) ? nodes : []) {
         const id = node?.config?.credentialId;
         if (typeof id !== "string" || !id) continue;
-        if (CredentialStore.isValidId(id) && !await credentialStore.get(id, { owner })) return false;
+        if (CredentialStore.isValidId(id)) {
+          const provider = node?.name === "YouTube" ? YOUTUBE_PROVIDER : GOOGLE_DRIVE_PROVIDER;
+          if (!await credentialStore.get(id, { owner, provider })) return false;
+        }
         if (FacebookCredentialStore.isValidId(id) && !facebookCredentialStore.get(id, { owner })) return false;
       }
       return true;

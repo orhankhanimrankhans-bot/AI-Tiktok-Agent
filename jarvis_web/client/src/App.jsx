@@ -34,6 +34,7 @@ import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, T
   canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
+import { buildYouTubeUploadRequest, YOUTUBE_OPERATION_UPLOAD, YOUTUBE_PRIVACY_STATUSES, youtubeCredentialLabel, youtubeNodeDefaults } from "./youtubeConfig.js";
 
 const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
 const LOCAL_WORKFLOW_MANAGER_ID = "local-workflow";
@@ -83,9 +84,14 @@ function FacebookIcon({ className = "" }) {
   );
 }
 
+function YouTubeIcon({ className = "" }) {
+  return <span className={`youtube-mark ${className}`} aria-hidden="true"><svg viewBox="0 0 32 24" focusable="false"><rect x="1" y="1" width="30" height="22" rx="7" fill="#ff0033" /><path d="m13 7 8 5-8 5z" fill="#fff" /></svg></span>;
+}
+
 function NodeProviderIcon({ node }) {
   if (node.provider === "Google Drive") return <GoogleDriveIcon />;
   if (node.provider === "Facebook") return <FacebookIcon />;
+  if (node.provider === "YouTube") return <YouTubeIcon />;
   if (node.name === "Schedule Trigger") return <span className="trigger-mark" aria-hidden="true">
     <svg viewBox="0 0 32 32" focusable="false">
       <circle className="trigger-clock-face" cx="16" cy="16" r="10.5" />
@@ -127,6 +133,14 @@ const NODE_LIBRARY = [
     description: "Interact with Facebook through the Meta Graph API",
     type: "ACTION",
     icon: "f",
+  },
+  {
+    id: "youtube-upload",
+    provider: "YouTube",
+    name: "YouTube",
+    description: "Upload a video with the YouTube Data API v3",
+    type: "ACTION",
+    icon: "▶",
   },
   {
     id: "facebook-page-post",
@@ -1177,9 +1191,12 @@ function GoogleCredentialModal({
   onStartOAuth,
   onDisconnect,
   credential,
+  service = "drive",
 }) {
+  const isYouTube = service === "youtube";
+  const serviceName = isYouTube ? "YouTube" : "Google Drive";
   const [credentialName, setCredentialName] = useState(
-    credential?.name ?? "Google Drive account"
+    credential?.name ?? `${serviceName} account`
   );
   const [activeTab, setActiveTab] = useState("Connection");
   const [authMode, setAuthMode] = useState(credential?.authMode ?? "managed_oauth2");
@@ -1208,21 +1225,21 @@ function GoogleCredentialModal({
       return;
     }
     const now = new Date().toISOString();
-    onSave({ ...credential, id: credential.id, name: credentialName.trim() || credential.accountEmail || "Google Drive account", authMode, allowedDomains, visibility, updatedAt: now });
+    onSave({ ...credential, id: credential.id, name: credentialName.trim() || credential.accountEmail || `${serviceName} account`, authMode, allowedDomains, visibility, updatedAt: now });
   };
 
   const disconnectCredential = async () => {
     if (!credential?.id) return;
-    setConnectionMessage("Disconnecting Google Drive...");
+    setConnectionMessage(`Disconnecting ${serviceName}...`);
 
     try {
       await onDisconnect(credential.id);
       setStatus("not_connected");
-      setConnectionMessage("Google Drive credential disconnected.");
-      onNotify("Google Drive credential disconnected");
+      setConnectionMessage(`${serviceName} credential disconnected.`);
+      onNotify(`${serviceName} credential disconnected`);
       onClose();
     } catch (error) {
-      setConnectionMessage(error?.message || "Could not disconnect Google Drive.");
+      setConnectionMessage(error?.message || `Could not disconnect ${serviceName}.`);
     }
   };
 
@@ -1231,7 +1248,7 @@ function GoogleCredentialModal({
       <div className="credential-modal">
         <header className="credential-modal-header">
           <div className="credential-modal-title">
-            <GoogleDriveIcon className="drive-provider-logo" />
+            {isYouTube ? <YouTubeIcon className="drive-provider-logo" /> : <GoogleDriveIcon className="drive-provider-logo" />}
             <div>
               <input
                 className="credential-name-input"
@@ -1239,7 +1256,7 @@ function GoogleCredentialModal({
                 onChange={(e) => setCredentialName(e.target.value)}
               />
               <div className="credential-subtitle">
-                Google Drive OAuth2 API
+                {isYouTube ? "YouTube Data API v3 OAuth2" : "Google Drive OAuth2 API"}
               </div>
             </div>
           </div>
@@ -1253,7 +1270,7 @@ function GoogleCredentialModal({
 
         <div className="credential-modal-body">
           <aside className="credential-tabs">
-            {["Connection", "Sharing", "Details"].map((tab) => (
+            {(isYouTube ? ["Connection", "Details"] : ["Connection", "Sharing", "Details"]).map((tab) => (
               <button type="button" key={tab} className={activeTab === tab ? "credential-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>
             ))}
           </aside>
@@ -1281,10 +1298,10 @@ function GoogleCredentialModal({
             </div>
             </>}
             {activeTab === "Sharing" && <div className="credential-metadata-panel"><h3>Credential visibility</h3><label htmlFor="google-credential-visibility">Visibility</label><select id="google-credential-visibility" value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="private">Private</option><option value="shared">Shared</option></select><p>Private credentials are available only to this Corex workspace. Sharing is metadata only until backend permissions are configured.</p></div>}
-            {activeTab === "Details" && <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Credential ID/reference</dt><dd>{credential?.id ?? "Created after Google sign-in"}</dd></div><div><dt>Provider</dt><dd>Google Drive</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{status}</dd></div><div><dt>Created</dt><dd>{credential?.createdAt ?? "Created after Google sign-in"}</dd></div><div><dt>Updated</dt><dd>{credential?.updatedAt ?? "Not saved yet"}</dd></div></dl></div>}
+            {activeTab === "Details" && <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Credential ID/reference</dt><dd>{credential?.id ?? "Created after Google sign-in"}</dd></div><div><dt>Provider</dt><dd>{serviceName}</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{status}</dd></div><div><dt>Created</dt><dd>{credential?.createdAt ?? "Created after Google sign-in"}</dd></div><div><dt>Updated</dt><dd>{credential?.updatedAt ?? "Not saved yet"}</dd></div></dl></div>}
           </section>
         </div>
-        {showDeleteConfirmation && <div className="credential-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-credential-title"><div className="credential-confirm-modal"><h3 id="delete-credential-title">Delete credential?</h3><p>Delete "{credentialName.trim() || "Google Drive account"}"?</p><div><button type="button" onClick={() => setShowDeleteConfirmation(false)}>Cancel</button><button type="button" className="confirm-delete" onClick={() => onDelete(credential.id)}>Delete</button></div></div></div>}
+        {showDeleteConfirmation && <div className="credential-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-credential-title"><div className="credential-confirm-modal"><h3 id="delete-credential-title">Delete credential?</h3><p>Delete "{credentialName.trim() || `${serviceName} account`}"?</p><div><button type="button" onClick={() => setShowDeleteConfirmation(false)}>Cancel</button><button type="button" className="confirm-delete" onClick={() => onDelete(credential.id)}>Delete</button></div></div></div>}
       </div>
     </div>
   );
@@ -1886,6 +1903,7 @@ function createPhase2Config(nodeId) {
   if (nodeId === "google-move") return { credentialId: "", resource: "File", operation: "Move", fileIdMode: "Expression",
     fileId: "{{ $json.sourceFileId }}", destinationFolderId: "", settings: defaultNodeSettings() };
   if (nodeId === "facebook-graph-api") return { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
+  if (nodeId === "youtube-upload") return { ...youtubeNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "prepare-content") return { ...prepareContentDefaults(), settings: defaultNodeSettings() };
   return null;
 }
@@ -2098,6 +2116,38 @@ function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecuteP
   </div></div>;
 }
 
+function YouTubeEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
+  const defaults = { ...youtubeNodeDefaults(), settings: defaultNodeSettings() };
+  const [activeTab, setActiveTab] = useState("Parameters");
+  const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
+  const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
+  const [output, setOutput] = useState(node.output ?? null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const updateSetting = (key, value) => setConfig((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+  const executeStep = async () => { if (isExecuting) return; setIsExecuting(true); try { const executed = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" }); setOutput(executed.output); onSaveNode(executed); } finally { setIsExecuting(false); } };
+  const saveAndClose = () => { onSaveNode({ ...node, config, input, output, status: node.status ?? "idle" }); onClose(); };
+  return <div className="node-editor-overlay"><div className="node-editor-window">
+    <header className="node-editor-header"><div className="node-editor-title"><YouTubeIcon className="facebook-title-icon" /><strong>YouTube</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
+    <div className="node-editor-body google-three-column">
+      <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
+      <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
+        <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
+          <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{youtubeCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
+          <label>Operation</label><select value={config.operation} disabled><option>{YOUTUBE_OPERATION_UPLOAD}</option></select>
+          <label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} placeholder="data" />
+          <label>Title</label><input value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="{{ $json.title }}" />
+          <label>Description</label><textarea rows="4" value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="{{ $json.socialCaption }}" />
+          <label>Privacy Status</label><select value={config.privacyStatus} onChange={(event) => setConfig({ ...config, privacyStatus: event.target.value })}>{YOUTUBE_PRIVACY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}</select>
+          <label>Made for Kids</label><select value={config.madeForKids ? "yes" : "no"} onChange={(event) => setConfig({ ...config, madeForKids: event.target.value === "yes" })}><option value="no">No</option><option value="yes">Yes</option></select>
+          <label>Tags</label><input value={config.tags} onChange={(event) => setConfig({ ...config, tags: event.target.value })} placeholder="Optional, comma-separated; expressions supported" />
+          <label>Category ID</label><input value={config.categoryId} onChange={(event) => setConfig({ ...config, categoryId: event.target.value })} placeholder="Optional numeric ID" />
+        </div> : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version="YouTube node version 1.0" />}</div>
+      </section>
+      <NodeOutputPanel output={output} onExecute={executeStep} />
+    </div>
+  </div></div>;
+}
+
 function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
   const defaults = { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
   const [activeTab, setActiveTab] = useState("Parameters");
@@ -2271,6 +2321,10 @@ function App() {
   const [googleCredentials, setGoogleCredentials] = useState([]);
   const [editingGoogleCredentialId, setEditingGoogleCredentialId] = useState(null);
   const pendingGoogleCredentialNodeId = useRef(null);
+  const [showYouTubeCredential, setShowYouTubeCredential] = useState(false);
+  const [youtubeCredentials, setYouTubeCredentials] = useState([]);
+  const [editingYouTubeCredentialId, setEditingYouTubeCredentialId] = useState(null);
+  const pendingYouTubeCredentialNodeId = useRef(null);
   const [credentialToast, setCredentialToast] = useState("");
   const [showFacebookCredential, setShowFacebookCredential] = useState(false);
   const [facebookCredentials, setFacebookCredentials] = useState([]);
@@ -2336,6 +2390,18 @@ function App() {
     return { connected: Boolean(selectedCredential || credentials.length), credentials, selectedCredential };
   };
 
+  const syncYouTubeCredentials = async (credentialId = null) => {
+    const response = await fetch(`${API_BASE_URL}/api/youtube/credentials`, { credentials: "include" });
+    if (!response.ok) throw new Error("Could not load YouTube credentials.");
+    const data = await response.json(); let credentials = Array.isArray(data.credentials) ? data.credentials : [];
+    if (credentialId) {
+      const status = await fetch(`${API_BASE_URL}/api/youtube/credentials/${encodeURIComponent(credentialId)}`, { credentials: "include" });
+      if (!status.ok) throw new Error("Connected YouTube credential was not found.");
+      const selected = await status.json(); credentials = [...credentials.filter((item) => item.id !== selected.id), selected];
+    }
+    setYouTubeCredentials(credentials); return credentials.find((item) => item.id === credentialId) || null;
+  };
+
   const syncFacebookCredentials = async (credentialId = null) => {
     const response = await fetch(`${API_BASE_URL}/api/facebook/credentials`, { credentials: "include" });
     if (!response.ok) throw new Error("Could not load Facebook credentials.");
@@ -2381,6 +2447,12 @@ function App() {
     popup.focus();
   };
 
+  const startYouTubeOAuth = (credentialId = null) => {
+    const popup = window.open(`${API_BASE_URL}/api/youtube/auth/start?mode=popup${credentialId ? `&credentialId=${encodeURIComponent(credentialId)}` : ""}`,
+      "jarvis_youtube_oauth", "popup=yes,width=560,height=720,resizable=yes,scrollbars=yes");
+    if (!popup) setCredentialToast("Popup was blocked. Allow popups for COREX and try again."); else popup.focus();
+  };
+
   const disconnectGoogleOAuth = async (credentialId) => {
     const response = await fetch(`${API_BASE_URL}/api/google/credentials/${encodeURIComponent(credentialId)}/disconnect`, {
       method: "POST",
@@ -2410,6 +2482,18 @@ function App() {
     setGoogleCredentials((current) => current.filter((item) => item.id !== credentialId));
   };
 
+  const disconnectYouTube = async (credentialId) => {
+    const response = await fetch(`${API_BASE_URL}/api/youtube/credentials/${encodeURIComponent(credentialId)}/disconnect`, { method: "POST", credentials: "include" });
+    if (!response.ok) throw new Error("Could not disconnect YouTube credential.");
+    setYouTubeCredentials((items) => items.filter((item) => item.id !== credentialId));
+  };
+
+  const deleteYouTubeCredential = async (credentialId) => {
+    const response = await fetch(`${API_BASE_URL}/api/youtube/credentials/${encodeURIComponent(credentialId)}`, { method: "DELETE", credentials: "include" });
+    if (!response.ok) throw new Error("Could not delete YouTube credential.");
+    setYouTubeCredentials((items) => items.filter((item) => item.id !== credentialId));
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -2429,6 +2513,20 @@ function App() {
           if (!cancelled) {
             const credentialId = event.data.credentialId;
             if (!credentialId) throw new Error("Google OAuth did not return a credential ID.");
+            if (event.data.service === "youtube") {
+              const credential = await syncYouTubeCredentials(credentialId);
+              if (!credential) throw new Error("Connected YouTube credential was not found.");
+              setEditingYouTubeCredentialId(credentialId); setShowYouTubeCredential(true);
+              const pendingNodeId = pendingYouTubeCredentialNodeId.current;
+              if (pendingNodeId) {
+                setCanvasNodes((nodes) => assignCredentialToNode(nodes, pendingNodeId, credentialId));
+                setEditingNode((node) => node?.id === pendingNodeId ? assignCredentialToNode([node], pendingNodeId, credentialId)[0] : node);
+                pendingYouTubeCredentialNodeId.current = null;
+              }
+              setCredentialToast(`YouTube connected: ${credential.accountEmail || credential.accountName || "Google account"}`);
+              window.setTimeout(() => setCredentialToast(""), 3500);
+              return;
+            }
             const result = await syncGoogleCredential({ showToast: true, credentialId });
             if (!result.selectedCredential) throw new Error("Connected credential was not found.");
             setEditingGoogleCredentialId(credentialId);
@@ -2457,7 +2555,7 @@ function App() {
 
       if (!cancelled) {
         setCredentialToast(
-          event.data?.message || "Google sign-in was not completed."
+          event.data?.message || `${event.data?.service === "youtube" ? "YouTube" : "Google"} sign-in was not completed.`
         );
         window.setTimeout(() => setCredentialToast(""), 5000);
       }
@@ -2468,12 +2566,14 @@ function App() {
     // Fallback for a non-popup OAuth callback or a manually opened callback page.
     const params = new URLSearchParams(window.location.search);
     const oauthResult = params.get("google_oauth");
+    const youtubeOauthResult = params.get("youtube_oauth");
     const oauthCredentialId = params.get("credential_id");
 
     const clearOAuthQuery = () => {
-      if (!oauthResult) return;
+      if (!oauthResult && !youtubeOauthResult) return;
       const url = new URL(window.location.href);
       url.searchParams.delete("google_oauth");
+      url.searchParams.delete("youtube_oauth");
       url.searchParams.delete("credential_id");
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     };
@@ -2482,8 +2582,16 @@ function App() {
       try {
         const result = await syncGoogleCredential({
           showToast: oauthResult === "connected",
-          credentialId: oauthCredentialId,
+          credentialId: oauthResult ? oauthCredentialId : null,
         });
+        const youtubeCredential = await syncYouTubeCredentials(youtubeOauthResult ? oauthCredentialId : null);
+
+        if (youtubeOauthResult === "connected" && youtubeCredential && !cancelled) {
+          setEditingYouTubeCredentialId(youtubeCredential.id); setShowYouTubeCredential(true);
+          setCredentialToast(`YouTube connected: ${youtubeCredential.accountEmail || youtubeCredential.accountName || "Google account"}`);
+        } else if (youtubeOauthResult === "error" && !cancelled) {
+          setCredentialToast("YouTube sign-in was not completed.");
+        }
 
         if (oauthResult === "connected" && result.selectedCredential && !cancelled) {
           setEditingGoogleCredentialId(result.selectedCredential.id);
@@ -2500,9 +2608,9 @@ function App() {
           window.setTimeout(() => setCredentialToast(""), 5000);
         }
       } catch (error) {
-        if (!cancelled && oauthResult) {
+        if (!cancelled && (oauthResult || youtubeOauthResult)) {
           setCredentialToast(
-            error?.message || "Could not check Google Drive connection status."
+            error?.message || `Could not check ${youtubeOauthResult ? "YouTube" : "Google Drive"} connection status.`
           );
           window.setTimeout(() => setCredentialToast(""), 5000);
         }
@@ -2675,6 +2783,16 @@ function App() {
           const data = await response.json(); if (!response.ok) throw new Error(data?.error || "Facebook Graph request failed."); return data;
         };
         return String(node.config.endpoint || "").includes("{{") ? executePerItem(input, executeRead) : executeRead(input);
+      }
+      if (node.name === "YouTube") {
+        if (!node.config?.credentialId) throw new Error("Select a connected YouTube credential.");
+        return executePerItem(input, async (item) => {
+          const response = await fetch(`${API_BASE_URL}/api/youtube/videos/upload`, { method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildYouTubeUploadRequest(node.config, item)) });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data?.error || "YouTube upload failed.");
+          return data;
+        });
       }
       throw new Error(`${node.name} does not support real execution in Phase 2.`);
   };
@@ -3367,7 +3485,7 @@ function App() {
 
                       {canvasNodes.map(
                         (node, index) => {
-                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, openAIConfigured });
+                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured });
                           const borderState = nodeBorderVisualState(node, isWorkflowRunning, health); const candidate = connectionDrag && validateConnectionCandidate(canvasNodes, connections, connectionDrag.sourceId, node.id); const inputState = candidate?.ok ? " connection-target-valid" : connectionDrag?.targetId === node.id ? " connection-target-invalid" : ""; const outputState = connectionDrag?.sourceId === node.id ? " connection-source-active" : "";
                           return <div
   key={node.id}
@@ -3609,7 +3727,7 @@ function App() {
           </section>
         ) : visibleTopPage === "DASHBOARD" ? (
           <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
-            healthContext={{ googleCredentials, facebookCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
+            healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
             onOpenWorkflow={(workflowId) => { if (!can("view_workflow")) return; setTopPage("WORKFLOW"); if (workflowId && workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
         ) : visibleTopPage === "TOOLS" ? (
@@ -3682,6 +3800,19 @@ function App() {
         />
       )}
 
+      {editingNode?.name === "YouTube" && (
+        <YouTubeEditor
+          node={editingNode}
+          previousNode={getPreviousNode(editingNode.id)}
+          credentials={youtubeCredentials}
+          onCreateCredential={(credentialId = null) => { pendingYouTubeCredentialNodeId.current = editingNode.id; setEditingYouTubeCredentialId(credentialId); setShowYouTubeCredential(true); }}
+          onExecutePreviousNodes={executePreviousNodesFor}
+          onExecuteNode={executeRuntimeNode}
+          onSaveNode={updateCanvasNode}
+          onClose={() => setEditingNode(null)}
+        />
+      )}
+
       {editingNode?.name === "Prepare Content" && (
         <PrepareContentEditor
           node={editingNode}
@@ -3724,6 +3855,19 @@ function App() {
           }}
           onStartOAuth={startGoogleOAuth}
           onDisconnect={disconnectGoogleOAuth}
+        />
+      )}
+
+      {showYouTubeCredential && (
+        <GoogleCredentialModal
+          service="youtube"
+          onClose={() => { setShowYouTubeCredential(false); setEditingYouTubeCredentialId(null); }}
+          credential={youtubeCredentials.find((item) => item.id === editingYouTubeCredentialId)}
+          onSave={(credential) => { setYouTubeCredentials((items) => [...items.filter((item) => item.id !== credential.id), credential]); setShowYouTubeCredential(false); setCredentialToast("YouTube credential settings saved"); }}
+          onDelete={(credentialId) => deleteYouTubeCredential(credentialId).then(() => { setShowYouTubeCredential(false); setEditingYouTubeCredentialId(null); setCredentialToast("YouTube credential deleted"); }).catch((error) => setCredentialToast(error.message))}
+          onNotify={(message) => setCredentialToast(message)}
+          onStartOAuth={startYouTubeOAuth}
+          onDisconnect={disconnectYouTube}
         />
       )}
 

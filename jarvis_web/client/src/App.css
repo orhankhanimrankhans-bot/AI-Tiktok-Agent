@@ -2080,12 +2080,14 @@ button {
   }
 }
 
-.facebook-mark {
+.facebook-mark,
+.youtube-mark {
   display: grid;
   place-items: center;
 }
 
-.facebook-mark svg {
+.facebook-mark svg,
+.youtube-mark svg {
   width: 100%;
   height: 100%;
   display: block;
@@ -2546,7 +2548,7 @@ button {
 .workflow-node { height: 78px; min-height: 78px; background: linear-gradient(145deg, #2a3135, #181e21); border-color: #52636b;
   box-shadow: inset 0 1px rgba(255,255,255,.06), inset 0 -1px rgba(0,0,0,.4), 0 12px 28px rgba(0,0,0,.32); }
 .workflow-node-icon { display: grid; place-items: center; overflow: hidden; background: linear-gradient(145deg, #26373e, #121c20); box-shadow: inset 0 1px rgba(255,255,255,.08), 0 5px 12px rgba(0,0,0,.28); }
-.workflow-node-icon .google-drive-mark, .workflow-node-icon .facebook-mark { width: 34px; height: 34px; display: grid; place-items: center; }
+.workflow-node-icon .google-drive-mark, .workflow-node-icon .facebook-mark, .workflow-node-icon .youtube-mark { width: 34px; height: 34px; display: grid; place-items: center; }
 .workflow-node-icon svg { width: 100%; height: 100%; }
 .trigger-mark { width: 35px; height: 35px; display: grid; place-items: center; color: #6deaff; filter: drop-shadow(0 0 5px rgba(71, 224, 246, .28)); }
 .trigger-mark svg { overflow: visible; }

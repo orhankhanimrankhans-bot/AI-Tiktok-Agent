@@ -12,7 +12,9 @@ try {
   );
 }
 
-const PROVIDER = "google-drive";
+const GOOGLE_DRIVE_PROVIDER = "google-drive";
+const YOUTUBE_PROVIDER = "youtube";
+const GOOGLE_PROVIDERS = new Set([GOOGLE_DRIVE_PROVIDER, YOUTUBE_PROVIDER]);
 const TYPE = "oauth2";
 const CREDENTIAL_ID_PATTERN = /^gcred_[A-Za-z0-9_-]{22}$/;
 const KEY_SALT = "jarvis-web-google-credential-store-v1";
@@ -118,6 +120,11 @@ class CredentialStore {
     return typeof id === "string" && CREDENTIAL_ID_PATTERN.test(id);
   }
 
+  static normalizeProvider(provider = GOOGLE_DRIVE_PROVIDER) {
+    if (!GOOGLE_PROVIDERS.has(provider)) throw new Error("Invalid Google credential provider.");
+    return provider;
+  }
+
   async open() {
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
     this.db = new DatabaseSync(this.dbPath);
@@ -215,8 +222,9 @@ class CredentialStore {
     return result.tokens;
   }
 
-  async findByAccountEmail(accountEmail, { includeTokens = false, owner } = {}) {
+  async findByAccountEmail(accountEmail, { includeTokens = false, owner, provider = GOOGLE_DRIVE_PROVIDER } = {}) {
     const { ownerType, ownerId } = normalizeCredentialOwner(owner);
+    const normalizedProvider = CredentialStore.normalizeProvider(provider);
     const normalizedEmail = String(accountEmail || "").trim().toLowerCase();
     if (!normalizedEmail) return null;
     const row = this.db.prepare(`
@@ -224,39 +232,44 @@ class CredentialStore {
       FROM google_credentials
       WHERE provider = ? AND owner_type = ? AND owner_id = ? AND lower(trim(account_email)) = ?
       LIMIT 1
-    `).get(PROVIDER, ownerType, ownerId, normalizedEmail);
+    `).get(normalizedProvider, ownerType, ownerId, normalizedEmail);
     if (!row) return null;
     const credential = publicCredential(row); const tokens = this.readTokens(row);
     if (includeTokens) credential.tokens = tokens;
     return credential;
   }
 
-  async list(owner) {
+  async list(owner, { provider = GOOGLE_DRIVE_PROVIDER } = {}) {
     const { ownerType, ownerId } = normalizeCredentialOwner(owner);
+    const normalizedProvider = CredentialStore.normalizeProvider(provider);
     const rows = await this.all(
-      "SELECT * FROM google_credentials WHERE owner_type = ? AND owner_id = ? ORDER BY created_at ASC",
-      [ownerType, ownerId]
+      "SELECT * FROM google_credentials WHERE provider = ? AND owner_type = ? AND owner_id = ? ORDER BY created_at ASC",
+      [normalizedProvider, ownerType, ownerId]
     );
     return rows.map(publicCredential);
   }
 
-  async get(id, { includeTokens = false, owner } = {}) {
+  async get(id, { includeTokens = false, owner, provider } = {}) {
     if (!CredentialStore.isValidId(id)) return null;
     const row = await this.getRow(id, owner);
     if (!row) return null;
+    if (provider && row.provider !== CredentialStore.normalizeProvider(provider)) return null;
     const credential = publicCredential(row); const tokens = this.readTokens(row);
     if (includeTokens) credential.tokens = tokens;
     return credential;
   }
 
-  async save({ id, accountEmail = "", accountName = "", tokens }, owner) {
+  async save({ id, provider = GOOGLE_DRIVE_PROVIDER, accountEmail = "", accountName = "", tokens }, owner) {
     const normalizedOwner = normalizeCredentialOwner(owner);
+    const normalizedProvider = CredentialStore.normalizeProvider(provider);
     if (!CredentialStore.isValidId(id)) throw new Error("Invalid credential ID.");
     if (!tokens || typeof tokens !== "object") throw new Error("OAuth tokens are required.");
     const anyExisting = this.db.prepare("SELECT owner_type, owner_id FROM google_credentials WHERE id = ?").get(id);
     if (anyExisting && (anyExisting.owner_type !== normalizedOwner.ownerType || anyExisting.owner_id !== normalizedOwner.ownerId)) {
       throw new Error("Credential ID belongs to another workspace.");
     }
+    const existingProvider = this.db.prepare("SELECT provider FROM google_credentials WHERE id = ?").get(id)?.provider;
+    if (existingProvider && existingProvider !== normalizedProvider) throw new Error("Credential ID belongs to another Google provider.");
     const existing = await this.getRow(id, normalizedOwner);
     const now = new Date().toISOString();
     const encrypted = encryptTokens(tokens, this.key);
@@ -273,7 +286,7 @@ class CredentialStore {
         token_tag = excluded.token_tag,
         updated_at = excluded.updated_at`,
       [
-        id, PROVIDER, TYPE, accountEmail, accountName,
+        id, normalizedProvider, TYPE, accountEmail, accountName,
         encrypted.ciphertext, encrypted.iv, encrypted.tag,
         existing?.created_at || now, now, normalizedOwner.ownerType, normalizedOwner.ownerId,
       ]
@@ -308,4 +321,6 @@ module.exports = {
   deriveEncryptionKey,
   encryptionKeys,
   encryptTokens,
+  GOOGLE_DRIVE_PROVIDER,
+  YOUTUBE_PROVIDER,
 };

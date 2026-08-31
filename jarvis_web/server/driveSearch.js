@@ -1,4 +1,4 @@
-const { CredentialStore } = require("./credentialStore");
+const { CredentialStore, GOOGLE_DRIVE_PROVIDER } = require("./credentialStore");
 
 const MAX_RESULTS = 1000;
 const DEFAULT_LIMIT = 50;
@@ -129,7 +129,7 @@ async function executeDriveSearch({
     throw new DriveSearchError(400, "invalid_credential_id", "Invalid Google credential ID.");
   }
 
-  const credential = await credentialStore.get(params.credentialId, { includeTokens: true, owner });
+  const credential = await credentialStore.get(params.credentialId, { includeTokens: true, owner, provider: GOOGLE_DRIVE_PROVIDER });
   if (!credential) {
     throw new DriveSearchError(404, "credential_not_found", "The selected Google credential was not found.");
   }
@@ -172,6 +172,7 @@ async function executeDriveSearch({
     if (refreshedTokens) {
       await credentialStore.save({
         id: credential.id,
+        provider: GOOGLE_DRIVE_PROVIDER,
         accountEmail: credential.accountEmail,
         accountName: credential.accountName,
         tokens: { ...credential.tokens, ...refreshedTokens },

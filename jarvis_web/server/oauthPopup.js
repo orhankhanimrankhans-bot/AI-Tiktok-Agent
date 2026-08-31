@@ -1,9 +1,10 @@
-function makePopupResultHtml({ status, message = "", credentialId = null, clientUrl }) {
+function makePopupResultHtml({ status, message = "", credentialId = null, service = "drive", clientUrl }) {
   const payload = JSON.stringify({
     type: "jarvis-google-oauth",
     status,
     message,
     credentialId,
+    service,
   }).replace(/</g, "\\u003c");
   const targetOrigin = JSON.stringify(new URL(clientUrl).origin);
 

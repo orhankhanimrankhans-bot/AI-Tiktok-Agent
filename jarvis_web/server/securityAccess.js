@@ -9,7 +9,7 @@ function loginKey(req, role) { return `${req.ip || req.socket?.remoteAddress || 
 function loginBlocked(key, now = Date.now()) { const value = failures.get(key); if (!value) return false; if (value.lockedUntil > now) return true; if (value.lockedUntil) failures.delete(key); return false; }
 function recordFailure(key, now = Date.now()) { const value = failures.get(key) || { count: 0, lockedUntil: 0 }; value.count += 1; if (value.count >= MAX_FAILURES) { value.count = 0; value.lockedUntil = now + LOCK_MS; } failures.set(key, value); }
 function allowResetRequest(key, now = Date.now()) { const value = resetRequests.get(key); if (!value || now - value.startedAt >= RESET_WINDOW_MS) { resetRequests.set(key, { count: 1, startedAt: now }); return true; } if (value.count >= RESET_MAX) return false; value.count += 1; return true; }
-const STORAGE_NODE_PERMISSIONS = Object.freeze({ "Search Files and Folders": "storage", "Download File": "storage", "Move File": "storage_modify", "Delete File": "storage_modify" });
+const STORAGE_NODE_PERMISSIONS = Object.freeze({ "Search Files and Folders": "storage", "Download File": "storage", "Move File": "storage_modify", "Delete File": "storage_modify", YouTube: "storage_modify" });
 function requiredPermissions(req) {
   const permissions = [];
   if (req.path === "/api/workflow-executions/run") {
@@ -26,6 +26,9 @@ function requiredPermissions(req) {
   if (req.path.startsWith("/api/google/auth/")) return "storage_modify";
   if (req.path.startsWith("/api/google/credentials")) return req.method === "GET" ? "storage" : "storage_modify";
   if (req.path.startsWith("/api/google/drive/")) return ["move", "delete"].some((part) => req.path.endsWith(`/${part}`)) ? "storage_modify" : "storage";
+  if (req.path.startsWith("/api/youtube/auth/")) return "storage_modify";
+  if (req.path.startsWith("/api/youtube/credentials")) return req.method === "GET" ? "storage" : "storage_modify";
+  if (req.path.startsWith("/api/youtube/videos/")) return "storage_modify";
   if (req.path === "/api/ai/prepare-content") return "run_workflow";
   if (req.path.startsWith("/api/conversation") || req.path.startsWith("/api/agent/")) return "conversation";
   return null;

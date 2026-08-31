@@ -9,12 +9,12 @@ export function preservePublishedSource(publication, sourceItem) {
 
 export function buildArchiveMoveRequest(config, publication) {
   if (publication?.success !== true || publication?.status !== "published") {
-    throw new Error("Move File requires a successfully published Facebook Reel result.");
+    throw new Error("Move File requires successfully published results from every requested publisher.");
   }
   const fileId = String(resolveExpression(config?.fileId || "", publication) || "").trim();
   const destinationFolderId = String(config?.destinationFolderId || "").trim();
   if (!config?.credentialId) throw new Error("Select a Google Drive credential before executing.");
-  if (!fileId) throw new Error("The published Reel result is missing its source Google Drive file ID.");
+  if (!fileId) throw new Error("The publishing result is missing its source Google Drive file ID.");
   if (!destinationFolderId) throw new Error("Enter the Google Drive Done folder ID.");
   return { credentialId: config.credentialId, fileId, destinationFolderId };
 }
