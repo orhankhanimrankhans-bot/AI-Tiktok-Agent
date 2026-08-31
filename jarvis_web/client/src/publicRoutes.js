@@ -3,5 +3,7 @@ export function resolvePublicPage(pathname) {
     .replace(/\/{2,}/g, "/")
     .replace(/\/$/, "") || "/";
 
-  return normalizedPath === "/privacy-policy" ? "privacy-policy" : null;
+  if (normalizedPath === "/privacy-policy") return "privacy-policy";
+  if (normalizedPath === "/terms") return "terms";
+  return null;
 }
