@@ -30,5 +30,8 @@ export function sanitizeFacebookConfig(config = {}) {
   return safe;
 }
 export function facebookCredentialLabel(credential) {
-  return `Facebook - ${credential?.pageName || credential?.name || credential?.accountName || credential?.accountId || "Account"}`;
+  const name = credential?.pageName || credential?.name || credential?.accountName || credential?.accountId || "Account";
+  const mode = credential?.authMode === "manual_access_token" || credential?.type === "access_token" ? "Token" : "OAuth";
+  const suffix = typeof credential?.id === "string" ? credential.id.slice(-4).toUpperCase() : "----";
+  return `Facebook - ${name} · ${mode} · ${suffix}`;
 }

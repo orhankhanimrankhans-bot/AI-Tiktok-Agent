@@ -180,12 +180,28 @@ function processingFailed(status) {
   return Boolean(statusFailureDiagnostic(status));
 }
 
+function statusSnapshot(response) {
+  const processing = phaseValue(response, "processing_phase"); const publishing = phaseValue(response, "publishing_phase");
+  const video = topStatusValue(response, "video_status"); const copyright = topStatusValue(response, "copyright_check_status");
+  return { finalProcessingState: video || publishing || processing || "unknown", copyrightState: copyright || null };
+}
+
+function verificationFromStatus(response) {
+  const snapshot = statusSnapshot(response); const diagnostic = statusFailureDiagnostic(response);
+  if (diagnostic) return { status: "verification_failed", metaVerification: "failed", ...snapshot, diagnostic };
+  if (!published(response)) return { status: "verification_pending", metaVerification: "pending", ...snapshot };
+  if (snapshot.copyrightState && !/complete|completed|approved|passed|success/.test(snapshot.copyrightState)) {
+    return { status: "verification_pending", metaVerification: "pending", ...snapshot };
+  }
+  return { status: "verified", metaVerification: "verified", ...snapshot };
+}
+
 async function waitForPublished({ service, token, videoId, maxAttempts = 20, intervalMs = 3000, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const status = await service.reelStatus(token, videoId);
-    if (published(status)) return status.status;
     const diagnostic = statusFailureDiagnostic(status);
     if (diagnostic) throw reelError(422, "reel_processing_failed", "Facebook reported that Reel processing or publishing failed.", diagnostic);
+    if (published(status)) return status.status;
     if (attempt + 1 < maxAttempts) await sleep(intervalMs);
   }
   throw reelError(504, "reel_processing_timeout", "Facebook Reel processing did not complete before the timeout.");
@@ -203,11 +219,27 @@ async function publishPageReel(options) {
     filePath: file.filePath, size: file.size, timeoutMs: options.uploadTimeoutMs });
   await options.service.finishPageReelUpload(page.token, { videoId: session.videoId, title, description });
   const wait = options.request.waitForProcessing !== false;
-  if (wait) await waitForPublished({ service: options.service, token: page.token, videoId: session.videoId,
+  let publishedStatus = null; if (wait) publishedStatus = await waitForPublished({ service: options.service, token: page.token, videoId: session.videoId,
     maxAttempts: options.maxAttempts, intervalMs: options.intervalMs, sleep: options.sleep });
+  let verification = { status: wait ? "verification_pending" : "submitted", metaVerification: "pending", finalProcessingState: wait ? "published" : "submitted", copyrightState: null };
+  if (wait) {
+    try {
+      const finalObject = await options.service.reelStatus(page.token, session.videoId, "facebook_final_verify");
+      verification = verificationFromStatus(finalObject);
+    } catch (error) {
+      const unavailable = error instanceof FacebookGraphError && [400, 404].includes(error.statusCode) && ["meta_100", "meta_803", "meta_404"].includes(error.code);
+      verification = { status: unavailable ? "unavailable_after_publish" : "verification_failed",
+        metaVerification: unavailable ? "unavailable" : "failed", finalProcessingState: "published", copyrightState: null };
+    }
+  }
   return { success: true, videoId: session.videoId, pageId: page.pageId, pageName: page.pageName,
-    fileName: file.fileName, status: wait ? "published" : "submitted" };
+    expectedPageId: String(options.credential.pageId), resolvedPageId: page.pageId, pageIdentityVerified: true,
+    fileName: file.fileName, status: wait ? "published" : "submitted", publicationVerificationStatus: verification.status,
+    metaVerification: verification.metaVerification, publicAudienceCheck: "manual_check_required",
+    finalProcessingState: verification.finalProcessingState, copyrightState: verification.copyrightState,
+    submittedAt: options.now ? options.now().toISOString() : new Date().toISOString(), publishedAt: wait ? (options.now ? options.now().toISOString() : new Date().toISOString()) : null };
 }
 
 module.exports = { buildDiagnostic, logReelFailure, pageContext, processingFailed, publishPageReel, published,
-  resolveBinaryReference, sanitizeDiagnosticReason, statusFailureDiagnostic, uploadVideo, validateUploadUrl, waitForPublished };
+  resolveBinaryReference, sanitizeDiagnosticReason, statusFailureDiagnostic, statusSnapshot, uploadVideo, validateUploadUrl,
+  verificationFromStatus, waitForPublished };

@@ -28,7 +28,7 @@ function sourceMetadata(request) {
 }
 
 function toLegacyReelResponse(result) {
-  const { sourceFileId, sourceFileName, ...legacy } = result || {};
+  const { sourceFileId, sourceFileName, credentialId, credentialAuthMode, ...legacy } = result || {};
   return legacy;
 }
 
@@ -46,7 +46,7 @@ function validateGraphOperation({ credentialId, method, endpoint, body, query },
   if (query && Object.keys(query).length) throw graphRequestError(400, "unsupported_graph_query", "Unsupported Facebook Graph query.");
 }
 
-function createFacebookExecutionContext({ credentialStore, graphServiceFactory, publishPageReel, binaryDirectory, binaryResolver, validateCredentialId = () => true, logger = console }) {
+function createFacebookExecutionContext({ credentialStore, graphServiceFactory, publishPageReel, publicationStore, binaryDirectory, binaryResolver, validateCredentialId = () => true, logger = console }) {
   required("credentialStore", credentialStore); required("graphServiceFactory", graphServiceFactory); required("publishPageReel", publishPageReel); required("binaryDirectory", binaryDirectory);
   function resolveBinaryReference(referenceId) {
     return binaryResolver ? binaryResolver(referenceId) : { referenceId, binaryDirectory };
@@ -91,7 +91,13 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
     }
     const result = await publishPageReel({ request: input, service: graphServiceFactory(), credential,
       binaryDir: binary.binaryDirectory || binaryDirectory });
-    return result?.success === true ? { ...result, ...source } : result;
+    if (result?.success === true && publicationStore) publicationStore.create({ ...result, ...source, owner,
+      executionId: input.executionId, workflowId: input.workflowId, workflowName: input.workflowName, triggerMode: input.triggerMode,
+      credentialId: credential.id, authMode: credential.authMode === "manual_access_token" ? "manual_token" : "managed_oauth",
+      status: result.publicationVerificationStatus, snapshots: [{ checkedAt: result.publishedAt || result.submittedAt,
+        status: result.publicationVerificationStatus, processingState: result.finalProcessingState, copyrightState: result.copyrightState }] });
+    return result?.success === true ? { ...result, ...source, credentialId: credential.id,
+      credentialAuthMode: credential.authMode === "manual_access_token" ? "manual_token" : "managed_oauth" } : result;
   }
   return Object.freeze({
     resolveCredential(credentialId, owner) { return credentialStore.get(credentialId, tokenOptions(owner)); },

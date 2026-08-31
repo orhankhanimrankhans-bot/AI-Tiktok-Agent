@@ -60,8 +60,8 @@ test("existing Meta OAuth controls remain available", () => {
 });
 
 test("Facebook dropdown labels independent credentials by Page and refreshes after creation", () => {
-  assert.equal(facebookCredentialLabel({ pageName: "TinyTech", accountName: "Owner" }), "Facebook - TinyTech");
-  assert.equal(facebookCredentialLabel({ pageName: "Page 2", accountName: "Owner" }), "Facebook - Page 2");
+  assert.equal(facebookCredentialLabel({ id: "fcred_1234", pageName: "TinyTech", accountName: "Owner", authMode: "oauth" }), "Facebook - TinyTech · OAuth · 1234");
+  assert.equal(facebookCredentialLabel({ id: "fcred_abcd", pageName: "Page 2", accountName: "Owner", authMode: "manual_access_token" }), "Facebook - Page 2 · Token · ABCD");
   assert.match(appSource, /await syncFacebookCredentials\(saved\.id\)/);
   assert.match(appSource, /credentials\.map\(\(credential\) => <option key=\{credential\.id\}/);
   assert.match(appSource, /node\.id === nodeId \? \{ \.\.\.node, config: \{ \.\.\.node\.config, credentialId: saved\.id \}/);

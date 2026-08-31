@@ -114,7 +114,7 @@ class FacebookGraphService {
     if (description) body.description = description;
     return this.postReelForm(token, body, "finish");
   }
-  reelStatus(token, videoId) { return this.request(validatePageId(videoId), token, { fields: "status" }); }
+  reelStatus(token, videoId, stage = "facebook_processing") { return this.request(validatePageId(videoId), token, { fields: "status" }, "", stage); }
 }
 
 function credentialToken(credential) {

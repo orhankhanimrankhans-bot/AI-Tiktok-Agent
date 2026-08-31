@@ -107,7 +107,9 @@ test("publish flow returns metadata only after published processing state", asyn
       credential: { authMode: "manual_access_token", pageId: "1307346875785068", pageName: "TinyTech", tokens: { pageAccessToken: TOKEN } }, sleep: async () => {},
       uploadFetch: async (_url, options) => { for await (const _chunk of options.body) { /* consume stream */ } return response({ success: true }); } });
     assert.equal(result.status, "published"); assert.equal(result.pageName, "TinyTech"); assert.equal(result.fileName, "clip.mp4");
-    assert.deepEqual(calls.map((call) => call[0]), ["identity", "start", "finish", "status"]);
+    assert.deepEqual(calls.map((call) => call[0]), ["identity", "start", "finish", "status", "status"]);
+    assert.equal(result.metaVerification, "verified"); assert.equal(result.publicAudienceCheck, "manual_check_required");
+    assert.equal(result.pageIdentityVerified, true); assert.equal(result.publicationVerificationStatus, "verified");
     assert.doesNotMatch(JSON.stringify(result), /page-token|Authorization|rupload|binary|[A-Z]:\\/i);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -201,6 +203,13 @@ test("terminal success does not require optional publish_status", async () => {
   assert.deepEqual(await waitForPublished({ service: { reelStatus: async () => status }, token: TOKEN,
     videoId: "987654", maxAttempts: 1, sleep: async () => {} }), status.status);
   assert.equal(published({ status: { video_status: "published" } }), true);
+});
+
+test("published Reel remains workflow-successful when final verification has a technical error", async () => {
+  const dir = fixture(); let polls = 0; const service = { pageIdentity: async () => ({ id: "123456", name: "Page" }),
+    startPageReelUpload: async () => ({ videoId: "987654", uploadUrl: "https://rupload.facebook.com/video-upload/opaque" }),
+    finishPageReelUpload: async () => ({ success: true }), reelStatus: async () => { polls += 1; if (polls === 1) return { status: { video_status: "published" } }; throw new FacebookGraphError(503, "meta_network_error", `failed ${TOKEN}`); } };
+  try { const result = await publishPageReel({ request: request(), binaryDir: dir, service, credential: { authMode: "manual_access_token", pageId: "123456", tokens: { pageAccessToken: TOKEN } }, uploadFetch: async (_url, options) => { for await (const _chunk of options.body) { /* consume */ } return response({ success: true }); } }); assert.equal(result.status, "published"); assert.equal(result.publicationVerificationStatus, "verification_failed"); assert.equal(result.metaVerification, "failed"); assert.doesNotMatch(JSON.stringify(result), /page-token-fixture/); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("known Reel failure produces exactly one sanitized structured log entry", () => {

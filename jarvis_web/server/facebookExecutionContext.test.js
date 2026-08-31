@@ -47,10 +47,10 @@ test("publishReel resolves opaque credential and binary references internally be
   const context = createFacebookExecutionContext({ credentialStore: { get: (...args) => { calls.push(["credential", ...args]); return credential; } }, graphServiceFactory: () => { calls.push(["graph"]); return { internal: true }; }, publishPageReel: publisher, binaryDirectory: "C:/private", binaryResolver: (referenceId) => { calls.push(["binary", referenceId]); return { referenceId, binaryDirectory: "C:/private" }; }, validateCredentialId: (id) => id === credential.id });
   const request = { credentialId: credential.id, binaryProperty: "data", binary: { property: "data", referenceId: "bin_1234567890123456789012" }, fileName: "clip.mp4", mimeType: "video/mp4", title: "Title", description: "Caption", waitForProcessing: false, sourceFileId: "drive_1", sourceFileName: "source.mp4" };
   const result = await context.publishReel(request);
-  assert.deepEqual(result, { success: true, status: "published", videoId: "987654", fileName: "clip.mp4", sourceFileId: "drive_1", sourceFileName: "source.mp4" });
+  assert.deepEqual(result, { success: true, status: "published", videoId: "987654", fileName: "clip.mp4", sourceFileId: "drive_1", sourceFileName: "source.mp4", credentialId: credential.id, credentialAuthMode: "manual_token" });
   assert.deepEqual(calls.slice(0, 3), [["credential", credential.id, { includeTokens: true }], ["binary", request.binary.referenceId], ["graph"]]);
   const options = calls[3][1]; assert.equal(options.request, request); assert.equal(options.credential, credential); assert.equal(options.binaryDir, "C:/private"); assert.equal(options.service.internal, true);
-  assert.doesNotMatch(JSON.stringify(result), /page-token|credential|Authorization|private|binary|Buffer/i);
+  assert.doesNotMatch(JSON.stringify(result), /page-token|Authorization|private|binary|Buffer/i);
 });
 
 test("publishReel preserves safe failures and never converts a failed publisher result to publication success", async () => {
@@ -67,7 +67,7 @@ test("publishReel validates source metadata and the browser route mapper preserv
   const credential = { id: "fcred_123", authMode: "oauth", tokens: { userAccessToken: "facebook-token-secret" } };
   const context = createFacebookExecutionContext({ credentialStore: { get: () => credential }, graphServiceFactory: () => ({}), publishPageReel: async () => ({ success: true, status: "published", videoId: "987654" }), binaryDirectory: "C:/private", validateCredentialId: () => true });
   const internal = await context.publishReel({ credentialId: credential.id, binary: { referenceId: "bin_123" }, sourceFileId: "drive_1", sourceFileName: "source.mp4" });
-  assert.deepEqual(internal, { success: true, status: "published", videoId: "987654", sourceFileId: "drive_1", sourceFileName: "source.mp4" });
+  assert.deepEqual(internal, { success: true, status: "published", videoId: "987654", sourceFileId: "drive_1", sourceFileName: "source.mp4", credentialId: credential.id, credentialAuthMode: "managed_oauth" });
   assert.deepEqual(toLegacyReelResponse(internal), { success: true, status: "published", videoId: "987654" });
   assert.deepEqual(toLegacyReelResponse({ success: false, status: "error" }), { success: false, status: "error" });
   await assert.rejects(context.publishReel({ credentialId: credential.id, binary: { referenceId: "bin_123" }, sourceFileId: "../private" }), (error) => error instanceof FacebookGraphError && error.code === "invalid_source_file_id");

@@ -19,6 +19,8 @@ const { createFacebookExecutionContext, toLegacyReelResponse } = require("./face
 const { AUTH_MODE_MANUAL, FacebookCredentialStore } = require("./facebookCredentialStore");
 const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
 const { logReelFailure, publishPageReel } = require("./facebookReels");
+const { FacebookPublicationStore } = require("./facebookPublicationStore");
+const { createFacebookVerificationWorker } = require("./facebookVerificationWorker");
 const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPageSelectorHtml, makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
@@ -259,6 +261,7 @@ let facebookExecutionContext;
 let workflowExecutor;
 let workflowStore;
 let workflowScheduler;
+let facebookVerificationWorker;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null }) {
@@ -875,7 +878,8 @@ async function startServer() {
   facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
     legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();
-  facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
+  const facebookPublicationStore = new FacebookPublicationStore(credentialStore.db); facebookPublicationStore.open();
+  facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   executionServices = createExecutionServices({ credentialStore, createOAuthClient, createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }), facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
@@ -890,8 +894,10 @@ async function startServer() {
       return true;
     }, logger: console });
   workflowScheduler = createWorkflowScheduler({ workflowStore, workflowExecutor, executionStore, logger: console });
+  facebookVerificationWorker = createFacebookVerificationWorker({ store: facebookPublicationStore, credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, logger: console });
   const server = app.listen(PORT, () => {
     workflowScheduler.start();
+    facebookVerificationWorker.start();
     console.log("");
     console.log("=================================");
     console.log(" COREX BACKEND");
@@ -909,6 +915,7 @@ async function startServer() {
     if (error?.code === "EADDRINUSE") console.error(`FATAL ERROR: Corex backend is already running on port ${PORT}.`);
     else console.error("FATAL ERROR: Corex backend listener failed.");
     workflowScheduler.stop();
+    facebookVerificationWorker.stop();
     process.exitCode = 1;
   });
   return server;
