@@ -26,7 +26,9 @@ function createExecutionServices(dependencies) {
       createOAuthClient: google.createOAuthClient, createYouTubeClient: required("createYouTubeClient", input.createYouTubeClient),
       binaryDir: required("binaryDirectory", input.binaryDirectory), logger }) },
     binary: { directory: required("binaryDirectory", input.binaryDirectory) },
-    openAI: { prepare: required("prepareContent", input.prepareContent), apiKey: required("openAIApiKey", input.openAIApiKey), model: required("openAIModel", input.openAIModel) },
+    openAI: { prepare: (request) => required("prepareContent", input.prepareContent)({ ...request, binaryDir: required("binaryDirectory", input.binaryDirectory),
+      geminiApiKey: input.geminiApiKey || "", geminiModel: input.geminiModel }),
+      apiKey: required("openAIApiKey", input.openAIApiKey), model: required("openAIModel", input.openAIModel) },
     history: { store: required("executionStore", input.executionStore) },
     logger,
   };

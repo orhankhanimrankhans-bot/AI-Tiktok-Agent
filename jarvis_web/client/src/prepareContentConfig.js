@@ -3,9 +3,9 @@ import { resolveExpression } from "./expressionResolver.js";
 export const PREPARE_CONTENT_TONES = ["Natural", "Fun", "Professional", "Informative", "Inspirational"];
 
 export function prepareContentDefaults() {
-  return { inputSource: "Previous Item Metadata", fileName: "{{ $json.fileName }}",
-    titleInstructions: "Create a concise, engaging social media title based only on the filename and metadata.",
-    captionInstructions: "Create a natural social media caption based only on the filename and metadata. Do not claim to have viewed the video.",
+  return { inputSource: "Downloaded Video Frames", fileName: "{{ $json.fileName }}",
+    titleInstructions: "Create a concise, specific title naming the real object and visible action.",
+    captionInstructions: "Describe exactly what visibly happens in the video without unsupported claims.",
     hashtagCount: 5, language: "English", tone: "Natural", preserveInput: true };
 }
 
@@ -16,13 +16,15 @@ export function buildPrepareContentRequest(config, item) {
   if (!PREPARE_CONTENT_TONES.includes(config?.tone)) throw new Error("Select a supported tone.");
   return {
     fileName: String(resolveExpression(config.fileName || "{{ $json.fileName }}", item) ?? ""),
-    mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
+    mimeType: typeof item.mimeType === "string" ? item.mimeType : "", binary: item.binary,
     titleInstructions: String(config.titleInstructions || ""), captionInstructions: String(config.captionInstructions || ""),
     hashtagCount, language: String(config.language || "English"), tone: config.tone,
   };
 }
 
 export function mergePreparedContent(item, generated, preserveInput = true) {
-  const fields = { title: generated.title, caption: generated.caption, hashtags: generated.hashtags, socialCaption: generated.socialCaption };
+  const fields = { detectedObject: generated.detectedObject, detectedAction: generated.detectedAction,
+    title: generated.title, description: generated.description, caption: generated.caption,
+    hashtags: generated.hashtags, socialCaption: generated.socialCaption };
   return preserveInput ? { ...item, ...fields } : fields;
 }

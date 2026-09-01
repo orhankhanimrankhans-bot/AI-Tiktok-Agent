@@ -4,16 +4,17 @@ import test from "node:test";
 import { buildPrepareContentRequest, mergePreparedContent, prepareContentDefaults } from "./prepareContentConfig.js";
 import { runLinearWorkflow } from "./workflowRunner.js";
 
-test("Prepare Content defaults and request expose metadata only", () => {
+test("Prepare Content request carries only the private binary reference needed for server-side visual analysis", () => {
   const item = { id: "file-1", fileName: "clip.mp4", mimeType: "video/mp4", binary: { property: "data", referenceId: "bin_private" }, accessToken: "never-send" };
   const request = buildPrepareContentRequest(prepareContentDefaults(), item);
-  assert.deepEqual(Object.keys(request), ["fileName", "mimeType", "titleInstructions", "captionInstructions", "hashtagCount", "language", "tone"]);
-  assert.equal(request.fileName, "clip.mp4"); assert.doesNotMatch(JSON.stringify(request), /bin_private|never-send|binary|accessToken/);
+  assert.deepEqual(Object.keys(request), ["fileName", "mimeType", "binary", "titleInstructions", "captionInstructions", "hashtagCount", "language", "tone"]);
+  assert.equal(request.fileName, "clip.mp4"); assert.deepEqual(request.binary, { property: "data", referenceId: "bin_private" }); assert.doesNotMatch(JSON.stringify(request), /never-send|accessToken/);
+  assert.equal(prepareContentDefaults().inputSource, "Downloaded Video Frames");
 });
 
 test("merge preserves original metadata and binary reference for Facebook", () => {
   const item = { fileName: "clip.mp4", binary: { property: "data", referenceId: "bin_123" } };
-  const generated = { title: "Title", caption: "Caption", hashtags: ["#one"], socialCaption: "Caption\n\n#one" };
+  const generated = { detectedObject: "Scooter", detectedAction: "Shredder crushing scooter", title: "Title", description: "Description", caption: "Description", hashtags: ["#one"], socialCaption: "Description\n\n#one" };
   assert.deepEqual(mergePreparedContent(item, generated, true), { ...item, ...generated });
   assert.deepEqual(mergePreparedContent(item, generated, false), generated);
 });

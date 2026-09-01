@@ -32,6 +32,18 @@ test("Facebook and YouTube publish the same prepared binary before one source mo
   assert.equal(result.nodes.find((node) => node.nodeId === "m").status, "success");
 });
 
+test("visual analysis failure stops both publishers and prevents Move File", async () => {
+  const calls = []; const svc = itemServices(calls);
+  svc.openAI.prepare = async ({ body }) => { calls.push(["prepare-visual", body.binary.referenceId]); const error = new Error("Visual analysis failed safely"); error.code = "visual_analysis_failed"; throw error; };
+  svc.facebook.publishReel = async () => { calls.push(["facebook"]); return { success: true, status: "published" }; };
+  svc.youtube = { uploadVideo: async () => { calls.push(["youtube"]); return { success: true, videoId: "youtube-1" }; } };
+  svc.google.moveFile = async () => { calls.push(["move"]); return { success: true, status: "moved" }; };
+  const result = await createWorkflowExecutor({ executionServices: svc, logger: { error() {} } }).execute({ workflowId: "visual-fail", nodes: dualPublisherNodes, connections: dualPublisherLinks });
+  assert.equal(result.status, "error"); assert.deepEqual(calls, [["download", "file-1"], ["prepare-visual", "bin-test"]]);
+  assert.equal(result.nodes.find((node) => node.nodeId === "p").status, "error");
+  assert.equal(result.nodes.find((node) => node.nodeId === "m").status, "error");
+});
+
 for (const failedPublisher of ["facebook", "youtube"]) test(`${failedPublisher} failure prevents Move File and total success`, async () => {
   const calls = []; const svc = itemServices(calls);
   svc.youtube = { uploadVideo: async (request) => { calls.push(["youtube", request.sourceFileId]); if (failedPublisher === "youtube") { const error = new Error("YouTube failed safely"); error.code = "youtube_upload_failed"; throw error; } return { success: true, videoId: "youtube-1", sourceFileId: request.sourceFileId, sourceFileName: request.sourceFileName }; } };

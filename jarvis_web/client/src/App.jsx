@@ -2085,7 +2085,7 @@ function ParameterList({ title, addLabel, items, onChange }) {
 function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
   const defaults = { ...prepareContentDefaults(), settings: defaultNodeSettings() };
   const [activeTab, setActiveTab] = useState("Parameters");
-  const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
+  const [config, setConfig] = useState({ ...defaults, ...node.config, inputSource: defaults.inputSource, settings: { ...defaults.settings, ...node.config?.settings } });
   const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
   const [output, setOutput] = useState(node.output ?? null);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -2104,15 +2104,15 @@ function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecuteP
       <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
         <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
           <div className={openAIConfigured ? "connection-status success" : "connection-status not-tested"}>{openAIConfigured ? "OpenAI configured on server" : "OpenAI not configured on server"}</div>
-          <label>Input Source</label><select value={config.inputSource} disabled><option>Previous Item Metadata</option></select>
-          <label>Filename Expression</label><input value={config.fileName} onChange={(event) => setConfig({ ...config, fileName: event.target.value })} placeholder="{{ $json.fileName }}" />
+          <label>Input Source</label><select value={config.inputSource} disabled><option>Downloaded Video Frames</option></select>
+          <label>Source Filename</label><input value={config.fileName} onChange={(event) => setConfig({ ...config, fileName: event.target.value })} placeholder="{{ $json.fileName }}" />
           <label>Title Instructions</label><textarea rows="3" value={config.titleInstructions} onChange={(event) => setConfig({ ...config, titleInstructions: event.target.value })} />
           <label>Caption Instructions</label><textarea rows="4" value={config.captionInstructions} onChange={(event) => setConfig({ ...config, captionInstructions: event.target.value })} />
           <label>Hashtag Count</label><input type="number" min="1" max="20" value={config.hashtagCount} onChange={(event) => setConfig({ ...config, hashtagCount: Number(event.target.value) })} />
           <label>Language</label><input value={config.language} onChange={(event) => setConfig({ ...config, language: event.target.value })} />
           <label>Tone</label><select value={config.tone} onChange={(event) => setConfig({ ...config, tone: event.target.value })}>{PREPARE_CONTENT_TONES.map((tone) => <option key={tone}>{tone}</option>)}</select>
           <ToggleSetting label="Preserve Input" value={config.preserveInput !== false} onChange={() => setConfig({ ...config, preserveInput: config.preserveInput === false })} />
-          <small>Corex generates copy from filename and metadata only. It does not analyze the video.</small>
+          <small>COREX extracts representative frames from the downloaded video and grounds the object, action, title, description, and hashtags in visible evidence. The filename is not used for detection.</small>
         </div> : <GenericNodeSettings settings={config.settings} onChange={updateSetting} version="Prepare Content node version 1.0" />}</div>
       </section>
       <NodeOutputPanel output={output} onExecute={executeStep} />

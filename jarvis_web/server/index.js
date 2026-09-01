@@ -25,6 +25,7 @@ const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebo
 const { makeFacebookPageSelectorHtml, makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require("./openaiPrepareContent");
+const { DEFAULT_GEMINI_MODEL } = require("./geminiVideoAnalysis");
 const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
 const { SqliteSessionStore } = require("./sqliteSessionStore");
 const { createWorkflowScheduler } = require("./workflowScheduler");
@@ -100,6 +101,8 @@ const META_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v26.0";
 const META_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(META_GRAPH_VERSION_VALUE) ? META_GRAPH_VERSION_VALUE : "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
 const JARVIS_DB_PATH = path.resolve(
   process.env.JARVIS_DB_PATH || path.join(__dirname, "data", "credentials.sqlite3")
 );
@@ -117,6 +120,7 @@ const googleOAuthConfigured = Boolean(
 );
 const facebookOAuthConfigured = Boolean(META_APP_ID && META_APP_SECRET && META_REDIRECT_URI && META_GRAPH_VERSION);
 const openAIConfigured = Boolean(OPENAI_API_KEY);
+const geminiConfigured = Boolean(GEMINI_API_KEY);
 const SESSION_MAX_AGE_DAYS = Math.min(3650, Math.max(1, Number(process.env.SESSION_MAX_AGE_DAYS) || 365));
 const persistentSessionStore = new SqliteSessionStore();
 
@@ -282,6 +286,7 @@ app.get("/api/health", (req, res) => {
     googleOAuthConfigured,
     facebookOAuthConfigured,
     openAIConfigured,
+    geminiConfigured,
   });
 });
 
@@ -920,7 +925,8 @@ async function startServer() {
   executionServices = createExecutionServices({ credentialStore, createOAuthClient,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
     createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
-    facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL, executionStore, logger: console });
+    facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL,
+    geminiApiKey: GEMINI_API_KEY, geminiModel: GEMINI_MODEL, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
   registerWorkflowRoutes(app, { workflowStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore),
