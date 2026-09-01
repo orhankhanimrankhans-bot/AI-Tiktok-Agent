@@ -33,7 +33,7 @@ test("unsafe input, missing keys, Gemini failure, and malformed OpenAI output fa
   await assert.rejects(() => prepareContent(options({ apiKey: "" })), (error) => error.code === "openai_not_configured");
   await assert.rejects(() => prepareContent(options({ geminiApiKey: "" })), (error) => error.code === "gemini_not_configured");
   let requested = false;
-  await assert.rejects(() => prepareContent(options({ analyzeVideoImpl: async () => { const error = new Error("private path"); error.code = "gemini_processing_failed"; throw error; }, fetchImpl: async () => { requested = true; return response(success); } })), (error) => error.code === "gemini_processing_failed" && !/path/i.test(error.message));
+  await assert.rejects(() => prepareContent(options({ analyzeVideoImpl: async () => { const error = new Error("private path"); error.code = "gemini_processing_failed"; error.diagnosticCode = "GEMINI_PROCESSING_503"; throw error; }, fetchImpl: async () => { requested = true; return response(success); } })), (error) => error.code === "gemini_processing_failed" && error.diagnosticCode === "GEMINI_PROCESSING_503" && !/path/i.test(error.message));
   assert.equal(requested, false);
   await assert.rejects(() => prepareContent(options({ fetchImpl: async () => response({ output: [] }) })), (error) => error.code === "openai_malformed_response");
 });
@@ -62,4 +62,5 @@ test("dedicated route accepts no browser keys and reports server configuration b
   assert.match(route, /executionServices\.openAI\.prepare\(\{ body: req\.body, apiKey: executionServices\.openAI\.apiKey, model: executionServices\.openAI\.model \}\)/);
   assert.doesNotMatch(route, /req\.body\.(apiKey|token|authorization)/i);
   assert.match(source, /openAIConfigured/); assert.match(source, /geminiConfigured/);
+  assert.match(route, /diagnosticCode/);
 });

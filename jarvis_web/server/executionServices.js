@@ -27,7 +27,7 @@ function createExecutionServices(dependencies) {
       binaryDir: required("binaryDirectory", input.binaryDirectory), logger }) },
     binary: { directory: required("binaryDirectory", input.binaryDirectory) },
     openAI: { prepare: (request) => required("prepareContent", input.prepareContent)({ ...request, binaryDir: required("binaryDirectory", input.binaryDirectory),
-      geminiApiKey: input.geminiApiKey || "", geminiModel: input.geminiModel }),
+      geminiApiKey: input.geminiApiKey || "", geminiModel: input.geminiModel, logger }),
       apiKey: required("openAIApiKey", input.openAIApiKey), model: required("openAIModel", input.openAIModel) },
     history: { store: required("executionStore", input.executionStore) },
     logger,

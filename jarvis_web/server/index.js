@@ -294,7 +294,7 @@ app.post("/api/ai/prepare-content", async (req, res) => {
   try {
     return res.json(await executionServices.openAI.prepare({ body: req.body, apiKey: executionServices.openAI.apiKey, model: executionServices.openAI.model }));
   } catch (error) {
-    if (error instanceof PrepareContentError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message });
+    if (error instanceof PrepareContentError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message, ...(error.diagnosticCode ? { diagnosticCode: error.diagnosticCode } : {}) });
     console.error("Prepare Content failed safely.");
     return res.status(500).json({ status: "error", code: "prepare_content_server_error", error: "Prepare Content could not be completed." });
   }

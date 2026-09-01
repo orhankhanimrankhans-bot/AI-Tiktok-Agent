@@ -4,11 +4,12 @@ const TONES = new Set(["Natural", "Fun", "Professional", "Informative", "Inspira
 const { GeminiVideoError, analyzeVideo } = require("./geminiVideoAnalysis");
 
 class PrepareContentError extends Error {
-  constructor(statusCode, code, message) {
+  constructor(statusCode, code, message, diagnosticCode = "") {
     super(message);
     this.name = "PrepareContentError";
     this.statusCode = statusCode;
     this.code = code;
+    this.diagnosticCode = diagnosticCode;
   }
 }
 
@@ -85,15 +86,15 @@ function normalizePreparedContent(value, hashtagCount, visual) {
 }
 
 async function prepareContent({ body, apiKey, model = DEFAULT_OPENAI_MODEL, geminiApiKey, geminiModel, binaryDir,
-  fetchImpl = fetch, timeoutMs = 60000, analyzeVideoImpl = analyzeVideo }) {
+  fetchImpl = fetch, timeoutMs = 60000, analyzeVideoImpl = analyzeVideo, logger = console }) {
   if (!apiKey) throw new PrepareContentError(503, "openai_not_configured", "OpenAI is not configured on the Corex server.");
   if (!geminiApiKey) throw new PrepareContentError(503, "gemini_not_configured", "Gemini video analysis is not configured on the Corex server.");
   const input = validatePrepareContentInput(body);
   let visual;
-  try { visual = await analyzeVideoImpl({ binaryDir, binary: input.binary, mimeType: input.mimeType, apiKey: geminiApiKey, model: geminiModel }); }
+  try { visual = await analyzeVideoImpl({ binaryDir, binary: input.binary, mimeType: input.mimeType, apiKey: geminiApiKey, model: geminiModel, logger }); }
   catch (error) {
-    if (error instanceof GeminiVideoError) throw new PrepareContentError(422, error.code, error.message);
-    if (/^(gemini_|visual_analysis_)/.test(String(error?.code || ""))) throw new PrepareContentError(422, error.code, "COREX could not analyze the downloaded video.");
+    if (error instanceof GeminiVideoError) throw new PrepareContentError(422, error.code, error.message, error.diagnosticCode);
+    if (/^(gemini_|visual_analysis_)/.test(String(error?.code || ""))) throw new PrepareContentError(422, error.code, "COREX could not analyze the downloaded video.", error.diagnosticCode);
     throw new PrepareContentError(422, "visual_analysis_failed", "COREX could not analyze the downloaded video.");
   }
   const controller = new AbortController();
