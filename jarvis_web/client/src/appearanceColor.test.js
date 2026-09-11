@@ -28,11 +28,12 @@ test("contrast calculation identifies readable and low-contrast pairs", () => {
   assert.ok(contrastRatio("#ffffff", "#000000") > 20); assert.ok(contrastRatio("#777777", "#777777") < 1.1);
 });
 
-test("advanced dialog exposes synchronized controls, live preview, saved colors, OK, and Cancel", () => {
-  const picker = fs.readFileSync(new URL("./AdvancedColorPicker.jsx", import.meta.url), "utf8");
+test("workflow theme menu exposes only Dark and Light without the color panel", () => {
   const app = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
-  assert.match(picker, /color-sv-surface/); assert.match(picker, /Hue spectrum/); assert.match(picker, /HEX/);
-  for (const label of ["Red", "Green", "Blue", "Hue", "Saturation", "Lightness", "Add to Custom Colors", "OK", "Cancel"]) assert.match(picker, new RegExp(label));
-  assert.match(picker, /onPreview/); assert.match(picker, /onConfirm/); assert.match(picker, /onCancel/); assert.match(picker, /color-contrast-warning/);
-  assert.match(app, /setColorEditor/); assert.match(app, /colorEditor\.original/); assert.match(app, /customColors/); assert.match(app, /Reset Entire Theme/); assert.match(app, /Reset Section/);
+  const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.match(app, /className="theme-menu"/);
+  assert.match(app, /\[\["dark", "Dark"\], \["light", "Light"\]\]/);
+  assert.match(app, /applySimpleTheme/);
+  assert.doesNotMatch(app, /setColorEditor|colorEditor\.original|Reset Entire Theme|Reset Section|appearance-popover/);
+  assert.match(styles, /\.theme-menu/);
 });

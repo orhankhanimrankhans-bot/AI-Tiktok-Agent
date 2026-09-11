@@ -146,7 +146,7 @@ test("appearance persistence stays separate and contains UI-only theme fields", 
   const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   assert.equal(CANVAS_APPEARANCE_KEY, "jarvis_canvas_appearance_v1");
   assert.match(source, /localStorage\.setItem\(CANVAS_APPEARANCE_KEY/);
-  assert.match(source, /canvasStyle/); assert.match(source, /APPEARANCE_COLOR_SECTIONS/); assert.match(source, /appearanceCssVariables/);
+  assert.match(source, /canvasStyle/); assert.match(source, /theme-menu/); assert.match(source, /appearanceCssVariables/);
   assert.doesNotMatch(JSON.stringify(safeAppearance({ accessToken: "not-allowed", binary: { referenceId: "not-allowed" } })), /accessToken|referenceId/);
 });
 

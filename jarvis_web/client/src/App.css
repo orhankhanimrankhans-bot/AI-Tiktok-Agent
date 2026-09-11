@@ -4182,3 +4182,45 @@ button {
 .jarvis-app.sidebar-collapsed .sidebar {
   overflow: hidden !important;
 }
+
+/* Simple two-option theme menu. */
+.theme-menu {
+  position: absolute;
+  z-index: 16;
+  top: 48px;
+  right: 50px;
+  width: 210px;
+  padding: 8px;
+  color: #f4f7f9;
+  background: rgba(50, 50, 50, .98);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 16px;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, .38);
+}
+
+.theme-menu button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.theme-menu button:hover,
+.theme-menu button:focus-visible {
+  background: rgba(255, 255, 255, .08);
+}
+
+.theme-menu button b {
+  color: #f4f7f9;
+  font-size: 18px;
+  font-weight: 600;
+}

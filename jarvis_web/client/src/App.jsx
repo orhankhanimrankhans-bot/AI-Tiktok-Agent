@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import AdvancedColorPicker from "./AdvancedColorPicker.jsx";
 import WorkflowManager from "./WorkflowManager.jsx";
 import SecurityAccess from "./SecurityAccess.jsx";
 import { useJarvisAuth } from "./JarvisAuth.jsx";
@@ -30,7 +29,7 @@ import {
   upstreamInputError,
 } from "./workflowExecution.js";
 import { normalizeSavedWorkflow, workflowForStorage } from "./workflowStorage.js";
-import { APPEARANCE_COLOR_SECTIONS, CANVAS_APPEARANCE_KEY, DEFAULT_APPEARANCE, THEME_PRESETS, appearanceCssVariables, canvasBackground,
+import { CANVAS_APPEARANCE_KEY, appearanceCssVariables, canvasBackground,
   canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
@@ -56,10 +55,6 @@ function loadStoredLocalWorkflow() {
   return workflow;
 }
 
-function AppearanceColorField({ label, value, onOpen, onReset }) {
-  return <div className="appearance-color-field"><span>{label}</span><div><button type="button" className="appearance-color-swatch" style={{ background: value }}
-    onClick={onOpen} aria-label={`Edit ${label}`} /><code>{value.toUpperCase()}</code><button type="button" className="appearance-property-reset" onClick={onReset}>Reset</button></div></div>;
-}
 
 function GoogleDriveIcon({ className = "" }) {
   return (
@@ -2313,7 +2308,6 @@ function App() {
   const suppressNodeClickRef = useRef(false);
   const [canvasViewport, setCanvasViewport] = useState(() => loadCanvasAppearance().viewport);
   const [canvasAppearance, setCanvasAppearance] = useState(loadCanvasAppearance);
-  const [colorEditor, setColorEditor] = useState(null);
   const [showAppearance, setShowAppearance] = useState(false);
   const [lastExecutionAt, setLastExecutionAt] = useState(null);
   useEffect(() => {
@@ -2697,16 +2691,28 @@ function App() {
     setCanvasAppearance((current) => safeAppearance({ ...current, ...patch, viewport: canvasViewport }));
   };
 
-  const applyThemePreset = (preset) => {
-    updateAppearance({ ...preset, preset: preset.id, canvasStyle: "linear-gradient" });
+  const applySimpleTheme = (theme) => {
+    if (theme === "light") {
+      updateAppearance({
+        preset: "white",
+        canvasStyle: "solid",
+        canvasColor: "#f4f7f9",
+        canvasColorB: "#e3e9ee",
+        headerColor: "#e3e9ee",
+        providerLogoMode: "original",
+      });
+    } else {
+      updateAppearance({
+        preset: "jarvis-dark",
+        canvasStyle: "solid",
+        canvasColor: "#0d1117",
+        canvasColorB: "#102a43",
+        headerColor: "#171d22",
+        providerLogoMode: "original",
+      });
+    }
+    setShowAppearance(false);
   };
-
-  const resetAppearanceSection = (section) => updateAppearance(Object.fromEntries(section.fields.map(([key]) => [key, DEFAULT_APPEARANCE[key]])));
-
-  const contrastBackgroundFor = (key) => ({ nodeTitle: canvasAppearance.nodeBackground, nodeSubtitle: canvasAppearance.nodeBackground,
-    headerTextColor: canvasAppearance.headerColor, statusTextColor: canvasAppearance.headerColor, sidebarText: canvasAppearance.sidebarBackground,
-    sidebarActiveText: canvasAppearance.sidebarActiveBackground, controlText: canvasAppearance.controlBackground,
-    mainText: canvasAppearance.panelBackground, mutedText: canvasAppearance.panelBackground }[key] || null);
 
   useEffect(() => {
     localStorage.setItem(CANVAS_APPEARANCE_KEY, JSON.stringify({ ...canvasAppearance, viewport: canvasViewport }));
@@ -3451,24 +3457,13 @@ function App() {
                     <button type="button" onClick={() => setShowAppearance((open) => !open)} title="Canvas appearance" aria-label="Canvas appearance">Theme</button>
                     <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow">Fit</button>
                   </div>
-                  {showAppearance && <aside className="appearance-popover" onPointerDown={(event) => event.stopPropagation()}>
-                    <header><div><span>APPEARANCE</span><strong>Corex Theme System</strong></div><button type="button" onClick={() => setShowAppearance(false)} aria-label="Close appearance">×</button></header>
-                    <div><strong>Presets</strong><div className="theme-presets">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button"
-                      className={canvasAppearance.preset === preset.id ? "selected" : ""} onClick={() => applyThemePreset(preset)}>
-                      <span style={{ background: `linear-gradient(135deg, ${preset.canvasColor}, ${preset.canvasColorB})` }} />{preset.label}</button>)}</div></div>
-                    <div><strong>Background Type</strong><div className="appearance-segmented three-way">{[["solid", "Solid"], ["linear-gradient", "Linear"], ["radial-gradient", "Radial"]].map(([value, label]) =>
-                      <button key={value} type="button" className={canvasAppearance.canvasStyle === value ? "selected" : ""} onClick={() => updateAppearance({ canvasStyle: value })}>{label}</button>)}</div></div>
-                    {canvasAppearance.canvasStyle === "linear-gradient" && <label className="gradient-angle"><span>Gradient Angle</span><input type="range" min="0" max="360" value={canvasAppearance.gradientAngle}
-                      onChange={(event) => updateAppearance({ gradientAngle: Number(event.target.value), preset: "custom" })} /><b>{canvasAppearance.gradientAngle}°</b></label>}
-                    <div><strong>Provider Logos</strong><div className="appearance-segmented">{[["original", "Original Brand"], ["monochrome", "Theme Tint"]].map(([value, label]) =>
-                      <button key={value} type="button" className={canvasAppearance.providerLogoMode === value ? "selected" : ""} onClick={() => updateAppearance({ providerLogoMode: value, preset: "custom" })}>{label}</button>)}</div></div>
-                    <div className="appearance-sections">{APPEARANCE_COLOR_SECTIONS.map((section, index) => <details key={section.id} open={index === 0}>
-                      <summary><span>{section.label}</span><button type="button" onClick={(event) => { event.preventDefault(); resetAppearanceSection(section); }}>Reset Section</button></summary>
-                      <div className="appearance-color-fields">{section.fields.map(([key, label]) => <AppearanceColorField key={key} label={label} value={canvasAppearance[key]}
-                        onOpen={() => setColorEditor({ key, label, original: canvasAppearance[key] })}
-                        onReset={() => updateAppearance({ [key]: DEFAULT_APPEARANCE[key], preset: "custom" })} />)}</div>
-                    </details>)}</div>
-                    <button type="button" className="reset-entire-theme" onClick={() => setCanvasAppearance(safeAppearance({ viewport: canvasViewport }))}>Reset Entire Theme</button>
+                  {showAppearance && <aside className="theme-menu" onPointerDown={(event) => event.stopPropagation()}>
+                    {[["dark", "Dark"], ["light", "Light"]].map(([value, label]) => {
+                      const selected = value === "light" ? canvasAppearance.preset === "white" : canvasAppearance.preset !== "white";
+                      return <button key={value} type="button" className={selected ? "selected" : ""} onClick={() => applySimpleTheme(value)}>
+                        <span>{label}</span>{selected && <b>✓</b>}
+                      </button>;
+                    })}
                   </aside>}
 
                   <div className="canvas-viewport" style={canvasViewportStyle(canvasViewport, window.devicePixelRatio)}>
@@ -3793,12 +3788,6 @@ function App() {
 
       </main>
 
-      {colorEditor && <AdvancedColorPicker key={`${colorEditor.key}-${colorEditor.original}`} label={colorEditor.label} initialColor={colorEditor.original}
-        contrastBackground={contrastBackgroundFor(colorEditor.key)} customColors={canvasAppearance.customColors}
-        onPreview={(color) => updateAppearance({ [colorEditor.key]: color, preset: "custom" })}
-        onConfirm={(color) => { updateAppearance({ [colorEditor.key]: color, preset: "custom" }); setColorEditor(null); }}
-        onCancel={() => { updateAppearance({ [colorEditor.key]: colorEditor.original }); setColorEditor(null); }}
-        onAddCustom={(color) => updateAppearance({ customColors: [...canvasAppearance.customColors, color] })} />}
 
       {editingNode &&
         editingNode.name ===
