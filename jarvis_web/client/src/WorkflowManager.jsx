@@ -7,7 +7,7 @@ function formatUpdatedAt(value) {
   return Number.isNaN(date.getTime()) ? "Recently updated" : date.toLocaleString();
 }
 
-export default function WorkflowManager({ apiBaseUrl, onClose, selectedWorkflowId, onSelectWorkflow, onNewWorkflow, onWorkflowUpdated, onWorkflowDeleted, activeWorkflowId, runningWorkflowId, onOpenWorkflow, pendingOpenWorkflowId, onCancelOpen, onDiscardAndOpen, openingWorkflowId, refreshKey }) {
+export default function WorkflowManager({ apiBaseUrl, onClose, selectedWorkflowId, onSelectWorkflow, onNewWorkflow, onWorkflowCreated, onWorkflowUpdated, onWorkflowDeleted, activeWorkflowId, runningWorkflowId, onOpenWorkflow, pendingOpenWorkflowId, onCancelOpen, onDiscardAndOpen, openingWorkflowId, refreshKey }) {
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -33,7 +33,7 @@ export default function WorkflowManager({ apiBaseUrl, onClose, selectedWorkflowI
   }, [apiBaseUrl, refreshKey]);
 
   const selected = workflows.find((workflow) => workflow.id === selectedWorkflowId) || null;
-  const startNew = async () => { await onNewWorkflow?.(); };
+  const startNew = async () => { const created = await onNewWorkflow?.(); await onWorkflowCreated?.(created); };
   const submitRename = async (event) => {
     event.preventDefault();
     const trimmedName = normalizeWorkflowName(name);

@@ -120,7 +120,7 @@ const NODE_LIBRARY = [
     name: "Schedule Trigger",
     description: "Start a workflow automatically on a schedule",
     type: "TRIGGER",
-    icon: "◷",
+    icon: "â—·",
   },
   {
     id: "prepare-content",
@@ -144,7 +144,7 @@ const NODE_LIBRARY = [
     name: "YouTube",
     description: "Upload a video with the YouTube Data API v3",
     type: "ACTION",
-    icon: "▶",
+    icon: "â–¶",
   },
   {
     id: "facebook-page-post",
@@ -178,7 +178,7 @@ const NODE_LIBRARY = [
     name: "Search Files and Folders",
     description: "Search files and folders in Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-download",
@@ -186,7 +186,7 @@ const NODE_LIBRARY = [
     name: "Download File",
     description: "Download a file from Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-delete",
@@ -194,7 +194,7 @@ const NODE_LIBRARY = [
     name: "Delete File",
     description: "Delete the selected file from Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-copy",
@@ -202,7 +202,7 @@ const NODE_LIBRARY = [
     name: "Copy File",
     description: "Copy a file in Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-create-text",
@@ -210,7 +210,7 @@ const NODE_LIBRARY = [
     name: "Create File from Text",
     description: "Create a new Google Drive file from text",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-move",
@@ -218,7 +218,7 @@ const NODE_LIBRARY = [
     name: "Move File",
     description: "Move a file to another folder in Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-share-file",
@@ -226,7 +226,7 @@ const NODE_LIBRARY = [
     name: "Share File",
     description: "Share a Google Drive file",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-update",
@@ -234,7 +234,7 @@ const NODE_LIBRARY = [
     name: "Update File",
     description: "Update a Google Drive file",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-upload",
@@ -242,7 +242,7 @@ const NODE_LIBRARY = [
     name: "Upload File",
     description: "Upload a file to Google Drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-create-folder",
@@ -250,7 +250,7 @@ const NODE_LIBRARY = [
     name: "Create Folder",
     description: "Create a new Google Drive folder",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-delete-folder",
@@ -258,7 +258,7 @@ const NODE_LIBRARY = [
     name: "Delete Folder",
     description: "Delete a Google Drive folder",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-share-folder",
@@ -266,7 +266,7 @@ const NODE_LIBRARY = [
     name: "Share Folder",
     description: "Share a Google Drive folder",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-create-shared-drive",
@@ -274,7 +274,7 @@ const NODE_LIBRARY = [
     name: "Create Shared Drive",
     description: "Create a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-delete-shared-drive",
@@ -282,7 +282,7 @@ const NODE_LIBRARY = [
     name: "Delete Shared Drive",
     description: "Delete a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-get-shared-drive",
@@ -290,7 +290,7 @@ const NODE_LIBRARY = [
     name: "Get Shared Drive",
     description: "Get a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-get-many-shared-drives",
@@ -298,7 +298,7 @@ const NODE_LIBRARY = [
     name: "Get Many Shared Drives",
     description: "List shared drives",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "google-update-shared-drive",
@@ -306,7 +306,7 @@ const NODE_LIBRARY = [
     name: "Update Shared Drive",
     description: "Update a shared drive",
     type: "ACTION",
-    icon: "△",
+    icon: "â–³",
   },
   {
     id: "limit",
@@ -438,18 +438,18 @@ const saveAndClose = () => {
 
         <header className="node-editor-header">
           <div className="node-editor-title">
-            <div className="schedule-title-icon">◷</div>
+            <div className="schedule-title-icon">â—·</div>
             <strong>Schedule Trigger</strong>
           </div>
 
           <div className="node-editor-header-actions">
-            <button>Docs ↗</button>
+            <button>Docs â†—</button>
 
             <button
               className="node-editor-close"
              onClick={saveAndClose}
             >
-              ×
+              Ã—
             </button>
           </div>
         </header>
@@ -485,7 +485,7 @@ const saveAndClose = () => {
                 className="execute-step"
                 onClick={executeTrigger}
               >
-                ♙ Execute step
+                â™™ Execute step
               </button>
             </div>
 
@@ -504,7 +504,7 @@ const saveAndClose = () => {
                   <div className="trigger-rules-title">
                     <strong>Trigger Rules</strong>
 
-                    <button onClick={addRule}>＋</button>
+                    <button onClick={addRule}>ï¼‹</button>
                   </div>
 
                   {rules.map((rule, index) => (
@@ -518,7 +518,7 @@ const saveAndClose = () => {
                           className="rule-expand"
                           onClick={() => toggleRule(rule.id)}
                         >
-                          {rule.expanded ? "⌄" : "›"}
+                          {rule.expanded ? "âŒ„" : "â€º"}
                         </button>
 
                         <strong>
@@ -531,7 +531,7 @@ const saveAndClose = () => {
                             deleteRule(rule.id)
                           }
                         >
-                          ♲
+                          â™²
                         </button>
                       </div>
 
@@ -580,7 +580,7 @@ const saveAndClose = () => {
                               />
 
                               <small>
-                                Must be in range 1–59
+                                Must be in range 1â€“59
                               </small>
                             </>
                           )}
@@ -606,7 +606,7 @@ const saveAndClose = () => {
                               />
 
                               <small>
-                                Must be in range 1–59
+                                Must be in range 1â€“59
                               </small>
                             </>
                           )}
@@ -671,7 +671,7 @@ const saveAndClose = () => {
                               />
 
                               <small>
-                                Must be in range 1–31
+                                Must be in range 1â€“31
                               </small>
 
                               <label>
@@ -906,7 +906,7 @@ const saveAndClose = () => {
                     className="add-rule-button"
                     onClick={addRule}
                   >
-                    ＋ Add Rule
+                    ï¼‹ Add Rule
                   </button>
                 </>
               )}
@@ -1027,7 +1027,7 @@ const saveAndClose = () => {
 
             {!output ? (
               <div className="empty-output">
-                <div className="output-bolt">ϟ</div>
+                <div className="output-bolt">ÏŸ</div>
 
                 <h3>No trigger output</h3>
 
@@ -1115,13 +1115,13 @@ function GoogleDriveProviderBrowser({
   return (
     <div className="provider-browser">
       <div className="provider-browser-header">
-        <button className="provider-back" onClick={onBack}>←</button>
+        <button className="provider-back" onClick={onBack}>â†</button>
         <GoogleDriveIcon className="drive-provider-logo" />
         <h2>Google Drive</h2>
       </div>
 
       <div className="provider-action-search">
-        <span>⌕</span>
+        <span>âŒ•</span>
         <input
           autoFocus
           value={actionSearch}
@@ -1175,8 +1175,8 @@ function FacebookProviderBrowser({ onBack, onSelectAction }) {
 
   return (
     <div className="provider-browser">
-      <div className="provider-browser-header facebook-provider-header"><button className="provider-back" onClick={onBack}>←</button><FacebookIcon className="facebook-provider-logo" /><h2>Facebook</h2></div>
-      <div className="provider-action-search"><span>⌕</span><input autoFocus value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Search Facebook Actions..." /></div>
+      <div className="provider-browser-header facebook-provider-header"><button className="provider-back" onClick={onBack}>â†</button><FacebookIcon className="facebook-provider-logo" /><h2>Facebook</h2></div>
+      <div className="provider-action-search"><span>âŒ•</span><input autoFocus value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Search Facebook Actions..." /></div>
       <div className="provider-action-scroll">
         {groups.map((group) => {
           const items = group.items.filter(([, label]) => label.toLowerCase().includes(query));
@@ -1267,8 +1267,8 @@ function GoogleCredentialModal({
 
           <div className="credential-modal-actions">
             <button type="button" onClick={saveCredential}>Save</button>
-            {credential?.id && <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">⌫</button>}
-            <button type="button" onClick={onClose} aria-label="Close credential modal">×</button>
+            {credential?.id && <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">âŒ«</button>}
+            <button type="button" onClick={onClose} aria-label="Close credential modal">Ã—</button>
           </div>
         </header>
 
@@ -1287,7 +1287,7 @@ function GoogleCredentialModal({
               </select>
             </div>
 
-            {status === "connected" ? <div className="credential-connected"><span>✓</span><strong>Account connected{credential?.accountEmail ? ` · ${credential.accountEmail}` : ""}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnectCredential}>Disconnect</button></div></div> : <div className="credential-warning"><span>⚠</span><span>Connect your account to use this credential</span><button type="button" onClick={() => onStartOAuth(null)}>Sign in with Google</button></div>}
+            {status === "connected" ? <div className="credential-connected"><span>âœ“</span><strong>Account connected{credential?.accountEmail ? ` Â· ${credential.accountEmail}` : ""}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnectCredential}>Disconnect</button></div></div> : <div className="credential-warning"><span>âš </span><span>Connect your account to use this credential</span><button type="button" onClick={() => onStartOAuth(null)}>Sign in with Google</button></div>}
             {connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}
 
             <label htmlFor="google-allowed-domains">Allowed HTTP Request Domains</label>
@@ -1369,13 +1369,13 @@ function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconne
       <div className="credential-modal">
         <header className="credential-modal-header">
           <div className="credential-modal-title"><FacebookIcon className="facebook-provider-logo" /><div><input aria-label="Credential name" className="credential-name-input" value={credentialName} onChange={(event) => setCredentialName(event.target.value)} /><div className="credential-subtitle">Facebook Graph API credential</div></div></div>
-          <div className="credential-modal-actions">{isManual && <button type="button" onClick={saveAccessToken} disabled={!isExistingManual && !accessToken.trim()}>Save</button>}{isExistingManual && <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">⌫</button>}<button type="button" onClick={onClose} aria-label="Close credential modal">×</button></div>
+          <div className="credential-modal-actions">{isManual && <button type="button" onClick={saveAccessToken} disabled={!isExistingManual && !accessToken.trim()}>Save</button>}{isExistingManual && <button type="button" className="credential-delete-button" onClick={() => setShowDeleteConfirmation(true)} aria-label="Delete credential" title="Delete credential">âŒ«</button>}<button type="button" onClick={onClose} aria-label="Close credential modal">Ã—</button></div>
         </header>
         <div className="credential-modal-body">
           <aside className="credential-tabs"><button type="button" className="credential-tab-active">Connection</button><button type="button">Sharing</button><button type="button">Details</button></aside>
           <section className="credential-content">
             <div className="credential-content-top"><h3>Setup credential</h3><select aria-label="Authentication type" value={authMode} onChange={(event) => { setAuthMode(event.target.value); setAccessToken(""); setConnectionState("not_tested"); setConnectionMessage(""); }} disabled={Boolean(credential)}><option value="managed_oauth2">Managed Meta OAuth2</option><option value="manual_access_token">Access Token</option></select></div>
-            {!isManual && <>{credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button type="button" onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Corex backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
+            {!isManual && <>{credential ? <div className="credential-connected"><span>âœ“</span><strong>Account connected Â· {credential.accountName || credential.accountId}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button type="button" onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Corex backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
             {isManual && <div className="facebook-token-credential">
               <label htmlFor="facebook-access-token">Access Token</label>
               <div className="secret-input-row"><input id="facebook-access-token" type={showToken ? "text" : "password"} autoComplete="off" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); setConnectionState("not_tested"); setConnectionMessage(""); }} placeholder={isExistingManual ? "Enter a new token to replace the saved token" : "Enter a Facebook Graph API access token"} /><button type="button" onClick={() => setShowToken((visible) => !visible)} aria-label={showToken ? "Hide access token" : "Show access token"}>{showToken ? "Hide" : "Show"}</button></div>
@@ -1497,12 +1497,12 @@ function GoogleDriveSearchEditor({
           </div>
 
           <div className="node-editor-header-actions">
-            <button>Docs ↗</button>
+            <button>Docs â†—</button>
             <button
               className="node-editor-close"
               onClick={saveAndClose}
             >
-              ×
+              Ã—
             </button>
           </div>
         </header>
@@ -1519,13 +1519,13 @@ function GoogleDriveSearchEditor({
             </div>
 
             <div className="input-source-select">
-              <span>{previousNode?.icon ?? "◷"}</span>
+              <span>{previousNode?.icon ?? "â—·"}</span>
               <span>{previousNode?.name ?? "Schedule Trigger"}</span>
-              <span>⌄</span>
+              <span>âŒ„</span>
             </div>
 
             {!input ? <div className="input-empty-state">
-              <div className="input-arrow">→|</div>
+              <div className="input-arrow">â†’|</div>
               <h3>No input data</h3>
               <button
                 onClick={executePreviousNodes}
@@ -1612,7 +1612,7 @@ function GoogleDriveSearchEditor({
                       onClick={() => onCreateCredential(config.credentialId || null)}
                       title="Edit credential"
                     >
-                      ✎
+                      âœŽ
                     </button>
                   </div>
 
@@ -1727,18 +1727,18 @@ function GoogleDriveSearchEditor({
 
                   <div className="config-section-row">
                     <span>Filter</span>
-                    <button>＋</button>
+                    <button>ï¼‹</button>
                   </div>
                   <button className="config-add-button">
-                    ＋ Add Filter
+                    ï¼‹ Add Filter
                   </button>
 
                   <div className="config-section-row">
                     <span>Options</span>
-                    <button>＋</button>
+                    <button>ï¼‹</button>
                   </div>
                   <button className="config-add-button">
-                    ＋ Add option
+                    ï¼‹ Add option
                   </button>
                 </div>
               )}
@@ -1867,7 +1867,7 @@ function GoogleDriveSearchEditor({
 
             {!output ? (
               <div className="empty-output">
-                <div className="output-bolt">→|</div>
+                <div className="output-bolt">â†’|</div>
                 <h3>No output data</h3>
                 <button onClick={executeStep}>
                   Execute step
@@ -1938,13 +1938,13 @@ function NodeInputPanel({ previousNode, input, onInputChange, onExecutePreviousN
         </div>
       </div>
       <div className="input-source-select">
-        <span>{previousNode?.icon ?? "○"}</span>
+        <span>{previousNode?.icon ?? "â—‹"}</span>
         <span>{previousNode?.name ?? "No connected node"}</span>
-        <span>⌄</span>
+        <span>âŒ„</span>
       </div>
       {input == null ? (
         <div className="input-empty-state">
-          <div className="input-arrow">→|</div>
+          <div className="input-arrow">â†’|</div>
           <h3>No input data</h3>
           <button onClick={loadPreviousOutput}>Execute previous nodes</button>
           <div>to view input data</div>
@@ -1970,7 +1970,7 @@ function NodeOutputPanel({ output, onExecute, allowMock = false, onMock }) {
       </div>
       {output == null ? (
         <div className="empty-output">
-          <div className="output-bolt">→|</div>
+          <div className="output-bolt">â†’|</div>
           <h3>No output data</h3>
           <button onClick={onExecute}>Execute step</button>
           {allowMock && <button className="mock-data-action" onClick={onMock}>set clearly labeled mock data</button>}
@@ -2034,7 +2034,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
       <div className="node-editor-window">
         <header className="node-editor-header">
           <div className="node-editor-title">{isLimit ? <span className="logic-title-icon">1</span> : <GoogleDriveIcon className="drive-title-icon" />}<strong>{node.name}</strong></div>
-          <div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div>
+          <div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>Ã—</button></div>
         </header>
         <div className="node-editor-body google-three-column">
           <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} allowMock={isLimit} />
@@ -2051,7 +2051,7 @@ function Phase2NodeEditor({ node, kind, previousNode, credentials, onCreateCrede
                     <label>Keep</label><select value={config.keep} onChange={(event) => setConfig({ ...config, keep: event.target.value })}><option>First Items</option><option>Last Items</option></select>
                   </> : <>
                     <label>Credential</label>
-                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{googleCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
+                    <div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential() : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{config.credentialId && !credentials.some((credential) => credential.id === config.credentialId) && <option value={config.credentialId}>Credential missing</option>}{credentials.map((credential) => <option key={credential.id} value={credential.id}>{googleCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>âœŽ</button></div>
                     <label>Resource</label><select value={config.resource} disabled><option>File</option></select>
                     <label>Operation</label><select value={config.operation} disabled><option>{config.operation}</option></select>
                     <label>File ID</label><div className="value-mode-switch">{["Fixed", "Expression"].map((mode) => <button key={mode} className={config.fileIdMode === mode ? "active" : ""} onClick={() => setConfig({ ...config, fileIdMode: mode })}>{mode}</button>)}</div>
@@ -2076,7 +2076,7 @@ function ParameterList({ title, addLabel, items, onChange }) {
   return (
     <div className="request-parameter-section">
       <div className="config-section-row"><span>{title}</span><button onClick={() => onChange([...items, { name: "", value: "" }])}>+</button></div>
-      {items.map((item, index) => <div className="parameter-pair" key={index}><input aria-label={`${title} name`} placeholder="Name" value={item.name} onChange={(event) => update(index, "name", event.target.value)} /><input aria-label={`${title} value`} placeholder="Value" value={item.value} onChange={(event) => update(index, "value", event.target.value)} /><button aria-label={`Remove ${title} item`} onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>×</button></div>)}
+      {items.map((item, index) => <div className="parameter-pair" key={index}><input aria-label={`${title} name`} placeholder="Name" value={item.name} onChange={(event) => update(index, "name", event.target.value)} /><input aria-label={`${title} value`} placeholder="Value" value={item.value} onChange={(event) => update(index, "value", event.target.value)} /><button aria-label={`Remove ${title} item`} onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>Ã—</button></div>)}
       <button className="config-add-button" onClick={() => onChange([...items, { name: "", value: "" }])}>+ {addLabel}</button>
     </div>
   );
@@ -2098,7 +2098,7 @@ function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecuteP
   };
   const saveAndClose = () => { onSaveNode({ ...node, config, input, output, status: node.status ?? "idle" }); onClose(); };
   return <div className="node-editor-overlay"><div className="node-editor-window">
-    <header className="node-editor-header"><div className="node-editor-title"><span className="logic-title-icon">AI</span><strong>Prepare Content</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
+    <header className="node-editor-header"><div className="node-editor-title"><span className="logic-title-icon">AI</span><strong>Prepare Content</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>Ã—</button></div></header>
     <div className="node-editor-body google-three-column">
       <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
       <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
@@ -2131,12 +2131,12 @@ function YouTubeEditor({ node, previousNode, credentials, onCreateCredential, on
   const executeStep = async () => { if (isExecuting) return; setIsExecuting(true); try { const executed = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" }); setOutput(executed.output); onSaveNode(executed); } finally { setIsExecuting(false); } };
   const saveAndClose = () => { onSaveNode({ ...node, config, input, output, status: node.status ?? "idle" }); onClose(); };
   return <div className="node-editor-overlay"><div className="node-editor-window">
-    <header className="node-editor-header"><div className="node-editor-title"><YouTubeIcon className="facebook-title-icon" /><strong>YouTube</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
+    <header className="node-editor-header"><div className="node-editor-title"><YouTubeIcon className="facebook-title-icon" /><strong>YouTube</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>Ã—</button></div></header>
     <div className="node-editor-body google-three-column">
       <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
       <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
         <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
-          <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{youtubeCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
+          <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{youtubeCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>âœŽ</button></div>
           <label>Operation</label><select value={config.operation} disabled><option>{YOUTUBE_OPERATION_UPLOAD}</option></select>
           <label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} placeholder="data" />
           <label>Title</label><input value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="{{ $json.title }}" />
@@ -2188,13 +2188,13 @@ function FacebookGraphEditor({ node, previousNode, credentials, onCreateCredenti
 
   return (
     <div className="node-editor-overlay"><div className="node-editor-window">
-      <header className="node-editor-header"><div className="node-editor-title"><FacebookIcon className="facebook-title-icon" /><strong>Facebook Graph API</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>×</button></div></header>
+      <header className="node-editor-header"><div className="node-editor-title"><FacebookIcon className="facebook-title-icon" /><strong>Facebook Graph API</strong></div><div className="node-editor-header-actions"><button className="node-editor-close" onClick={saveAndClose}>Ã—</button></div></header>
       <div className="node-editor-body google-three-column">
         <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
         <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map((tab) => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" onClick={executeStep} disabled={isExecuting}>{isExecuting ? "Executing..." : "Execute step"}</button></div>
           <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters facebook-parameters">
             {validationMessage && <div className="field-validation" role="alert">{validationMessage}</div>}
-            <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{facebookCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>✎</button></div>
+            <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={(event) => event.target.value === "__create__" ? onCreateCredential(null) : setConfig({ ...config, credentialId: event.target.value })}><option value="">Select credential</option>{credentials.map((credential) => <option key={credential.id} value={credential.id}>{facebookCredentialLabel(credential)}</option>)}<option value="__create__">+ Create new credential</option></select><button className="credential-button" onClick={() => onCreateCredential(config.credentialId || null)}>âœŽ</button></div>
             <label>Operation</label><select value={config.operation} onChange={(event) => setConfig({ ...config, operation: event.target.value })}><option>{FACEBOOK_OPERATION_READ}</option><option>{FACEBOOK_OPERATION_PUBLISH_REEL}</option></select>
             {publishReel && <>
               <label>Binary Property</label><input value={config.binaryProperty} onChange={(event) => setConfig({ ...config, binaryProperty: event.target.value })} placeholder="data" />
@@ -2256,13 +2256,13 @@ function ExecutionHistory({ executions, selected, onSelect }) {
       {!executions.length && <p>No workflow executions yet.</p>}
       {executions.map((execution) => <button key={execution.executionId} className={selected?.executionId === execution.executionId ? "active" : ""} onClick={() => onSelect(execution.executionId)}>
         <strong>{execution.executionId.slice(0, 13)}</strong><span className={`execution-status ${execution.status}`}>{execution.status}</span>
-        <small>{new Date(execution.startedAt).toLocaleString()} · {Math.max(0, new Date(execution.finishedAt) - new Date(execution.startedAt))} ms · {execution.triggerMode}</small>
+        <small>{new Date(execution.startedAt).toLocaleString()} Â· {Math.max(0, new Date(execution.finishedAt) - new Date(execution.startedAt))} ms Â· {execution.triggerMode}</small>
       </button>)}
     </div>
     <div className="execution-detail">
       {!selected ? <p>Select an execution to inspect it.</p> : <>
-        <h3>{selected.workflowName} · {selected.status}</h3>
-        <p>{selected.startedAt} → {selected.finishedAt}</p>
+        <h3>{selected.workflowName} Â· {selected.status}</h3>
+        <p>{selected.startedAt} â†’ {selected.finishedAt}</p>
         <div className="output-tabs">{["Schema", "Table", "JSON"].map((name) => <button key={name} className={tab === name ? "output-tab-active" : ""} onClick={() => setTab(name)}>{name}</button>)}</div>
         <DataViewer value={selected.nodes} tab={tab} />
       </>}
@@ -2272,8 +2272,12 @@ function ExecutionHistory({ executions, selected, onSelect }) {
 
 function App() {
   const { session, can } = useJarvisAuth();
+  const credentialWorkspaceKey = session
+    ? `${session.role}:${session.profileId || "primary"}`
+    : "unauthenticated";
   const [topPage, setTopPage] =
     useState("WORKFLOW");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [workflowTab, setWorkflowTab] =
     useState("EDITOR");
@@ -2629,7 +2633,7 @@ function App() {
       cancelled = true;
       window.removeEventListener("message", handleOAuthMessage);
     };
-  }, []);
+  }, [credentialWorkspaceKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2654,7 +2658,7 @@ function App() {
     window.addEventListener("message", handleFacebookOAuth);
     const initialSyncTimer = window.setTimeout(() => syncFacebookCredentials().catch(() => {}), 0);
     return () => { cancelled = true; window.clearTimeout(initialSyncTimer); window.removeEventListener("message", handleFacebookOAuth); };
-  }, []);
+  }, [credentialWorkspaceKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2872,6 +2876,7 @@ function App() {
   const openServerWorkflow = async (workflowId) => {
     setOpeningWorkflowId(workflowId); setPendingOpenWorkflowId(null);
     try {
+      await Promise.allSettled([syncGoogleCredential(), syncFacebookCredentials()]);
       const workflow = validateStoredWorkflow(await getWorkflow(fetch, API_BASE_URL, workflowId));
       const definition = editorDefinition(workflow.nodes, workflow.connections);
       canvasNodesRef.current = definition.nodes; connectionsRef.current = definition.connections;
@@ -3026,7 +3031,7 @@ function App() {
       const stored = await publishLocalWorkflow(fetch, API_BASE_URL, { ...publishDefinition, serverWorkflowId: editorWorkflowSource === "server" ? activeServerWorkflow?.id : loadStoredLocalWorkflow()?.serverWorkflowId });
       const workflow = validateStoredWorkflow(stored);
       setEditorWorkflowSource("server"); setActiveServerWorkflow({ id: workflow.id, name: workflow.name, status: workflow.status, version: workflow.version, updatedAt: workflow.updatedAt });
-
+      storeWorkflowLinkage({ version: 2, name: workflow.name, nodes: definition.nodes, connections: definition.connections, savedAt: new Date().toISOString(), serverWorkflowId: workflow.id });
       setSelectedManagedWorkflowId(workflow.id); setWorkflowManagerRefreshKey((value) => value + 1);
       editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections); setWorkflowDirty(false);
       storeWorkflowLinkage({ version: 2, name: workflow.name, nodes: workflow.nodes, connections: workflow.connections, savedAt: new Date().toISOString(), serverWorkflowId: workflow.id });
@@ -3262,10 +3267,14 @@ function App() {
   const visibleTopPage = topPage === "WORKFLOW" && !can("view_workflow") ? (can("dashboard") ? "DASHBOARD" : "TOOLS") : topPage === "DASHBOARD" && !can("dashboard") ? (can("view_workflow") ? "WORKFLOW" : "TOOLS") : topPage;
 
   return (
-    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
+    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
       data-can-edit-workflow={can("edit_workflow") ? "true" : "false"} style={appearanceCssVariables(canvasAppearance)}>
 
-      <aside className="sidebar">
+      <button type="button" className="sidebar-toggle" aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
+        <span>{sidebarOpen ? "â€¹" : "\u2630"}</span>
+      </button>
+
+      <aside className="sidebar" aria-label="Corex navigation">
 
         <div className="brand">
           <div className="jarvis-logo" aria-label="ISK">ISK</div>
@@ -3283,18 +3292,18 @@ function App() {
 
         <nav className="side-nav">
           {[
-            ["⌂", "Home"],
-            ["▣", "Chat"],
-            ["◉", "Voice"],
-            ["◌", "WhatsApp"],
-            ["♪", "TikTok"],
-            ["♧", "Memory"],
-            ["✓", "Tasks"],
-            ["▤", "Logs"],
-            ["↻", "Updates"],
-            ["▰", "Backups"],
-            ["⚙", "Settings"],
-            ["〽", "System Health"],
+            ["âŒ‚", "Home"],
+            ["â–£", "Chat"],
+            ["â—‰", "Voice"],
+            ["â—Œ", "WhatsApp"],
+            ["â™ª", "TikTok"],
+            ["â™§", "Memory"],
+            ["âœ“", "Tasks"],
+            ["â–¤", "Logs"],
+            ["â†»", "Updates"],
+            ["â–°", "Backups"],
+            ["âš™", "Settings"],
+            ["ã€½", "System Health"],
           ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools" }[label]))).map(([icon, label]) => (
             <button key={label}>
               <span>{icon}</span>
@@ -3306,7 +3315,7 @@ function App() {
         <div className="sidebar-bottom">
 
           <div className="assisted">
-            ⬡ ASSISTED MODE
+            â¬¡ ASSISTED MODE
           </div>
 
           <small>
@@ -3358,7 +3367,7 @@ function App() {
                 <h1>{editorWorkflowSource === "server" ? activeServerWorkflow?.name : "My Workflow"}</h1>
                 {editorWorkflowSource === "server" && activeServerWorkflow && <div className="server-workflow-binding"><span>SERVER-STORED</span><strong className={`workflow-manager-status ${activeServerWorkflow.status.toLowerCase()}`}>{activeServerWorkflow.status}</strong></div>}
                 <div className={`workflow-live-status ${workflowStatus}`}><span />{workflowStatus.charAt(0).toUpperCase() + workflowStatus.slice(1)}
-                  {lastExecutionAt && !isWorkflowRunning && <small> · {new Date(lastExecutionAt).toLocaleTimeString()}</small>}
+                  {lastExecutionAt && !isWorkflowRunning && <small> Â· {new Date(lastExecutionAt).toLocaleTimeString()}</small>}
                 </div>
               </div>
 
@@ -3387,7 +3396,7 @@ function App() {
 
               <div className="workflow-actions">
                 <button className="run-button" onClick={() => runWorkflow()} disabled={isWorkflowRunning}>
-                  {isWorkflowRunning ? "Running..." : "▶ Run Workflow"}
+                  {isWorkflowRunning ? "Running..." : "â–¶ Run Workflow"}
                 </button>
 
                 <button onClick={saveWorkflow}>{workflowDirty ? "Save *" : "Save"}</button>
@@ -3399,7 +3408,7 @@ function App() {
             </div>
 
             {workflowNotice && <div className={`workflow-notice ${workflowNotice.status}`} role="status">{workflowNotice.message}</div>}
-            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} onNewWorkflow={startNewWorkflow} onWorkflowUpdated={handleManagedWorkflowUpdated} onWorkflowDeleted={handleManagedWorkflowDeleted} activeWorkflowId={activeServerWorkflow?.id || null} runningWorkflowId={isWorkflowRunning && editorWorkflowSource === "server" ? activeServerWorkflow?.id : null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} />}
+            {showWorkflowManager && <WorkflowManager apiBaseUrl={API_BASE_URL} onClose={() => { setShowWorkflowManager(false); setPendingOpenWorkflowId(null); }} selectedWorkflowId={selectedManagedWorkflowId} onSelectWorkflow={setSelectedManagedWorkflowId} onNewWorkflow={startNewWorkflow} onWorkflowCreated={() => Promise.allSettled([syncGoogleCredential(), syncFacebookCredentials()])} onWorkflowUpdated={handleManagedWorkflowUpdated} onWorkflowDeleted={handleManagedWorkflowDeleted} activeWorkflowId={activeServerWorkflow?.id || null} runningWorkflowId={isWorkflowRunning && editorWorkflowSource === "server" ? activeServerWorkflow?.id : null} onOpenWorkflow={requestOpenServerWorkflow} pendingOpenWorkflowId={pendingOpenWorkflowId} onCancelOpen={() => setPendingOpenWorkflowId(null)} onDiscardAndOpen={openServerWorkflow} openingWorkflowId={openingWorkflowId} refreshKey={workflowManagerRefreshKey} />}
 
             {workflowTab === "EDITOR" && (
               <div className="editor-layout">
@@ -3426,30 +3435,30 @@ function App() {
                         setShowNodePicker(true)
                       }
                     >
-                      ＋
+                      ï¼‹
                     </button>
 
-                    <button>⌕</button>
-                    <button>▤</button>
-                    <button>⌘</button>
-                    <button>✦</button>
+                    <button>âŒ•</button>
+                    <button>â–¤</button>
+                    <button>âŒ˜</button>
+                    <button>âœ¦</button>
                   </div>
 
                   <div className="canvas-command-tools" onPointerDown={(event) => event.stopPropagation()}>
                     <button type="button" onClick={() => { setInsertingConnectionId(null); setConnectingFromNodeId(null); setShowNodePicker(true); }} title="Add node" aria-label="Add node">+</button>
-                    <button type="button" onClick={() => { setShowNodePicker(true); setTimeout(() => document.querySelector('.node-search')?.focus(), 0); }} title="Search nodes" aria-label="Search nodes">⌕</button>
-                    <button type="button" onClick={() => setShowAppearance((open) => !open)} title="Canvas appearance" aria-label="Canvas appearance">◐</button>
-                    <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow">⌗</button>
+                    <button type="button" onClick={() => { setShowNodePicker(true); setTimeout(() => document.querySelector('.node-search')?.focus(), 0); }} title="Search nodes" aria-label="Search nodes">âŒ•</button>
+                    <button type="button" onClick={() => setShowAppearance((open) => !open)} title="Canvas appearance" aria-label="Canvas appearance">â—</button>
+                    <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow">âŒ—</button>
                   </div>
                   {showAppearance && <aside className="appearance-popover" onPointerDown={(event) => event.stopPropagation()}>
-                    <header><div><span>APPEARANCE</span><strong>Corex Theme System</strong></div><button type="button" onClick={() => setShowAppearance(false)} aria-label="Close appearance">×</button></header>
+                    <header><div><span>APPEARANCE</span><strong>Corex Theme System</strong></div><button type="button" onClick={() => setShowAppearance(false)} aria-label="Close appearance">Ã—</button></header>
                     <div><strong>Presets</strong><div className="theme-presets">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button"
                       className={canvasAppearance.preset === preset.id ? "selected" : ""} onClick={() => applyThemePreset(preset)}>
                       <span style={{ background: `linear-gradient(135deg, ${preset.canvasColor}, ${preset.canvasColorB})` }} />{preset.label}</button>)}</div></div>
                     <div><strong>Background Type</strong><div className="appearance-segmented three-way">{[["solid", "Solid"], ["linear-gradient", "Linear"], ["radial-gradient", "Radial"]].map(([value, label]) =>
                       <button key={value} type="button" className={canvasAppearance.canvasStyle === value ? "selected" : ""} onClick={() => updateAppearance({ canvasStyle: value })}>{label}</button>)}</div></div>
                     {canvasAppearance.canvasStyle === "linear-gradient" && <label className="gradient-angle"><span>Gradient Angle</span><input type="range" min="0" max="360" value={canvasAppearance.gradientAngle}
-                      onChange={(event) => updateAppearance({ gradientAngle: Number(event.target.value), preset: "custom" })} /><b>{canvasAppearance.gradientAngle}°</b></label>}
+                      onChange={(event) => updateAppearance({ gradientAngle: Number(event.target.value), preset: "custom" })} /><b>{canvasAppearance.gradientAngle}Â°</b></label>}
                     <div><strong>Provider Logos</strong><div className="appearance-segmented">{[["original", "Original Brand"], ["monochrome", "Theme Tint"]].map(([value, label]) =>
                       <button key={value} type="button" className={canvasAppearance.providerLogoMode === value ? "selected" : ""} onClick={() => updateAppearance({ providerLogoMode: value, preset: "custom" })}>{label}</button>)}</div></div>
                     <div className="appearance-sections">{APPEARANCE_COLOR_SECTIONS.map((section, index) => <details key={section.id} open={index === 0}>
@@ -3500,7 +3509,7 @@ function App() {
                         }
                       >
                         <div className="empty-icon">
-                          ＋
+                          ï¼‹
                         </div>
 
                         <div>
@@ -3514,7 +3523,7 @@ function App() {
 
                       <button className="empty-card">
                         <div className="empty-icon">
-                          ✦
+                          âœ¦
                         </div>
 
                         <div>
@@ -3556,7 +3565,7 @@ function App() {
                               title="Delete node"
                               aria-label={`Delete ${node.name}`}
                             >
-                              ×
+                              Ã—
                             </button>
 
                             <div
@@ -3597,8 +3606,8 @@ function App() {
                   <div className="zoom-tools" onPointerDown={(event) => event.stopPropagation()}>
                     <button type="button" onClick={() => setCanvasViewport({ x: 0, y: 0, zoom: 1 })} title="Reset view" aria-label="Reset canvas view">1:1</button>
                     <button type="button" onClick={() => zoomCanvas(canvasViewport.zoom + 0.1)} title="Zoom in" aria-label="Zoom in">+</button>
-                    <button type="button" onClick={() => zoomCanvas(canvasViewport.zoom - 0.1)} title="Zoom out" aria-label="Zoom out">−</button>
-                    <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow to screen">↙</button>
+                    <button type="button" onClick={() => zoomCanvas(canvasViewport.zoom - 0.1)} title="Zoom out" aria-label="Zoom out">âˆ’</button>
+                    <button type="button" onClick={fitWorkflow} title="Fit workflow" aria-label="Fit workflow to screen">â†™</button>
                   </div>
 
                   <div className="logs-bar">
@@ -3652,14 +3661,14 @@ function App() {
                           setShowNodePicker(false)
                         }
                       >
-                        ×
+                        Ã—
                       </button>
 
                     </div>
 
                     <div className="search-box">
 
-                      <span>⌕</span>
+                      <span>âŒ•</span>
 
                       <input
                         autoFocus
@@ -3678,7 +3687,7 @@ function App() {
                             setSearch("")
                           }
                         >
-                          ×
+                          Ã—
                         </button>
                       )}
 
@@ -3772,7 +3781,7 @@ function App() {
           <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
             healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
-            onOpenWorkflow={(workflowId) => { if (!can("view_workflow")) return; setTopPage("WORKFLOW"); if (workflowId && workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
+            onOpenWorkflow={(workflowId) => { if (!workflowId) { if (can("edit_workflow")) setShowWorkflowManager(true); return; } if (!can("view_workflow")) return; setTopPage("WORKFLOW"); if (workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
         ) : visibleTopPage === "TOOLS" ? (
           session.role === "admin" ? <SecurityAccess /> : <section className="placeholder-page"><h1>TOOLS</h1><p>Child-safe tools are available according to the active permission policy.</p></section>
         ) : (

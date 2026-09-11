@@ -3800,3 +3800,79 @@ button {
 @keyframes active-workflow-port-pulse { 50% { box-shadow: 0 0 0 3px rgba(72, 240, 143, .2), 0 0 13px rgba(72, 240, 143, .58); } }
 @keyframes active-workflow-connection-flow { to { stroke-dashoffset: -34; } }
 @media (prefers-reduced-motion: reduce) { .workflow-canvas.active-server-workflow .workflow-node, .workflow-canvas.active-server-workflow .node-port, .workflow-connections.active .workflow-connection-path { animation: none !important; } }
+
+
+/* Compact workflow header and click-to-open sidebar. */
+.sidebar-toggle {
+  position: fixed;
+  top: 86px;
+  left: 188px;
+  z-index: 60;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: #dffbff;
+  background: linear-gradient(145deg, #12252d, #071119);
+  border: 1px solid rgba(68, 219, 241, .58);
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .32), 0 0 16px rgba(54, 218, 242, .12);
+}
+.sidebar-toggle span { font-size: 18px; font-weight: 900; line-height: 1; }
+.jarvis-app.sidebar-collapsed .sidebar {
+  width: 0 !important;
+  min-width: 0 !important;
+  padding-inline: 0 !important;
+  overflow: hidden;
+  border-right-color: transparent;
+  transform: translateX(-100%);
+}
+.jarvis-app.sidebar-collapsed .sidebar-toggle { left: 12px; }
+.jarvis-app.sidebar-open .sidebar,
+.jarvis-app.sidebar-collapsed .sidebar,
+.sidebar-toggle { transition: left .2s ease, min-width .2s ease, width .2s ease, padding .2s ease, transform .2s ease; }
+.jarvis-app.sidebar-open .main-area,
+.jarvis-app.sidebar-collapsed .main-area { transition: margin .2s ease; }
+
+.jarvis-app .workflow-header {
+  min-height: 54px !important;
+  grid-template-columns: minmax(210px, 1fr) auto auto !important;
+  gap: 10px !important;
+  padding: 5px 14px !important;
+}
+.jarvis-app .workflow-title {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, auto) auto auto;
+  align-items: center;
+  justify-content: start;
+  gap: 7px;
+}
+.jarvis-app .workflow-title .breadcrumb { font-size: 8px; white-space: nowrap; }
+.jarvis-app .workflow-manager-entry { margin-top: 0; min-height: 24px; }
+.jarvis-app .workflow-title h1 {
+  max-width: min(360px, 28vw);
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jarvis-app .server-workflow-binding { margin-top: 0; }
+.jarvis-app .workflow-live-status { margin-top: 0; white-space: nowrap; }
+.jarvis-app .workflow-tabs button { padding: 5px 11px; }
+.jarvis-app .workflow-actions { gap: 6px; }
+.jarvis-app .workflow-actions button { min-height: 28px; padding-inline: 9px; }
+@media (max-width: 1100px) {
+  .jarvis-app .workflow-header { grid-template-columns: minmax(160px, 1fr) auto !important; }
+  .jarvis-app .workflow-tabs { display: none; }
+  .jarvis-app .workflow-title { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .jarvis-app .workflow-title .breadcrumb { display: none; }
+}
+@media (max-width: 760px) {
+  .sidebar-toggle { top: 64px; left: 12px; }
+  .jarvis-app.sidebar-open .sidebar { position: fixed; z-index: 55; }
+  .jarvis-app .workflow-header { min-height: 50px !important; grid-template-columns: 1fr !important; align-items: start; }
+  .jarvis-app .workflow-actions { justify-content: flex-start; }
+}
