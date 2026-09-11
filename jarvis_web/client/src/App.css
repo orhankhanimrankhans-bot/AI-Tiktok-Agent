@@ -3303,7 +3303,7 @@ button {
 .appearance-sections details { padding: 0; background: #141d21; border: 1px solid #303f45; border-radius: 9px; }
 .appearance-sections summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; color: #d8e8ec; cursor: pointer; list-style: none; font-size: 10px; font-weight: 800; }
 .appearance-sections summary::-webkit-details-marker { display: none; }.appearance-sections summary::before { content: "+"; color: var(--jarvis-accent); }
-.appearance-sections details[open] summary::before { content: "âˆ’"; }.appearance-sections summary span { flex: 1; }
+.appearance-sections details[open] summary::before { content: "Ã¢Ë†â€™"; }.appearance-sections summary span { flex: 1; }
 .appearance-sections summary button { padding: 4px 6px; color: #8ea1a8; background: transparent; border: 1px solid #394a51; border-radius: 6px; font-size: 8px; }
 .appearance-sections .appearance-color-fields { padding: 0 8px 8px; grid-template-columns: 1fr; }
 .appearance-color-field { min-height: 38px; }.appearance-color-field > div { display: flex; align-items: center; gap: 6px; }
@@ -3971,4 +3971,44 @@ button {
   .jarvis-app .sidebar-toggle { top: 164px !important; left: 12px !important; }
   .jarvis-app.sidebar-open .sidebar-toggle { left: 184px !important; }
   .jarvis-app .workflow-header { padding-left: 14px !important; }
+}
+
+/* Place the sidebar arrow at the top brand edge. */
+.jarvis-app .sidebar-toggle,
+.jarvis-app.sidebar-open .sidebar-toggle,
+.jarvis-app.sidebar-collapsed .sidebar-toggle {
+  top: 166px !important;
+  left: 188px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: linear-gradient(145deg, #103541, #06151b) !important;
+  border: 1px solid rgba(74, 229, 249, .72) !important;
+  box-shadow: 0 0 0 3px rgba(18, 168, 190, .12), 0 10px 24px rgba(0,0,0,.32) !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar-toggle {
+  left: 14px !important;
+}
+.jarvis-app .sidebar-toggle span {
+  font-size: 0 !important;
+  color: transparent !important;
+}
+.jarvis-app .sidebar-toggle span::before {
+  content: "<";
+  color: #eaffff;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+.jarvis-app.sidebar-collapsed .sidebar-toggle span::before {
+  content: ">";
+}
+@media (max-width: 760px) {
+  .jarvis-app .sidebar-toggle,
+  .jarvis-app.sidebar-open .sidebar-toggle,
+  .jarvis-app.sidebar-collapsed .sidebar-toggle {
+    top: 164px !important;
+  }
 }
