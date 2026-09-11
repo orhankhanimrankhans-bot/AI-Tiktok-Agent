@@ -4224,3 +4224,97 @@ button {
   font-size: 18px;
   font-weight: 600;
 }
+
+/* Full light theme overrides for the complete workspace. */
+.jarvis-app.theme-light-mode {
+  background: #f4f7f9 !important;
+  color: #17242d !important;
+}
+
+.jarvis-app.theme-light-mode .main-area,
+.jarvis-app.theme-light-mode .workflow-page,
+.jarvis-app.theme-light-mode .workflow-canvas {
+  background: #f4f7f9 !important;
+  color: #17242d !important;
+}
+
+.jarvis-app.theme-light-mode .top-nav {
+  background: #ffffff !important;
+  border-bottom: 1px solid #d8e3ea !important;
+  box-shadow: 0 2px 12px rgba(15, 35, 45, .06) !important;
+}
+
+.jarvis-app.theme-light-mode .sidebar {
+  background: #ffffff !important;
+  color: #24313a !important;
+  border-right-color: #d6e2e8 !important;
+  box-shadow: 10px 0 24px rgba(25, 45, 55, .08) !important;
+}
+
+.jarvis-app.theme-light-mode .brand-name,
+.jarvis-app.theme-light-mode .side-nav button,
+.jarvis-app.theme-light-mode .sidebar-bottom small,
+.jarvis-app.theme-light-mode .version {
+  color: #24313a !important;
+}
+
+.jarvis-app.theme-light-mode .brand-subtitle,
+.jarvis-app.theme-light-mode .workflow-live-status,
+.jarvis-app.theme-light-mode .workflow-meta,
+.jarvis-app.theme-light-mode .workflow-breadcrumb {
+  color: #647783 !important;
+}
+
+.jarvis-app.theme-light-mode .side-nav button span {
+  color: #087f9a !important;
+  background: #e9f7fa !important;
+  border-color: #bfe0e8 !important;
+}
+
+.jarvis-app.theme-light-mode .side-nav button:hover {
+  color: #07191d !important;
+  background: #e7f8fb !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-header {
+  background: #e6edf2 !important;
+  color: #1b2730 !important;
+  border-bottom-color: #cbd7df !important;
+  box-shadow: inset 0 -1px #d1dde5, 0 8px 22px rgba(15,35,45,.05) !important;
+}
+
+.jarvis-app.theme-light-mode .top-nav button,
+.jarvis-app.theme-light-mode .workflow-tabs button,
+.jarvis-app.theme-light-mode .workflow-actions button,
+.jarvis-app.theme-light-mode .canvas-command-tools button,
+.jarvis-app.theme-light-mode .zoom-tools button,
+.jarvis-app.theme-light-mode .empty-card {
+  color: #17242d !important;
+  background: #ffffff !important;
+  border-color: #bdced8 !important;
+  box-shadow: 0 8px 18px rgba(15, 35, 45, .10) !important;
+}
+
+.jarvis-app.theme-light-mode .top-nav .top-active,
+.jarvis-app.theme-light-mode .workflow-tabs .tab-active {
+  color: #07191d !important;
+  border-color: #0894ad !important;
+  box-shadow: inset 0 -2px #0894ad, 0 8px 18px rgba(8, 148, 173, .14) !important;
+}
+
+.jarvis-app.theme-light-mode .logs-bar {
+  background: #ffffff !important;
+  color: #25333c !important;
+  border-top-color: #d8e3ea !important;
+}
+
+.jarvis-app.theme-light-mode .theme-menu {
+  color: #17242d !important;
+  background: #ffffff !important;
+  border-color: #d6e2e8 !important;
+}
+
+.jarvis-app.theme-light-mode .theme-menu button:hover,
+.jarvis-app.theme-light-mode .theme-menu button:focus-visible {
+  background: #edf6f8 !important;
+}

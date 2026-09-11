@@ -2698,7 +2698,25 @@ function App() {
         canvasStyle: "solid",
         canvasColor: "#f4f7f9",
         canvasColorB: "#e3e9ee",
-        headerColor: "#e3e9ee",
+        headerColor: "#e6edf2",
+        headerTextColor: "#1b2730",
+        statusTextColor: "#5f707a",
+        headerBorderColor: "#cbd7df",
+        sidebarBackground: "#ffffff",
+        sidebarText: "#24313a",
+        sidebarActiveText: "#07191d",
+        sidebarIcon: "#087f9a",
+        sidebarActiveBackground: "#e7f8fb",
+        sidebarBorder: "#d6e2e8",
+        controlBackground: "#ffffff",
+        controlText: "#17242d",
+        controlAccent: "#0894ad",
+        controlBorder: "#bdced8",
+        controlHover: "#edf6f8",
+        mainText: "#17242d",
+        mutedText: "#647783",
+        panelBackground: "#ffffff",
+        panelBorder: "#d5e1e8",
         providerLogoMode: "original",
       });
     } else {
@@ -3271,9 +3289,10 @@ function App() {
   const activeServerWorkflowPresentation = isPersistedWorkflowActive(editorWorkflowSource, activeServerWorkflow);
   const dashboardGraph = buildDashboardGraph(canvasNodes, connections);
   const visibleTopPage = topPage === "WORKFLOW" && !can("view_workflow") ? (can("dashboard") ? "DASHBOARD" : "TOOLS") : topPage === "DASHBOARD" && !can("dashboard") ? (can("view_workflow") ? "WORKFLOW" : "TOOLS") : topPage;
+  const themeModeClass = canvasAppearance.preset === "white" ? " theme-light-mode" : " theme-dark-mode";
 
   return (
-    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
+    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${themeModeClass}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
       data-can-edit-workflow={can("edit_workflow") ? "true" : "false"} style={appearanceCssVariables(canvasAppearance)}>
       <aside className="sidebar" aria-label="Corex navigation">
 
