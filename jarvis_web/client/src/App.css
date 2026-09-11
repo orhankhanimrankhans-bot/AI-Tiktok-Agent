@@ -4162,3 +4162,23 @@ button {
 .jarvis-app.sidebar-collapsed .sidebar-brand-toggle > div:not(.jarvis-logo) {
   display: none !important;
 }
+
+/* Collapsed sidebar should be an icon-only rail. */
+.jarvis-app.sidebar-collapsed .side-nav button {
+  overflow: hidden !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  white-space: nowrap !important;
+}
+
+.jarvis-app.sidebar-collapsed .side-nav button span {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+}
+
+.jarvis-app.sidebar-collapsed .sidebar {
+  overflow: hidden !important;
+}
