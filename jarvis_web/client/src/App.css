@@ -4318,3 +4318,17 @@ button {
 .jarvis-app.theme-light-mode .theme-menu button:focus-visible {
   background: #edf6f8 !important;
 }
+
+/* Light mode spacing and visible right toolbar icons. */
+.jarvis-app.theme-light-mode .workflow-tabs {
+  margin-right: 18px !important;
+}
+
+.jarvis-app.theme-light-mode .canvas-command-tools button::before {
+  color: #087f9a !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .canvas-command-tools button:hover::before {
+  color: #065f73 !important;
+}
