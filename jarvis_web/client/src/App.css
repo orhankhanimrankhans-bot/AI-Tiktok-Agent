@@ -3303,7 +3303,7 @@ button {
 .appearance-sections details { padding: 0; background: #141d21; border: 1px solid #303f45; border-radius: 9px; }
 .appearance-sections summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; color: #d8e8ec; cursor: pointer; list-style: none; font-size: 10px; font-weight: 800; }
 .appearance-sections summary::-webkit-details-marker { display: none; }.appearance-sections summary::before { content: "+"; color: var(--jarvis-accent); }
-.appearance-sections details[open] summary::before { content: "Ã¢Ë†â€™"; }.appearance-sections summary span { flex: 1; }
+.appearance-sections details[open] summary::before { content: "ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢"; }.appearance-sections summary span { flex: 1; }
 .appearance-sections summary button { padding: 4px 6px; color: #8ea1a8; background: transparent; border: 1px solid #394a51; border-radius: 6px; font-size: 8px; }
 .appearance-sections .appearance-color-fields { padding: 0 8px 8px; grid-template-columns: 1fr; }
 .appearance-color-field { min-height: 38px; }.appearance-color-field > div { display: flex; align-items: center; gap: 6px; }
@@ -4010,5 +4010,120 @@ button {
   .jarvis-app.sidebar-open .sidebar-toggle,
   .jarvis-app.sidebar-collapsed .sidebar-toggle {
     top: 164px !important;
+  }
+}
+
+/* ChatGPT-style sidebar: full rail open, slim icon rail closed. */
+.jarvis-app .sidebar {
+  width: 214px !important;
+  min-width: 214px !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar {
+  width: 68px !important;
+  min-width: 68px !important;
+  padding: 16px 8px 12px !important;
+  overflow: visible !important;
+  border-right: 1px solid #163a4a !important;
+  transform: none !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar * {
+  visibility: visible !important;
+}
+.jarvis-app.sidebar-collapsed .brand {
+  justify-content: center !important;
+  padding: 0 0 18px !important;
+}
+.jarvis-app.sidebar-collapsed .jarvis-logo {
+  width: 42px !important;
+  height: 42px !important;
+  font-size: 17px !important;
+}
+.jarvis-app.sidebar-collapsed .brand > div:not(.jarvis-logo),
+.jarvis-app.sidebar-collapsed .side-nav button strong,
+.jarvis-app.sidebar-collapsed .sidebar-bottom small,
+.jarvis-app.sidebar-collapsed .version,
+.jarvis-app.sidebar-collapsed .assisted {
+  display: none !important;
+}
+.jarvis-app.sidebar-collapsed .side-nav {
+  align-items: center !important;
+  gap: 9px !important;
+}
+.jarvis-app.sidebar-collapsed .side-nav button {
+  width: 44px !important;
+  height: 44px !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+}
+.jarvis-app.sidebar-collapsed .side-nav button span {
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar-bottom {
+  min-height: 42px !important;
+}
+.jarvis-app .sidebar-toggle,
+.jarvis-app.sidebar-open .sidebar-toggle,
+.jarvis-app.sidebar-collapsed .sidebar-toggle {
+  top: 176px !important;
+  left: 178px !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  background: rgba(14, 28, 34, .96) !important;
+  border: 1px solid rgba(95, 229, 247, .42) !important;
+  box-shadow: none !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar-toggle {
+  left: 16px !important;
+}
+.jarvis-app .sidebar-toggle span {
+  position: relative;
+  width: 16px;
+  height: 12px;
+  display: block;
+  font-size: 0 !important;
+  color: transparent !important;
+}
+.jarvis-app .sidebar-toggle span::before,
+.jarvis-app .sidebar-toggle span::after {
+  content: "" !important;
+  position: absolute;
+  left: 0;
+  width: 16px;
+  height: 2px;
+  background: #ecfbff;
+  border-radius: 2px;
+}
+.jarvis-app .sidebar-toggle span::before { top: 1px; }
+.jarvis-app .sidebar-toggle span::after { bottom: 1px; }
+.jarvis-app .sidebar-toggle span {
+  border-top: 2px solid #ecfbff;
+  border-bottom: 2px solid #ecfbff;
+}
+.jarvis-app .workflow-header,
+.jarvis-app.sidebar-open .workflow-header,
+.jarvis-app.sidebar-collapsed .workflow-header {
+  padding-left: 14px !important;
+}
+@media (max-width: 760px) {
+  .jarvis-app.sidebar-collapsed .sidebar {
+    width: 62px !important;
+    min-width: 62px !important;
+  }
+  .jarvis-app .sidebar-toggle,
+  .jarvis-app.sidebar-open .sidebar-toggle,
+  .jarvis-app.sidebar-collapsed .sidebar-toggle {
+    top: 166px !important;
+    left: 14px !important;
+  }
+  .jarvis-app.sidebar-open .sidebar-toggle {
+    left: 178px !important;
   }
 }
