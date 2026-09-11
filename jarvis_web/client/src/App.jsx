@@ -3269,14 +3269,15 @@ function App() {
   return (
     <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
       data-can-edit-workflow={can("edit_workflow") ? "true" : "false"} style={appearanceCssVariables(canvasAppearance)}>
-
-      <button type="button" className="sidebar-toggle" aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
-        <span>{sidebarOpen ? "<" : "Menu"}</span>
-      </button>
-
       <aside className="sidebar" aria-label="Corex navigation">
 
-        <div className="brand">
+        <button
+          type="button"
+          className="brand sidebar-brand-toggle"
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
           <div className="jarvis-logo" aria-label="ISK">ISK</div>
 
           <div>
@@ -3288,7 +3289,7 @@ function App() {
               AI COMMAND CENTER
             </div>
           </div>
-        </div>
+        </button>
 
         <nav className="side-nav">
           {[

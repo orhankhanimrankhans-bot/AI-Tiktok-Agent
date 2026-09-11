@@ -4127,3 +4127,38 @@ button {
     left: 178px !important;
   }
 }
+
+/* Use the COREX/ISK brand as the sidebar control. */
+.jarvis-app .sidebar-toggle,
+.jarvis-app.sidebar-open .sidebar-toggle,
+.jarvis-app.sidebar-collapsed .sidebar-toggle {
+  display: none !important;
+}
+
+.jarvis-app .sidebar-brand-toggle {
+  width: 100%;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.jarvis-app .sidebar-brand-toggle:hover .jarvis-logo,
+.jarvis-app .sidebar-brand-toggle:focus-visible .jarvis-logo {
+  border-color: #75f3ff;
+  box-shadow: 0 0 18px rgba(39, 217, 255, .45), inset 0 0 14px rgba(31, 217, 255, .14);
+}
+
+.jarvis-app.sidebar-collapsed .sidebar-brand-toggle {
+  justify-content: center;
+  padding: 0 0 18px !important;
+}
+
+.jarvis-app.sidebar-collapsed .sidebar-brand-toggle > div:not(.jarvis-logo) {
+  display: none !important;
+}
