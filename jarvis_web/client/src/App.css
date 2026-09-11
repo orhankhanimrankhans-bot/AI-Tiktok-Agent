@@ -4332,3 +4332,35 @@ button {
 .jarvis-app.theme-light-mode .canvas-command-tools button:hover::before {
   color: #065f73 !important;
 }
+
+/* Separate the workflow tab buttons instead of grouping them together. */
+.jarvis-app .workflow-tabs {
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.jarvis-app .workflow-tabs button {
+  min-height: 40px !important;
+  padding: 0 18px !important;
+  border: 1px solid var(--jarvis-control-border) !important;
+  border-radius: 12px !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-tabs {
+  gap: 10px !important;
+  margin-right: 22px !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-tabs button {
+  background: #ffffff !important;
+  border-color: #b7cbd6 !important;
+  box-shadow: 0 8px 16px rgba(15, 35, 45, .08) !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-tabs .tab-active {
+  border-color: #0894ad !important;
+  box-shadow: inset 0 -3px #0894ad, 0 8px 18px rgba(8, 148, 173, .13) !important;
+}
