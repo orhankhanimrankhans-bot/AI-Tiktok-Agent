@@ -3303,7 +3303,7 @@ button {
 .appearance-sections details { padding: 0; background: #141d21; border: 1px solid #303f45; border-radius: 9px; }
 .appearance-sections summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; color: #d8e8ec; cursor: pointer; list-style: none; font-size: 10px; font-weight: 800; }
 .appearance-sections summary::-webkit-details-marker { display: none; }.appearance-sections summary::before { content: "+"; color: var(--jarvis-accent); }
-.appearance-sections details[open] summary::before { content: "−"; }.appearance-sections summary span { flex: 1; }
+.appearance-sections details[open] summary::before { content: "âˆ’"; }.appearance-sections summary span { flex: 1; }
 .appearance-sections summary button { padding: 4px 6px; color: #8ea1a8; background: transparent; border: 1px solid #394a51; border-radius: 6px; font-size: 8px; }
 .appearance-sections .appearance-color-fields { padding: 0 8px 8px; grid-template-columns: 1fr; }
 .appearance-color-field { min-height: 38px; }.appearance-color-field > div { display: flex; align-items: center; gap: 6px; }
@@ -3897,4 +3897,78 @@ button {
   .jarvis-app .workflow-header { min-height: 54px !important; grid-template-columns: 1fr !important; align-items: start; }
   .jarvis-app .workflow-title { flex-wrap: wrap; }
   .jarvis-app .workflow-actions { justify-content: flex-start; }
+}
+
+/* Live polish: clean drawer behavior, no clipped sidebar. */
+.jarvis-app .sidebar-toggle {
+  top: 218px !important;
+  left: 14px !important;
+  min-width: 54px !important;
+  height: 30px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  background: linear-gradient(145deg, #10232b, #071015) !important;
+}
+.jarvis-app.sidebar-open .sidebar-toggle {
+  left: 184px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar {
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-right: 0 !important;
+  transform: translateX(-100%) !important;
+}
+.jarvis-app.sidebar-collapsed .sidebar * {
+  visibility: hidden !important;
+}
+.jarvis-app.sidebar-collapsed .main-area {
+  margin-left: 0 !important;
+}
+.jarvis-app .workflow-header {
+  min-height: 56px !important;
+  padding: 6px 14px 6px 72px !important;
+  border-bottom-color: rgba(107, 231, 247, .2) !important;
+}
+.jarvis-app.sidebar-open .workflow-header {
+  padding-left: 14px !important;
+}
+.jarvis-app .workflow-title {
+  gap: 10px !important;
+}
+.jarvis-app .workflow-title h1 {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+.jarvis-app .workflow-tabs,
+.jarvis-app .workflow-actions button {
+  border-radius: 10px !important;
+}
+.jarvis-app .canvas-command-tools button {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  font-size: 0 !important;
+  color: transparent !important;
+}
+.jarvis-app .canvas-command-tools button::before {
+  color: #ecfbff;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+.jarvis-app .canvas-command-tools button:nth-child(1)::before { content: "+"; }
+.jarvis-app .canvas-command-tools button:nth-child(2)::before { content: "S"; }
+.jarvis-app .canvas-command-tools button:nth-child(3)::before { content: "T"; }
+.jarvis-app .canvas-command-tools button:nth-child(4)::before { content: "F"; }
+@media (max-width: 760px) {
+  .jarvis-app .sidebar-toggle { top: 164px !important; left: 12px !important; }
+  .jarvis-app.sidebar-open .sidebar-toggle { left: 184px !important; }
+  .jarvis-app .workflow-header { padding-left: 14px !important; }
 }
