@@ -70,6 +70,8 @@ test("Facebook Control uses stored metric snapshots without fabricating values a
   assert.equal(saved.metrics.views, 2500);
   assert.equal(saved.metrics.posts, 12);
   assert.equal(saved.performanceScore, score(saved.metrics));
+  const failed = store.markPageSyncIssue(page.id, "metric_unavailable", "Metric unavailable.", owner);
+  assert.equal(failed.lastSyncAt, "2026-09-12T12:00:00.000Z");
   assert.equal(store.deletePage(page.id, owner), true);
   assert.equal(db.prepare("SELECT count(*) AS count FROM facebook_page_metrics").get().count, 0);
   assert.equal(store.deletePage(page.id, owner), false);

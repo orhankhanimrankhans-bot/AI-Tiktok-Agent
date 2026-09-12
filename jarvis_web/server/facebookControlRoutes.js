@@ -17,12 +17,44 @@ function latestInsightValue(data, metricName) {
   for (const item of [...values].reverse()) { const number = Number(item?.value); if (Number.isFinite(number)) return number; }
   return null;
 }
+function normalizedName(value) { return String(value || "").trim().toLowerCase().replace(/\s+/g, " "); }
+function findMatchingCredential(page, facebookCredentialStore, owner) {
+  if (!facebookCredentialStore?.list) return null;
+  const credentials = facebookCredentialStore.list(owner).filter((credential) => credential.connected !== false && credential.pageId);
+  const pageId = String(page.pageId || "").trim();
+  if (pageId) {
+    const exact = credentials.find((credential) => String(credential.pageId) === pageId);
+    if (exact) return exact;
+  }
+  const pageName = normalizedName(page.pageName);
+  if (pageName) {
+    const matches = credentials.filter((credential) => normalizedName(credential.pageName || credential.name) === pageName);
+    if (matches.length === 1) return matches[0];
+  }
+  return null;
+}
 async function syncPage({ page, owner, store, facebookCredentialStore, graphServiceFactory, logger }) {
-  if (!page.credentialId) return store.markPageSyncIssue(page.id, "connection_required", "Facebook connection required.", owner);
   if (!facebookCredentialStore) return store.markPageSyncIssue(page.id, "connection_required", "Facebook connection required.", owner);
-  const credential = facebookCredentialStore.get(page.credentialId, { includeTokens: true, owner });
+  let workingPage = page;
+  let credentialId = page.credentialId;
+  if (!credentialId) {
+    const matched = findMatchingCredential(page, facebookCredentialStore, owner);
+    if (matched?.id) {
+      workingPage = store.updatePage(page.id, { ...page, credentialId: matched.id, pageId: page.pageId || matched.pageId, pageName: page.pageName || matched.pageName }, owner) || page;
+      credentialId = matched.id;
+    }
+  }
+  if (!credentialId) return store.markPageSyncIssue(page.id, "connection_required", "Facebook connection required. Connect this Page in Facebook Control.", owner);
+  let credential = facebookCredentialStore.get(credentialId, { includeTokens: true, owner });
+  if (!credential) {
+    const matched = findMatchingCredential(page, facebookCredentialStore, owner);
+    if (matched?.id) {
+      workingPage = store.updatePage(page.id, { ...page, credentialId: matched.id, pageId: page.pageId || matched.pageId, pageName: page.pageName || matched.pageName }, owner) || page;
+      credential = facebookCredentialStore.get(matched.id, { includeTokens: true, owner });
+    }
+  }
   if (!credential) return store.markPageSyncIssue(page.id, "credential_not_found", "Selected Facebook credential was not found.", owner);
-  const pageId = page.pageId || credential.pageId;
+  const pageId = workingPage.pageId || credential.pageId;
   if (!pageId) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
   const service = graphServiceFactory(); const token = credentialPageToken(credential, pageId);
   if (!token) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
@@ -34,7 +66,7 @@ async function syncPage({ page, owner, store, facebookCredentialStore, graphServ
     const followers = Number(metadata.followers_count ?? metadata.fan_count);
     const views = latestInsightValue(insights, "page_impressions_unique") ?? latestInsightValue(insights, "page_video_views");
     const postsCount = Number(posts?.summary?.total_count);
-    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || page.pageName, pageUrl: metadata.link || page.pageUrl, pagePictureUrl: metadata.picture?.data?.url || page.pagePictureUrl, followers: Number.isFinite(followers) ? followers : null, views, posts: Number.isFinite(postsCount) ? postsCount : null, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
+    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || workingPage.pageName, pageUrl: metadata.link || workingPage.pageUrl, pagePictureUrl: metadata.picture?.data?.url || workingPage.pagePictureUrl, followers: Number.isFinite(followers) ? followers : null, views, posts: Number.isFinite(postsCount) ? postsCount : null, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
   } catch (error) {
     const issue = publicSyncError(error); logger?.warn?.("Facebook Control sync page failed safely.", { status: issue.status, pageRecordId: page.id }); return store.markPageSyncIssue(page.id, issue.status, issue.message, owner);
   }

@@ -87,7 +87,7 @@ class FacebookGraphService {
     }
     return result;
   }
-  pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,followers_count,link,picture{url}" }, PERMISSIONS.page_metadata, "page_metadata"); }
+  pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,link,picture{url}" }, PERMISSIONS.page_metadata, "page_metadata"); }
   pageVideos(pageId, token) { return this.request(`${validatePageId(pageId)}/videos`, token, { limit: "0", summary: "true" }, PERMISSIONS.page_metadata, "page_videos"); }
   pagePosts(pageId, token) { return this.request(`${validatePageId(pageId)}/posts`, token, { fields: "id", limit: "0", summary: "true" }, PERMISSIONS.page_metadata, "page_posts"); }
   pageInsights(pageId, token) { return this.request(`${validatePageId(pageId)}/insights`, token, { metric: "page_impressions_unique,page_video_views", period: "day", limit: "5" }, PERMISSIONS.page_metadata, "page_insights"); }

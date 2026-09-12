@@ -31,6 +31,7 @@ function setupStore() {
 
 function credentialStore() {
   return {
+    list() { return [{ id: "fcred_1234567890123456789012", pageId: "123", pageName: "Corex Page", connected: true }]; },
     get(id) {
       assert.equal(id, "fcred_1234567890123456789012");
       return {
@@ -53,7 +54,7 @@ test("Facebook Control sync fetches real Graph metrics through the existing cred
   const graphServiceFactory = () => ({
     async pageMetadata(pageId, token) {
       calls.push(["metadata", pageId, token]);
-      return { id: "123", name: "Corex Official", followers_count: 48200, link: "https://www.facebook.com/corexpage", picture: { data: { url: "https://example.test/corex.jpg" } } };
+      return { id: "123", name: "Corex Official", fan_count: 48200, link: "https://www.facebook.com/corexpage", picture: { data: { url: "https://example.test/corex.jpg" } } };
     },
     async pagePosts(pageId, token) {
       calls.push(["posts", pageId, token]);
@@ -80,6 +81,29 @@ test("Facebook Control sync fetches real Graph metrics through the existing cred
     ["insights", "123", "page-token-secret"],
   ]);
   assert.doesNotMatch(JSON.stringify(result), /page-token-secret|user-token-secret/);
+  db.close();
+});
+
+
+test("Facebook Control sync auto-links saved credentials by Page ID before fetching metrics", async () => {
+  const { db, store, owner } = setupStore();
+  store.updatePage("fbpage_aaaaaaaa", {
+    pageUrl: "https://www.facebook.com/corexpage",
+    pageName: "Corex Page",
+    pageId: "123",
+    credentialId: "",
+  }, owner);
+  const graphServiceFactory = () => ({
+    async pageMetadata() { return { id: "123", name: "Corex Page", fan_count: 9000, link: "https://www.facebook.com/corexpage" }; },
+    async pagePosts() { return { summary: { total_count: 45 } }; },
+    async pageInsights() { return { data: [{ name: "page_video_views", values: [{ value: 321000 }] }] }; },
+  });
+  const result = await syncFacebookControl({ owner, store, facebookCredentialStore: credentialStore(), graphServiceFactory, logger: { warn() {}, error() {} } });
+  assert.equal(result.status, "synced");
+  assert.equal(result.pages[0].credentialId, "fcred_1234567890123456789012");
+  assert.equal(result.pages[0].metrics.followers, 9000);
+  assert.equal(result.pages[0].metrics.views, 321000);
+  assert.equal(result.pages[0].metrics.posts, 45);
   db.close();
 });
 

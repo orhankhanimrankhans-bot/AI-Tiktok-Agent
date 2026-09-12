@@ -16,6 +16,10 @@ test("Facebook Performance page uses backend sync and the required compact secti
     assert.match(performancePage, new RegExp(column));
   }
   assert.match(performancePage, /Waiting for first successful Facebook sync/);
+  assert.match(performancePage, /metricStatus\(page, "posts"\)/);
+  assert.match(performancePage, /\? "0"/);
+  assert.match(performancePage, /: "0%"/);
+  assert.match(performancePage, /some\(\(page\) => !page\.metrics\?\.capturedAt\)/);
   assert.doesNotMatch(performancePage, /Pending/);
   assert.match(performancePage, /window\.open\(page\.pageUrl/);
   assert.match(styles, /\.facebook-performance-row/);
