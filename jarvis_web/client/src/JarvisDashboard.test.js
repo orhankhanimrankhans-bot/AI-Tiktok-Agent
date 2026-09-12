@@ -9,8 +9,8 @@ const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
 test("dashboard renders a coded technical pipeline board", () => {
-  assert.match(dashboard, /className="technical-pipeline-board compact-technical-board"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="technical-isk-core"/); assert.match(dashboard, /<span>ISK<\/span>/);
-  for (const label of ["INPUT", "TOOLS", "MEMORY SERVICES", "RESPONSE", "COMMAND PIPELINE"]) assert.match(dashboard, new RegExp(label));
+  assert.match(dashboard, /className="technical-pipeline-board compact-technical-board balanced-technical-board"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="technical-isk-core"/); assert.match(dashboard, /<span>ISK<\/span>/);
+  for (const label of ["INPUT", "TOOLS", "MEMORY SERVICES", "COMMAND PIPELINE"]) assert.match(dashboard, new RegExp(label)); assert.doesNotMatch(dashboard, /RESPONSE<br \/>STREAM/);
   for (const label of ["Web App", "Mobile App", "API / SDK", "Enterprise Systems", "Search", "Code Executor", "Data Analyzer", "Integrations"]) assert.match(dashboard, new RegExp(label));
   assert.match(styles, /\.technical-pipeline-board/); assert.match(styles, /\.compact-pipeline-grid/); assert.match(styles, /\.compact-flow-arrow/); assert.match(styles, /\.data-cylinder/);
 });
