@@ -8,16 +8,16 @@ const pipeline = readFileSync(new URL("./CommandPipeline.jsx", import.meta.url),
 const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
-test("dashboard renders a coded technical pipeline board", () => {
-  assert.match(dashboard, /className="technical-pipeline-board compact-technical-board balanced-technical-board"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="technical-isk-core"/); assert.match(dashboard, /<span>ISK<\/span>/);
-  for (const label of ["INPUT", "TOOLS", "MEMORY SERVICES", "COMMAND PIPELINE"]) assert.match(dashboard, new RegExp(label)); assert.doesNotMatch(dashboard, /RESPONSE<br \/>STREAM/);
-  for (const label of ["Web App", "Mobile App", "API / SDK", "Enterprise Systems", "Search", "Code Executor", "Data Analyzer", "Integrations"]) assert.match(dashboard, new RegExp(label));
-  assert.match(styles, /\.technical-pipeline-board/); assert.match(styles, /\.compact-pipeline-grid/); assert.match(styles, /\.compact-flow-arrow/); assert.match(styles, /\.data-cylinder/);
-});
+test("dashboard renders a clean Corex summary dashboard", () => {
+  assert.match(dashboard, /className="corex-summary-dashboard"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="corex-summary-orb"/); assert.match(dashboard, /<span>ISK<\/span>/);
+  for (const label of ["Workflows", "Active Nodes", "Connections", "Google Drive", "Facebook", "Queue", "LIVE WORKFLOWS", "Command pipeline"]) assert.match(dashboard, new RegExp(label));
+  assert.doesNotMatch(dashboard, /technical-pipeline-board compact-technical-board balanced-technical-board/); assert.doesNotMatch(dashboard, /INPUT<br \/>CHANNELS/); assert.doesNotMatch(dashboard, /MEMORY SERVICES/);
+  assert.match(styles, /\.corex-summary-dashboard/); assert.match(styles, /\.corex-summary-grid/); assert.match(styles, /\.corex-summary-card/); assert.match(styles, /\.corex-summary-workflows/);
+})
 
 test("saved workflows and real execution inputs feed the technical dashboard", () => {
   assert.match(dashboard, /listWorkflows\(fetch, apiBaseUrl\)/); assert.match(dashboard, /savedWorkflows\.filter/); assert.match(dashboard, /dashboardFacts\(\{ graph, googleCredentials: healthContext\.googleCredentials, facebookCredentials: healthContext\.facebookCredentials, executions/);
-  assert.match(dashboard, /workflowItems = workflows\.slice\(0, 4\)/); assert.match(dashboard, /onOpenWorkflow\?\.\(workflow\.id\)/); assert.match(dashboard, /facts\.workflowCount\} workflows \/ \{facts\.nodeCount\} active nodes \/ \{facts\.connectionCount\} connections/);
+  assert.match(dashboard, /workflowItems = workflows\.slice\(0, 4\)/); assert.match(dashboard, /onOpenWorkflow\?\.\(workflow\.id\)/); assert.match(dashboard, /\["Workflows", String\(facts\.workflowCount\)/); assert.match(dashboard, /\["Active Nodes", String\(facts\.nodeCount\)/); assert.match(dashboard, /\["Connections", String\(facts\.connectionCount\)/);
   assert.match(app, /apiBaseUrl=\{API_BASE_URL\}/); assert.match(app, /activeWorkflowId=\{editorWorkflowSource/); assert.match(app, /requestOpenServerWorkflow\(workflowId\)/);
 });
 
@@ -31,12 +31,12 @@ test("conversation routes tasks to agents and reports unavailable connectors hon
   assert.match(dashboard, /handoffIntent\(text\)/); assert.match(dashboard, /setOfficeHandoff/); assert.match(dashboard, /No external action was claimed/);
 });
 
-test("technical dashboard keeps the office below coded pipeline modules", () => {
+test("technical dashboard keeps the office below the clean summary", () => {
   assert.match(dashboard, /<OfficeSimulation/); assert.match(office, /jarvis-ai-office\.webp/);
-  assert.doesNotMatch(dashboard, /compact-plane-labels/); assert.doesNotMatch(dashboard, /CONTROL PLANE/); assert.match(dashboard, /input-grid/); assert.match(dashboard, /tool-grid/); assert.match(dashboard, /memory-grid/);
-  assert.doesNotMatch(dashboard, /privacy-shield/); assert.doesNotMatch(dashboard, /technical-flow-lines/); assert.match(dashboard, /compact-flow-arrow/); assert.match(dashboard, /technical-workflow-strip/);
-  assert.match(dashboard, /facts\.facebookCredentials\.length \? "Facebook connected" : "Limited"/); assert.match(dashboard, /Amazon is not connected/);
-  assert.match(styles, /\.compact-pipeline-grid/); assert.match(styles, /\.compact-flow-arrow/); assert.match(styles, /\.technical-workflow-strip/); assert.match(styles, /@media \(max-width: 1080px\)[\s\S]*compact-pipeline-grid/);
+  assert.doesNotMatch(dashboard, /compact-plane-labels/); assert.doesNotMatch(dashboard, /CONTROL PLANE/); assert.doesNotMatch(dashboard, /input-grid/); assert.doesNotMatch(dashboard, /tool-grid/); assert.doesNotMatch(dashboard, /memory-grid/);
+  assert.doesNotMatch(dashboard, /privacy-shield/); assert.doesNotMatch(dashboard, /technical-flow-lines/); assert.doesNotMatch(dashboard, /compact-flow-arrow/);
+  assert.match(dashboard, /facts\.facebookCredentials\.length \? "Connected" : "Limited"/); assert.match(dashboard, /Amazon is not connected/);
+  assert.match(styles, /\.corex-summary-dashboard/); assert.match(styles, /\.corex-summary-workflow-list/); assert.match(styles, /@media \(max-width: 760px\)[\s\S]*corex-summary-grid/);
 });
 test("responsive and reduced-motion safeguards cover the headquarters", () => {
   assert.match(styles, /@media \(max-width: 1450px\)[\s\S]*pipeline-live-stage/); assert.match(styles, /@media \(max-width: 1080px\)/); assert.match(styles, /@media \(max-width: 760px\)[\s\S]*workflow-wire-layer/);

@@ -26,37 +26,34 @@ function ConversationPanel({ inputRef, messages, draft, onDraft, onSend }) {
 }
 
 
-function TechnicalPipelineBoard({ facts, workflows, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation }) {
+function CorexSummaryDashboard({ facts, workflows, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation }) {
   const workflowItems = workflows.slice(0, 4);
-  const inputChannels = [
-    ["web", "Web App", "Dashboard"],
-    ["mobile", "Mobile App", "Responsive"],
-    ["api", "API / SDK", `${facts.nodeCount} nodes`],
-    ["enterprise", "Enterprise Systems", `${facts.connectionCount} links`],
+  const statusCards = [
+    ["Workflows", String(facts.workflowCount), "Saved automation plans", "workflow"],
+    ["Active Nodes", String(facts.nodeCount), "Canvas modules ready", "workflow"],
+    ["Connections", String(facts.connectionCount), "Linked workflow routes", "workflow"],
+    ["Google Drive", facts.googleCredentials.length ? "Connected" : "Offline", facts.googleCredentials.length ? `${facts.googleCredentials.length} credential record(s)` : "Connect storage first", "storage"],
+    ["Facebook", facts.facebookCredentials.length ? "Connected" : "Limited", facts.facebookCredentials.length ? `${facts.facebookCredentials.length} credential record(s)` : "No credential record", "facebook"],
+    ["Queue", facts.queuedItems.length ? `${facts.queuedItems.length} items` : "Ready", facts.queuedItems.length ? "Prepared media waiting" : "No pending upload", "upload"],
   ];
-  const toolItems = [
-    ["Search", facts.queuedItems.length ? `${facts.queuedItems.length} queued` : "Ready"],
-    ["Code Executor", "Workflow runner"],
-    ["Data Analyzer", `${facts.workflowCount} workflows`],
-    ["Integrations", facts.facebookCredentials.length ? "Facebook connected" : "Limited"],
-  ];
-  const memoryItems = [
-    ["Conversation Memory", "Local session"],
-    ["Vector Store", "Not connected"],
-    ["Knowledge Base", "Project data"],
-    ["User Preferences", "Saved theme"],
-  ];
-  return <section className="technical-pipeline-board compact-technical-board balanced-technical-board" aria-label="Corex technical pipeline dashboard">
-    <div className="pipeline-frame-corner top-left" /><div className="pipeline-frame-corner top-right" /><div className="pipeline-frame-corner bottom-left" /><div className="pipeline-frame-corner bottom-right" />
-    <header className="technical-pipeline-header"><div><span>AI CONTROL SYSTEM</span><h1>COREX CORE</h1><p>Live command headquarters</p></div><button type="button" className="technical-isk-core" onClick={onFocusConversation} aria-label="ISK - focus Corex conversation"><span>ISK</span></button><strong><i />{state.toUpperCase()}</strong></header>
-    <div className="compact-pipeline-grid">
-      <section className="technical-column input-channel-column"><h2>INPUT<br />CHANNELS</h2><div className="technical-stack input-grid">{inputChannels.map(([id, label, meta]) => <button type="button" key={id} onClick={() => onControl(id === "enterprise" ? "workflow" : id === "api" ? "workflow" : "upload")}><i>{id === "web" ? "◎" : id === "mobile" ? "▯" : id === "api" ? "&lt;/&gt;" : "▥"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
-      <div className="compact-flow-arrow" aria-hidden="true"><span /><i /></div>
-      <section className="technical-column tools-column compact-tools-column"><h2>TOOLS</h2><div className="technical-stack compact tool-grid">{toolItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Integrations" ? "facebook" : label === "Data Analyzer" ? "workflow" : "storage")}><i>{label === "Search" ? "⌕" : label === "Code Executor" ? "▣" : label === "Data Analyzer" ? "▥" : "✚"}</i><span>{label}</span><small>{meta}</small></button>)}</div><h2 className="memory-title">MEMORY SERVICES</h2><div className="technical-stack compact memory-stack memory-grid">{memoryItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Conversation Memory" ? "whatsapp" : "storage")}><i>{label === "Conversation Memory" ? "☰" : label === "Vector Store" ? "✤" : label === "Knowledge Base" ? "▤" : "●"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
+  const stateLabel = workflowError ? "Needs Check" : workflowActive ? "Running" : state.toUpperCase();
+  return <section className="corex-summary-dashboard" aria-label="Corex dashboard overview">
+    <header className="corex-summary-hero">
+      <div><span>AI CONTROL SYSTEM</span><h1>COREX CORE</h1><p>Clean command overview for workflows, storage, social access, and live operations.</p></div>
+      <button type="button" className="corex-summary-orb" onClick={onFocusConversation} aria-label="Focus Corex conversation"><span>ISK</span></button>
+      <strong className={`corex-summary-state ${workflowError ? "error" : workflowActive ? "running" : "ready"}`}><i />{stateLabel}</strong>
+    </header>
+    <div className="corex-summary-grid">
+      {statusCards.map(([label, value, meta, control]) => <button type="button" className="corex-summary-card" key={label} onClick={() => onControl(control)}><span>{label}</span><strong>{value}</strong><small>{meta}</small></button>)}
     </div>
-    <footer className="technical-workflow-strip compact-workflow-strip"><div><span>LIVE WORKFLOWS</span><strong>COMMAND PIPELINE</strong></div><div className="technical-workflow-list">{workflowItems.map((workflow) => <button type="button" key={workflow.id} onClick={() => onOpenWorkflow?.(workflow.id)}><i /> <span>{workflow.name}</span><small>{workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleDateString() : "READY"}</small></button>)}</div><button type="button" className="technical-add-workflow" onClick={() => onControl("workflow")}>+ ADD WORKFLOW</button><p>{facts.workflowCount} workflows / {facts.nodeCount} active nodes / {facts.connectionCount} connections</p></footer>
+    <footer className="corex-summary-workflows">
+      <div><span>LIVE WORKFLOWS</span><strong>Command pipeline</strong></div>
+      <div className="corex-summary-workflow-list">{workflowItems.map((workflow) => <button type="button" key={workflow.id} onClick={() => onOpenWorkflow?.(workflow.id)}><i /><span>{workflow.name}</span><small>{workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleDateString() : "READY"}</small></button>)}</div>
+      <button type="button" className="corex-summary-add" onClick={() => onControl("workflow")}>+ Add workflow</button>
+    </footer>
   </section>;
 }
+
 export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive = false, workflowError = false, healthContext = {}, executions = [], lastExecutionAt = null, activeWorkflowId = "local-workflow", onOpenWorkflow }) {
   const [detail, setDetail] = useState(null); const [draft, setDraft] = useState(""); const [messages, setMessages] = useState([]); const [savedWorkflows, setSavedWorkflows] = useState([]); const [agentStates, setAgentStates] = useState({}); const [tasks, setTasks] = useState([]); const [activeWorkspace, setActiveWorkspace] = useState(null); const [officeHandoff, setOfficeHandoff] = useState(null); const inputRef = useRef(null); const taskSequence = useRef(0);
   const healthStates = graph.nodes.map((node) => nodeConnectionHealth(node, healthContext)); const state = controlCenterState({ graph, workflowActive, workflowError, healthStates });
@@ -81,5 +78,5 @@ export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive
     setMessages((current) => [...current, { id: `${id}-result`, role: "jarvis", text: `${name}: ${result}` }]);
   };
   const sendMessage = (event) => { event.preventDefault(); const text = draft.trim(); if (!text) return; taskSequence.current += 1; setMessages((current) => [...current, { id: `message-${taskSequence.current}`, role: "user", text }]); setDraft(""); routeCommand(text); };
-  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}`} data-control-state={state}><div className="dashboard-main-column"><TechnicalPipelineBoard facts={facts} workflows={workflows} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} /><OfficeSimulation agentStates={{ ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit }} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
+  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}`} data-control-state={state}><div className="dashboard-main-column"><CorexSummaryDashboard facts={facts} workflows={workflows} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} /><OfficeSimulation agentStates={{ ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit }} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
 }
