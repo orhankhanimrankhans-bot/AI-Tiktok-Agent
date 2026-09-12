@@ -5598,3 +5598,184 @@ button {
   .compact-pipeline-grid .technical-column { border-right: 0; border-bottom: 1px dashed rgba(83, 231, 255, .16); }
   .compact-workflow-strip { grid-template-columns: 1fr !important; }
 }
+
+/* Final compact fit: keep the technical dashboard inside the top green-box area. */
+.technical-dashboard .compact-technical-board {
+  height: clamp(430px, 48vh, 560px) !important;
+  min-height: 430px !important;
+  max-height: 560px !important;
+  display: grid !important;
+  grid-template-rows: 74px minmax(0, 1fr) 64px !important;
+  gap: 8px !important;
+  padding: 10px !important;
+  overflow: hidden !important;
+}
+
+.technical-dashboard .compact-technical-board .technical-pipeline-header {
+  min-height: 0 !important;
+  height: 74px !important;
+  padding: 8px 14px !important;
+}
+
+.technical-dashboard .compact-technical-board .technical-pipeline-header h1 {
+  font-size: clamp(18px, 1.2vw, 23px) !important;
+  line-height: 1 !important;
+}
+
+.technical-dashboard .compact-technical-board .technical-pipeline-header span,
+.technical-dashboard .compact-technical-board .technical-pipeline-header p,
+.technical-dashboard .compact-technical-board .technical-pipeline-header strong {
+  font-size: 9px !important;
+}
+
+.technical-dashboard .compact-technical-board .technical-isk-core {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+}
+
+.technical-dashboard .compact-pipeline-grid {
+  min-height: 0 !important;
+  height: 100% !important;
+  grid-template-columns: 78px minmax(170px, 240px) minmax(70px, 1fr) minmax(240px, 330px) minmax(120px, 170px) !important;
+  overflow: hidden !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-column {
+  min-height: 0 !important;
+  align-content: center !important;
+  gap: 7px !important;
+  padding: 8px 10px !important;
+  overflow: hidden !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-column h2 {
+  min-height: 0 !important;
+  margin: 0 0 2px !important;
+  font-size: 10px !important;
+  line-height: 1.18 !important;
+  letter-spacing: .2em !important;
+}
+
+.technical-dashboard .compact-plane-labels b {
+  font-size: 8px !important;
+  line-height: 1.25 !important;
+}
+
+.technical-dashboard .compact-plane-labels > div {
+  padding: 6px !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-stack,
+.technical-dashboard .compact-pipeline-grid .memory-stack {
+  gap: 6px !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-stack button {
+  min-height: 38px !important;
+  grid-template-columns: 24px minmax(0, 1fr) !important;
+  gap: 7px !important;
+  padding: 6px 8px !important;
+  border-radius: 7px !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-stack i {
+  width: 24px !important;
+  height: 24px !important;
+  font-size: 13px !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-stack span {
+  font-size: 10px !important;
+}
+
+.technical-dashboard .compact-pipeline-grid .technical-stack small {
+  font-size: 8px !important;
+}
+
+.technical-dashboard .compact-tools-column .memory-title {
+  margin-top: 4px !important;
+  font-size: 10px !important;
+}
+
+.technical-dashboard .compact-response-column .data-cylinder {
+  width: 82px !important;
+  height: min(220px, 78%) !important;
+}
+
+.technical-dashboard .compact-workflow-strip {
+  min-height: 0 !important;
+  height: 64px !important;
+  grid-template-columns: 155px minmax(0, 1fr) 120px !important;
+  gap: 8px !important;
+  margin-top: 0 !important;
+  padding: 7px 10px !important;
+  overflow: hidden !important;
+}
+
+.technical-dashboard .compact-workflow-strip > div > span {
+  font-size: 8px !important;
+}
+
+.technical-dashboard .compact-workflow-strip > div > strong {
+  margin-top: 3px !important;
+  font-size: 10px !important;
+}
+
+.technical-dashboard .compact-workflow-strip .technical-workflow-list {
+  grid-template-columns: repeat(4, minmax(90px, 1fr)) !important;
+  gap: 6px !important;
+}
+
+.technical-dashboard .compact-workflow-strip .technical-workflow-list button {
+  min-height: 36px !important;
+  padding: 6px !important;
+}
+
+.technical-dashboard .compact-workflow-strip .technical-workflow-list span {
+  font-size: 9px !important;
+}
+
+.technical-dashboard .compact-workflow-strip .technical-workflow-list small,
+.technical-dashboard .compact-workflow-strip p {
+  font-size: 7px !important;
+}
+
+.technical-dashboard .compact-workflow-strip p {
+  display: none !important;
+}
+
+.technical-dashboard .technical-add-workflow {
+  min-height: 36px !important;
+  padding: 6px !important;
+  font-size: 8px !important;
+}
+
+.technical-dashboard .office-simulation,
+.technical-dashboard .operations-floor {
+  margin-top: 10px !important;
+}
+
+@media (max-width: 1450px) {
+  .technical-dashboard .compact-technical-board {
+    height: 450px !important;
+    grid-template-rows: 66px minmax(0, 1fr) 58px !important;
+  }
+  .technical-dashboard .compact-technical-board .technical-pipeline-header { height: 66px !important; }
+  .technical-dashboard .compact-pipeline-grid {
+    grid-template-columns: 64px minmax(145px, 190px) minmax(55px, 1fr) minmax(190px, 245px) minmax(92px, 135px) !important;
+  }
+  .technical-dashboard .compact-pipeline-grid .technical-stack button { min-height: 34px !important; padding: 5px 7px !important; }
+  .technical-dashboard .compact-response-column .data-cylinder { width: 70px !important; height: min(190px, 74%) !important; }
+  .technical-dashboard .compact-workflow-strip { height: 58px !important; grid-template-columns: 130px minmax(0, 1fr) 104px !important; }
+}
+
+@media (max-width: 1080px) {
+  .technical-dashboard .compact-technical-board {
+    height: auto !important;
+    max-height: none !important;
+    grid-template-rows: auto auto auto !important;
+    overflow: visible !important;
+  }
+  .technical-dashboard .compact-pipeline-grid { grid-template-columns: 1fr !important; }
+}
