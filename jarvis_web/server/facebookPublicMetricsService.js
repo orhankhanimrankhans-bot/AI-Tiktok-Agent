@@ -1,8 +1,12 @@
 ﻿"use strict";
 
+const fs = require("node:fs/promises");
+const path = require("node:path");
+
 const ALLOWED_FACEBOOK_HOSTS = new Set(["facebook.com", "www.facebook.com", "m.facebook.com", "mbasic.facebook.com", "mobile.facebook.com", "web.facebook.com"]);
 const DEFAULT_SCAN_DEPTH = 10;
 const DEFAULT_TIMEOUT_MS = 12000;
+const MAX_REASONABLE_PUBLIC_COUNT = 2_500_000_000;
 const SUCCESS_STATUSES = new Set([200, 201, 202]);
 
 class FacebookPublicMetricsError extends Error {
@@ -44,7 +48,8 @@ function parseSocialCount(value) {
   const base = Number.parseFloat(numeric);
   if (!Number.isFinite(base)) return null;
   const multiplier = suffix === "K" ? 1_000 : suffix === "M" ? 1_000_000 : suffix === "B" ? 1_000_000_000 : 1;
-  return Math.round(base * multiplier);
+  const count = Math.round(base * multiplier);
+  return count > MAX_REASONABLE_PUBLIC_COUNT ? null : count;
 }
 
 function normalizeFacebookUrl(input) {
@@ -103,26 +108,35 @@ function extractPageName(html, fallback = "") {
 }
 function extractPagePicture(html) { return extractMeta(html, "og:image") || extractMeta(html, "twitter:image") || ""; }
 
-function bestCount(candidates) {
-  const parsed = candidates.map((raw) => ({ raw: String(raw || "").trim(), count: parseSocialCount(raw) })).filter((item) => item.raw && item.count !== null);
+function bestCount(candidates, { excludedCounts = new Set() } = {}) {
+  const parsed = candidates
+    .map((candidate) => ({ raw: String(candidate?.raw ?? candidate ?? "").trim(), count: parseSocialCount(candidate?.raw ?? candidate), source: candidate?.source || "public_text" }))
+    .filter((item) => item.raw && item.count !== null && !excludedCounts.has(String(item.count)) && (item.count >= 10 || /[KMB]/i.test(item.raw)));
   if (!parsed.length) return null;
   parsed.sort((a, b) => String(b.count).length - String(a.count).length || b.count - a.count);
   return parsed[0];
 }
 
-function extractFollowerCount(html) {
+function pageIdExclusions(page = {}) {
+  const values = [page?.pageId, page?.page_id, page?.id]
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^\d{5,}$/.test(value));
+  return new Set(values);
+}
+
+function extractFollowerCount(html, page = {}) {
   const text = publicText(html);
   const candidates = [];
   for (const pattern of [
     /"(?:followers_count|followersCount|subscriber_count|subscriberCount|page_followers)"\s*:?\s*"?([0-9][0-9,\.]*\s*[KMB]?)"?/gi,
-    /([0-9][0-9,\.]*\s*[KMB]?)\s+(?:followers|people follow this page|people follow this)/gi,
-    /(?:followers|people follow this page|people follow this)\D{0,80}([0-9][0-9,\.]*\s*[KMB]?)/gi,
+    /([0-9][0-9,\.]*\s*[KMB]?)\s+(?:followers|followers\s*?|people follow this page|people follow this)/gi,
+    /(?:followers|followers\s*?|people follow this page|people follow this)\D{0,40}([0-9][0-9,\.]*\s*[KMB]?)/gi,
   ]) {
     let match;
-    while ((match = pattern.exec(text))) candidates.push(match[1]);
+    while ((match = pattern.exec(text))) candidates.push({ raw: match[1], source: "public_text" });
   }
-  const chosen = bestCount(candidates);
-  return chosen ? { count: chosen.count, display: chosen.raw, source: "public_text" } : { count: null, display: null, source: null };
+  const chosen = bestCount(candidates, { excludedCounts: pageIdExclusions(page) });
+  return chosen ? { count: chosen.count, display: chosen.raw, source: chosen.source } : { count: null, display: null, source: null };
 }
 
 function uniqueCounts(html, regex, limit) {
@@ -147,6 +161,63 @@ function extractRecentPosts(html, depth = DEFAULT_SCAN_DEPTH) {
 }
 function hasAnyMetric(scan) { return scan.followersCount !== null || scan.recentViewsTotal !== null || scan.postsCount !== null; }
 
+function safeUrlForLog(value) {
+  try {
+    const url = new URL(String(value || ""));
+    for (const key of [...url.searchParams.keys()]) if (/token|secret|password|cookie|session/i.test(key)) url.searchParams.set(key, "[redacted]");
+    return url.toString();
+  } catch { return String(value || "").replace(/(token|secret|password|cookie|session)=([^&\s]+)/gi, "$1=[redacted]"); }
+}
+
+function detectChromiumRuntime() {
+  const checks = [];
+  for (const packageName of ["playwright", "puppeteer"]) {
+    try { require.resolve(packageName); checks.push({ package: packageName, installed: true }); }
+    catch { checks.push({ package: packageName, installed: false }); }
+  }
+  return { mode: "not_configured", launched: false, available: checks.some((item) => item.installed), checks, message: "Public scanner currently uses HTTP fetch. Playwright/Puppeteer Chromium rendering is not configured." };
+}
+
+function classifyFacebookResponse({ status, finalUrl, title, html }) {
+  const url = String(finalUrl || "").toLowerCase();
+  const text = publicText(html).slice(0, 20000);
+  const cleanTitle = String(title || "").trim();
+  if (status === 403) return "blocked_403";
+  if (status === 429) return "rate_limited_429";
+  if (status && status >= 400) return "http_error";
+  if (/checkpoint/.test(url) || /checkpoint/i.test(cleanTitle) || /checkpoint/i.test(text)) return "checkpoint";
+  if (/login(?:\.php)?/.test(url) || /log in to facebook|you must log in|login approval needed/i.test(cleanTitle) || (/log in to facebook/i.test(text) && !/followers|people follow this|posts|videos|reels/i.test(text))) return "login_wall";
+  if (/temporarily blocked|too many requests|try again later|rate limit/i.test(text)) return "rate_limited_page";
+  if (/followers|people follow this|posts|videos|reels|og:title|pagelet|profile_social_context|profile/i.test(text) || cleanTitle && !/^facebook$/i.test(cleanTitle)) return "public_page";
+  if (!String(html || "").trim()) return "empty_response";
+  if (stripHtml(html).length < 200 && /<script/i.test(String(html))) return "empty_javascript_shell";
+  return "unknown";
+}
+
+function extractionSummary({ followers, posts, views }) {
+  return {
+    followersFound: followers.count !== null,
+    followers: followers.count,
+    followersDisplay: followers.display,
+    postsFound: Boolean(posts.count),
+    postsDetected: posts.count || 0,
+    postsType: posts.type,
+    viewsFound: Boolean(views.sampled),
+    videosDetected: views.sampled,
+    viewsDetected: views.sampled ? views.total : null,
+  };
+}
+
+async function saveDiagnosticSnapshot({ snapshotDir, pageRecordId, finalUrl, html }) {
+  if (!snapshotDir || !html) return null;
+  await fs.mkdir(snapshotDir, { recursive: true });
+  const safeId = String(pageRecordId || "facebook-page").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80);
+  const snapshotPath = path.join(snapshotDir, `facebook-public-${safeId}-${Date.now()}.html`);
+  const header = `<!-- COREX Facebook public scan diagnostic snapshot. URL: ${safeUrlForLog(finalUrl)} -->\n`;
+  await fs.writeFile(snapshotPath, `${header}${html}`, "utf8");
+  return snapshotPath;
+}
+
 async function fetchWithTimeout(fetchImpl, url, timeoutMs) {
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs);
   try { return await fetchImpl(url, { redirect: "follow", signal: controller.signal, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 COREX-PublicMetrics/1.1", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9" } }); }
@@ -154,47 +225,114 @@ async function fetchWithTimeout(fetchImpl, url, timeoutMs) {
 }
 
 function mergeHtmlScan(scan, html, sourceUrl, depth, page) {
-  const followers = extractFollowerCount(html);
+  const followers = extractFollowerCount(html, page);
   const views = extractVideoViews(html, depth);
   const posts = extractRecentPosts(html, depth);
   scan.pageName ||= extractPageName(html, page?.pageName || page?.page_name || "");
   scan.pagePictureUrl ||= extractPagePicture(html);
   if (scan.followersCount === null && followers.count !== null) { scan.followersCount = followers.count; scan.followersDisplay = followers.display; scan.followersSource = `${followers.source}:${new URL(sourceUrl).hostname}`; }
-  if (scan.recentViewsTotal === null && views.sampled) { scan.recentViewsTotal = views.total; scan.videosSampled = views.sampled; }
-  if (scan.postsCount === null && posts.count) { scan.postsCount = posts.count; scan.postsCountType = posts.type; scan.postsWindow = posts.window; }
+  if (views.sampled && (scan.recentViewsTotal === null || views.total > scan.recentViewsTotal)) { scan.recentViewsTotal = views.total; scan.videosSampled = views.sampled; }
+  if (posts.count && (scan.postsCount === null || posts.count > scan.postsCount)) { scan.postsCount = posts.count; scan.postsCountType = posts.type; scan.postsWindow = posts.window; }
 }
 
-function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), scanDepth = DEFAULT_SCAN_DEPTH, timeoutMs = DEFAULT_TIMEOUT_MS, logger = console } = {}) {
+function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), scanDepth = DEFAULT_SCAN_DEPTH, timeoutMs = DEFAULT_TIMEOUT_MS, logger = console, snapshotDir = path.join(__dirname, "tmp-diagnostics") } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("fetch implementation is required");
   const depth = Math.max(1, Math.min(20, Number(scanDepth) || DEFAULT_SCAN_DEPTH));
   return Object.freeze({
-    async scanPage(page) {
+    async scanPage(page, options = {}) {
       const pageUrl = normalizeFacebookUrl(page?.pageUrl || page?.page_url);
       const urls = scanUrlsForPage(page, pageUrl);
-      logger?.info?.("Facebook public scan started", { pageRecordId: page?.id, scanDepth: depth, variants: urls.length });
+      const diagnostics = {
+        pageRecordId: page?.id || null,
+        pageUrl: safeUrlForLog(pageUrl),
+        scanDepth: depth,
+        variants: urls.length,
+        browser: detectChromiumRuntime(),
+        attempts: [],
+        parserErrors: [],
+        timeoutErrors: [],
+        blockedResponses: [],
+        snapshotPath: null,
+      };
+      logger?.info?.("Facebook public scan started", { pageRecordId: page?.id, pageUrl: diagnostics.pageUrl, scanDepth: depth, variants: urls.length, browserMode: diagnostics.browser.mode });
       const scan = { status: "metric_unavailable", message: "Public metrics are unavailable from the current Facebook page response.", pageUrl, pageName: page?.pageName || page?.page_name || "", pagePictureUrl: "", followersCount: null, followersDisplay: null, followersSource: null, recentViewsTotal: null, videosSampled: 0, postsCount: null, postsCountType: null, postsWindow: null, scanDepth: depth, source: "public_http_fetch", capturedAt: now() };
       let sawSuccess = false; let lastFailure = null;
       for (const url of urls) {
+        const attempt = { url: safeUrlForLog(url), httpStatus: null, redirects: [], finalUrl: null, responseType: "not_started", browserLaunched: false, browserLaunchStatus: diagnostics.browser.message, pageTitle: "", contentLength: 0, extraction: null, parserErrors: [], timeoutError: null };
         let response;
-        try { response = await fetchWithTimeout(fetchImpl, url, timeoutMs); } catch (error) { lastFailure = error?.name === "AbortError" ? "Facebook public scan timed out; retrying later." : "Facebook public scan failed; retrying later."; continue; }
+        try { response = await fetchWithTimeout(fetchImpl, url, timeoutMs); }
+        catch (error) {
+          lastFailure = error?.name === "AbortError" ? "Facebook public scan timed out; retrying later." : "Facebook public scan failed; retrying later.";
+          attempt.responseType = error?.name === "AbortError" ? "timeout" : "request_error";
+          attempt.timeoutError = error?.name === "AbortError" ? { timeoutMs } : null;
+          attempt.error = error?.message || String(error);
+          if (attempt.timeoutError) diagnostics.timeoutErrors.push({ url: attempt.url, timeoutMs });
+          diagnostics.attempts.push(attempt);
+          logger?.warn?.("Facebook public scan request failed", { pageRecordId: page?.id, url: attempt.url, responseType: attempt.responseType, error: attempt.error });
+          continue;
+        }
+        attempt.httpStatus = response.status;
+        attempt.finalUrl = safeUrlForLog(response.url || url);
+        if ((response.url || url) !== url) attempt.redirects.push({ from: safeUrlForLog(url), to: attempt.finalUrl });
+        if (response.status === 403 || response.status === 429) diagnostics.blockedResponses.push({ url: attempt.url, httpStatus: response.status, finalUrl: attempt.finalUrl });
+        let html = "";
+        try { html = await response.text(); } catch (error) { attempt.parserErrors.push(`response_text:${error?.message || String(error)}`); diagnostics.parserErrors.push({ url: attempt.url, error: attempt.parserErrors.at(-1) }); }
+        attempt.contentLength = html.length;
+        attempt.pageTitle = extractPageName(html, "") || (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ? stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)[1]) : "");
+        attempt.responseType = classifyFacebookResponse({ status: response.status, finalUrl: response.url || url, title: attempt.pageTitle, html });
+        if (!diagnostics.snapshotPath && options.saveSnapshot) {
+          try { diagnostics.snapshotPath = await saveDiagnosticSnapshot({ snapshotDir: options.snapshotDir || snapshotDir, pageRecordId: page?.id || page?.pageId, finalUrl: response.url || url, html }); }
+          catch (error) { diagnostics.parserErrors.push({ url: attempt.url, error: `snapshot:${error?.message || String(error)}` }); }
+        }
+        let followers; let views; let posts;
+        try { followers = extractFollowerCount(html, page); } catch (error) { followers = { count: null, display: null, source: null }; attempt.parserErrors.push(`followers:${error?.message || String(error)}`); }
+        try { views = extractVideoViews(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; attempt.parserErrors.push(`views:${error?.message || String(error)}`); }
+        try { posts = extractRecentPosts(html, depth); } catch (error) { posts = { count: null, type: null, window: null }; attempt.parserErrors.push(`posts:${error?.message || String(error)}`); }
+        if (attempt.parserErrors.length) diagnostics.parserErrors.push({ url: attempt.url, errors: attempt.parserErrors });
+        attempt.extraction = extractionSummary({ followers, posts, views });
+        diagnostics.attempts.push(attempt);
+        logger?.info?.("Facebook public scan attempt", { pageRecordId: page?.id, url: attempt.url, httpStatus: attempt.httpStatus, finalUrl: attempt.finalUrl, responseType: attempt.responseType, pageTitle: attempt.pageTitle, contentLength: attempt.contentLength, extraction: attempt.extraction });
         if (!SUCCESS_STATUSES.has(response.status)) { lastFailure = response.status === 404 ? "Facebook Page not found." : response.status === 401 || response.status === 403 || response.status === 429 ? "Facebook temporarily blocked public scan." : "Facebook public scan did not return a readable page."; continue; }
         sawSuccess = true;
-        const finalUrl = normalizeFacebookUrl(response.url || url);
-        const html = await response.text();
-        mergeHtmlScan(scan, html, finalUrl, depth, page);
+        mergeHtmlScan(scan, html, response.url || url, depth, page);
         if (scan.followersCount !== null && scan.recentViewsTotal !== null && scan.postsCount !== null) break;
       }
+      diagnostics.summary = {
+        pageLoaded: sawSuccess,
+        finalUrl: diagnostics.attempts.find((item) => item.responseType === "public_page")?.finalUrl || diagnostics.attempts.find((item) => item.responseType !== "login_wall" && item.finalUrl)?.finalUrl || diagnostics.attempts.at(-1)?.finalUrl || null,
+        facebookResponseType: diagnostics.attempts.find((item) => item.responseType === "public_page")?.responseType || diagnostics.attempts.find((item) => item.responseType !== "login_wall")?.responseType || diagnostics.attempts.at(-1)?.responseType || "none",
+        followersFound: scan.followersCount !== null,
+        followers: scan.followersCount,
+        postsDetected: scan.postsCount || 0,
+        videosDetected: scan.videosSampled || 0,
+        viewsDetected: scan.recentViewsTotal,
+        error: null,
+      };
       if (!sawSuccess) {
-        return { ...scan, status: lastFailure === "Facebook Page not found." ? "page_not_found" : lastFailure === "Facebook temporarily blocked public scan." ? "temporarily_blocked" : "scan_failed", message: lastFailure || "Facebook public scan failed; retrying later." };
+        const failed = { ...scan, status: lastFailure === "Facebook Page not found." ? "page_not_found" : lastFailure === "Facebook temporarily blocked public scan." ? "temporarily_blocked" : "scan_failed", message: lastFailure || "Facebook public scan failed; retrying later." };
+        diagnostics.summary.error = failed.message;
+        logger?.warn?.("Facebook public scan completed without readable page", { pageRecordId: page?.id, status: failed.status, summary: diagnostics.summary, blockedResponses: diagnostics.blockedResponses.length, timeoutErrors: diagnostics.timeoutErrors.length });
+        return options.includeDiagnostics ? { ...failed, diagnostics } : failed;
       }
       if (hasAnyMetric(scan)) {
         scan.status = scan.followersCount !== null && (scan.recentViewsTotal !== null || scan.postsCount !== null) ? "synced" : "partial";
         scan.message = `Public scan collected ${[scan.followersCount !== null ? "followers" : null, scan.recentViewsTotal !== null ? "views" : null, scan.postsCount !== null ? "posts" : null].filter(Boolean).join(", ")}.`;
+      } else if (diagnostics.summary.facebookResponseType === "login_wall" || diagnostics.attempts.every((item) => item.responseType === "login_wall" || item.responseType === "checkpoint")) {
+        scan.status = "login_required";
+        scan.message = "Facebook returned a login/checkpoint page for public scan.";
+        diagnostics.summary.error = scan.message;
+      } else if (!diagnostics.browser.available) {
+        scan.message = "Public HTTP scan loaded Facebook, but visible metrics were not present in returned HTML. Browser rendering is not configured on this server.";
       }
-      logger?.info?.("Facebook public scan completed", { pageRecordId: page?.id, status: scan.status, videosSampled: scan.videosSampled });
-      return scan;
+      diagnostics.summary.followersFound = scan.followersCount !== null;
+      diagnostics.summary.followers = scan.followersCount;
+      diagnostics.summary.postsDetected = scan.postsCount || 0;
+      diagnostics.summary.videosDetected = scan.videosSampled || 0;
+      diagnostics.summary.viewsDetected = scan.recentViewsTotal;
+      logger?.info?.("Facebook public scan completed", { pageRecordId: page?.id, status: scan.status, videosSampled: scan.videosSampled, summary: diagnostics.summary, parserErrors: diagnostics.parserErrors.length, timeoutErrors: diagnostics.timeoutErrors.length, blockedResponses: diagnostics.blockedResponses.length });
+      return options.includeDiagnostics ? { ...scan, diagnostics } : scan;
     },
   });
 }
 
-module.exports = { FacebookPublicMetricsError, createFacebookPublicMetricsService, decodeEntities, extractFollowerCount, extractPageName, extractPagePicture, extractRecentPosts, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage };
+module.exports = { FacebookPublicMetricsError, createFacebookPublicMetricsService, decodeEntities, extractFollowerCount, extractPageName, extractPagePicture, extractRecentPosts, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime };

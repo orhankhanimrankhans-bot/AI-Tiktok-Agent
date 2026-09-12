@@ -2,7 +2,7 @@
 const { FacebookControlError } = require("./facebookControlStore");
 const { credentialPageToken, FacebookGraphError } = require("./facebookGraph");
 const MIN_PUBLIC_RESCAN_MS = 10 * 60 * 1000;
-function safe(res, error, logger) { if (error instanceof FacebookControlError) return res.status(400).json({ error: error.message, code: error.code }); logger?.error?.("Facebook Control operation failed safely."); return res.status(500).json({ error: "Facebook Control operation could not be completed." }); }
+function safe(res, error, logger) { if (error instanceof FacebookControlError) return res.status(400).json({ error: error.message, code: error.code }); logger?.error?.("Facebook Control operation failed safely.", { code: error?.code || "UNEXPECTED_FACEBOOK_CONTROL_ERROR", message: error?.message || String(error), stack: error?.stack }); return res.status(500).json({ error: "Facebook Control operation could not be completed." }); }
 function publicSyncError(error) {
   if (error instanceof FacebookGraphError) {
     if (error.statusCode === 401 || error.code === "meta_190") return { status: "token_expired", message: "Facebook token expired." };
@@ -67,7 +67,16 @@ async function syncPublicPage({ page, owner, store, publicMetricsService, logger
   if (!publicMetricsService?.scanPage) return null;
   if (shouldSkipPublicScan(page, { force })) return page;
   try { return store.recordPublicMetrics(page.id, await publicMetricsService.scanPage(page), owner); }
-  catch (error) { logger?.warn?.("Facebook public scan page failed safely.", { status: error?.code || "scan_failed", pageRecordId: page.id }); return store.markPageSyncIssue(page.id, error?.code || "scan_failed", error?.message || "Facebook public scan failed; retrying later.", owner); }
+  catch (error) { logger?.warn?.("Facebook public scan page failed safely.", { status: error?.code || "scan_failed", pageRecordId: page.id, message: error?.message || String(error), stack: error?.stack }); return store.markPageSyncIssue(page.id, error?.code || "scan_failed", error?.message || "Facebook public scan failed; retrying later.", owner); }
+}
+
+async function diagnosePublicPage({ owner, store, publicMetricsService, pageId = null, logger = console } = {}) {
+  if (!publicMetricsService?.scanPage) return { status: "unavailable", message: "Facebook public scanner is not available." };
+  const data = store.list(owner);
+  const page = pageId ? data.pages.find((item) => item.id === pageId) : data.pages[0];
+  if (!page) return { status: "not_found", message: pageId ? "Facebook Page record not found." : "No Facebook Pages added yet." };
+  logger?.info?.("Facebook public diagnostic scan requested", { pageRecordId: page.id, pageUrl: page.pageUrl });
+  return publicMetricsService.scanPage(page, { includeDiagnostics: true, saveSnapshot: true });
 }
 async function syncFacebookControl({ owner, store, facebookCredentialStore, graphServiceFactory = null, publicMetricsService = null, logger = console, forcePublicScan = true } = {}) {
   const before = store.list(owner);
@@ -92,7 +101,9 @@ function registerFacebookControlRoutes(app, { store, workspaceForRequest = () =>
   app.put("/api/facebook/pages/:pageId", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const page = store.updatePage(req.params.pageId, req.body, owner); return page ? res.json(page) : res.status(404).json({ error: "Facebook Page record not found." }); } catch (error) { return safe(res, error, logger); } });
   app.delete("/api/facebook/pages/:pageId", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return store.deletePage(req.params.pageId, owner) ? res.json({ ok: true, id: req.params.pageId }) : res.status(404).json({ error: "Facebook Page record not found." }); } catch (error) { return safe(res, error, logger); } });
   app.post("/api/facebook/pages/:pageId/test-connection", async (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const data = store.list(owner); const page = data.pages.find((item) => item.id === req.params.pageId); if (!page) return res.status(404).json({ error: "Facebook Page record not found." }); if (publicMetricsService?.scanPage) return res.json(store.recordPublicMetrics(page.id, await publicMetricsService.scanPage(page), owner)); if (!page.credentialId) return res.json({ ok: false, status: "connection_required", message: "Data connection required. Select an existing Facebook credential before live metrics can sync." }); if (facebookCredentialStore && !facebookCredentialStore.get(page.credentialId, { owner })) return res.status(404).json({ ok: false, status: "credential_not_found", message: "Selected Facebook credential was not found." }); return res.json({ ok: true, status: "connected", message: "Credential record is available. Live metric sync can use the server-side Meta integration." }); } catch (error) { return safe(res, error, logger); } });
+  app.post("/api/facebook/pages/:pageId/diagnose-public-scan", async (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const result = await diagnosePublicPage({ owner, store, publicMetricsService, pageId: req.params.pageId, logger }); return result.status === "not_found" ? res.status(404).json(result) : res.json(result); } catch (error) { return safe(res, error, logger); } });
+  app.post("/api/facebook/diagnose-public-scan", async (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const result = await diagnosePublicPage({ owner, store, publicMetricsService, pageId: req.body?.pageId || null, logger }); return result.status === "not_found" ? res.status(404).json(result) : res.json(result); } catch (error) { return safe(res, error, logger); } });
   app.put("/api/facebook/sync-settings", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.json(store.updateSync(req.body, owner)); } catch (error) { return safe(res, error, logger); } });
   app.post("/api/facebook/sync", async (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.json(await syncFacebookControl({ owner, store, facebookCredentialStore, graphServiceFactory, publicMetricsService, logger, forcePublicScan: true })); } catch (error) { return safe(res, error, logger); } });
 }
-module.exports = { MIN_PUBLIC_RESCAN_MS, registerFacebookControlRoutes, shouldSkipPublicScan, syncFacebookControl, publicSyncError };
+module.exports = { MIN_PUBLIC_RESCAN_MS, diagnosePublicPage, registerFacebookControlRoutes, shouldSkipPublicScan, syncFacebookControl, publicSyncError };

@@ -1,6 +1,6 @@
 ﻿const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createFacebookPublicMetricsService, extractFollowerCount, extractPageName, extractRecentPosts, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage } = require("./facebookPublicMetricsService");
+const { createFacebookPublicMetricsService, extractFollowerCount, extractPageName, extractRecentPosts, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime } = require("./facebookPublicMetricsService");
 
 test("public Facebook URL validation accepts only expected Facebook hosts", () => {
   assert.equal(normalizeFacebookUrl("facebook.com/corex"), "https://facebook.com/corex");
@@ -52,4 +52,41 @@ test("public scanner never invents missing numbers", async () => {
   assert.equal(emptyScan.followersCount, null);
   assert.equal(emptyScan.recentViewsTotal, null);
   assert.equal(emptyScan.postsCount, null);
+});
+
+
+test("follower parser does not treat a Facebook page id as the follower count", () => {
+  const html = '<html><body>{"pageID":"61566901767304","label":"Followers"}</body></html>';
+  assert.deepEqual(extractFollowerCount(html, { pageId: "61566901767304" }), { count: null, display: null, source: null });
+  assert.deepEqual(extractFollowerCount('<meta name="description" content="48,213 followers">', { pageId: "61566901767304" }), { count: 48213, display: "48,213", source: "public_text" });
+});
+
+test("public scanner returns safe diagnostics without fake metrics", async () => {
+  const requested = [];
+  const logs = [];
+  const service = createFacebookPublicMetricsService({
+    now: () => "2026-09-12T12:45:00.000Z",
+    fetchImpl: async (url) => {
+      requested.push(url);
+      return { status: 200, url: url.replace("www.facebook.com/demo", "www.facebook.com/people/Demo/61566901767304"), async text() { return '<title>Demo Page | Facebook</title><body>{"pageID":"61566901767304","label":"Followers"}<a href="/demo/posts/1">Post</a></body>'; } };
+    },
+    logger: { info(message, detail) { logs.push({ message, detail }); }, warn() {} },
+  });
+  const scan = await service.scanPage({ id: "fbpage_demo", pageUrl: "https://www.facebook.com/demo", pageId: "61566901767304" }, { includeDiagnostics: true });
+  assert.equal(scan.followersCount, null);
+  assert.equal(scan.postsCount, 1);
+  assert.equal(scan.status, "partial");
+  assert.equal(scan.diagnostics.summary.pageLoaded, true);
+  assert.equal(scan.diagnostics.summary.followersFound, false);
+  assert.equal(scan.diagnostics.attempts[0].responseType, "public_page");
+  assert.ok(scan.diagnostics.attempts[0].contentLength > 0);
+  assert.ok(logs.some((entry) => entry.message === "Facebook public scan attempt"));
+  assert.ok(requested.length > 0);
+});
+
+test("facebook response classifier identifies login and public page responses", () => {
+  assert.equal(classifyFacebookResponse({ status: 200, finalUrl: "https://www.facebook.com/login.php", title: "Facebook", html: "Log in to Facebook" }), "login_wall");
+  assert.equal(classifyFacebookResponse({ status: 429, finalUrl: "https://www.facebook.com/page", title: "Facebook", html: "" }), "rate_limited_429");
+  assert.equal(classifyFacebookResponse({ status: 200, finalUrl: "https://www.facebook.com/people/Demo/1", title: "Demo | Facebook", html: "Demo 48 followers posts" }), "public_page");
+  assert.equal(detectChromiumRuntime().mode, "not_configured");
 });
