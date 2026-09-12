@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import CommandPipeline from "./CommandPipeline.jsx";
-import OfficeSimulation from "./OfficeSimulation.jsx";
 import { handoffIntent } from "./officeMovement.js";
 import { listWorkflows } from "./workflowApi.js";
 import { controlCenterState, dashboardFacts } from "./dashboardControlCenter.js";
@@ -26,6 +24,45 @@ function ConversationPanel({ inputRef, messages, draft, onDraft, onSend }) {
   return <aside className="jarvis-conversation" aria-label="Corex Conversation"><header><div><span>SECURE LOCAL SESSION</span><h2>COREX CONVERSATION</h2></div><i aria-label="Text chat ready" /></header><div className="conversation-thread" aria-live="polite">{messages.length ? messages.map((message) => <article key={message.id} className={`conversation-message ${message.role}`}><strong>{message.role === "user" ? "USER" : "COREX"}</strong><p>{message.text}</p></article>) : <div className="conversation-empty"><b>WAITING FOR INPUT</b><span>Ask about workflows, storage, Facebook, WhatsApp, YouTube, TikTok, or system status.</span></div>}</div><form className="conversation-input" onSubmit={onSend}><button type="button" className="conversation-mic" disabled title="Voice transcription is not configured" aria-label="Microphone unavailable">MIC</button><input ref={inputRef} value={draft} onChange={(event) => onDraft(event.target.value)} placeholder="Type a command..." aria-label="Type a command" /><button type="submit" disabled={!draft.trim()}>SEND</button></form></aside>;
 }
 
+
+function TechnicalPipelineBoard({ facts, workflows, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation }) {
+  const modelState = workflowError ? "Fail-safe" : workflowActive ? "Active routing" : "Ready routing";
+  const workflowItems = workflows.slice(0, 5);
+  const inputChannels = [
+    ["web", "Web App", "Dashboard"],
+    ["mobile", "Mobile App", "Responsive"],
+    ["api", "API / SDK", `${facts.nodeCount} nodes`],
+    ["enterprise", "Enterprise Systems", `${facts.connectionCount} links`],
+  ];
+  const toolItems = [
+    ["Search", facts.queuedItems.length ? `${facts.queuedItems.length} queued` : "Ready"],
+    ["Code Executor", "Workflow runner"],
+    ["Data Analyzer", `${facts.workflowCount} workflows`],
+    ["Integrations", facts.facebookCredentials.length ? "Facebook connected" : "Limited"],
+  ];
+  const memoryItems = [
+    ["Conversation Memory", "Local session"],
+    ["Vector Store", "Not connected"],
+    ["Knowledge Base", "Project data"],
+    ["User Preferences", "Saved theme"],
+  ];
+  const privacyItems = ["PII Detection", "Policy Check", "Data Minimization", "Access Control"];
+  return <section className="technical-pipeline-board" aria-label="Corex technical pipeline dashboard">
+    <div className="pipeline-frame-corner top-left" /><div className="pipeline-frame-corner top-right" /><div className="pipeline-frame-corner bottom-left" /><div className="pipeline-frame-corner bottom-right" />
+    <header className="technical-pipeline-header"><div><span>AI CONTROL SYSTEM</span><h1>COREX CORE</h1><p>Live command headquarters</p></div><button type="button" className="technical-isk-core" onClick={onFocusConversation} aria-label="ISK - focus Corex conversation"><span>ISK</span></button><strong><i />{state.toUpperCase()}</strong></header>
+    <div className="technical-pipeline-grid">
+      <aside className="technical-plane-labels" aria-hidden="true"><div><b>INTERFACES</b></div><div><b>CONTROL PLANE</b></div><div><b>DATA PLANE</b></div></aside>
+      <section className="technical-column input-channel-column"><h2>INPUT<br />CHANNELS</h2><div className="technical-stack">{inputChannels.map(([id, label, meta]) => <button type="button" key={id} onClick={() => onControl(id === "enterprise" ? "workflow" : id === "api" ? "workflow" : "upload")}><i>{id === "web" ? "◎" : id === "mobile" ? "▯" : id === "api" ? "&lt;/&gt;" : "▥"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
+      <section className="technical-column event-stream-column"><h2>ASYNC EVENT<br />STREAM</h2><div className="data-cylinder" aria-label="Live async event stream"><span /><span /><span /><span /><i /></div><div className="signal-scope" /></section>
+      <section className="technical-column model-routing-column"><h2>MODEL<br />ROUTING</h2><div className="model-router-card"><button type="button" onClick={() => onControl("workflow")}><i>✣</i><span>Advanced Reasoning</span></button><button type="button" onClick={() => onControl("workflow")}><i>✺</i><span>General Purpose</span></button><button type="button" onClick={() => onControl("workflow")}><i>ϟ</i><span>{modelState}</span></button></div><div className="wave-scope purple" /></section>
+      <section className="technical-column privacy-column"><h2>PRIVACY<br />GUARD</h2><div className="privacy-shield"><i>✓</i></div><ul>{privacyItems.map((item) => <li key={item}>✓ {item}</li>)}</ul><div className="wave-scope gold" /></section>
+      <section className="technical-column tools-column"><h2>TOOLS</h2><div className="technical-stack compact">{toolItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Integrations" ? "facebook" : label === "Data Analyzer" ? "workflow" : "storage")}><i>{label === "Search" ? "⌕" : label === "Code Executor" ? "▣" : label === "Data Analyzer" ? "▥" : "✚"}</i><span>{label}</span><small>{meta}</small></button>)}</div><h2 className="memory-title">MEMORY SERVICES</h2><div className="technical-stack compact memory-stack">{memoryItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Conversation Memory" ? "whatsapp" : "storage")}><i>{label === "Conversation Memory" ? "☰" : label === "Vector Store" ? "✤" : label === "Knowledge Base" ? "▤" : "●"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
+      <section className="technical-column response-column"><h2>RESPONSE<br />STREAM</h2><div className="data-cylinder response" aria-label="Response stream"><span /><span /><span /><span /><i /></div><div className="signal-scope" /></section>
+    </div>
+    <div className="technical-flow-lines" aria-hidden="true"><span className="flow-a" /><span className="flow-b" /><span className="flow-c" /><span className="flow-d" /></div>
+    <footer className="technical-workflow-strip"><div><span>LIVE WORKFLOWS</span><strong>COMMAND PIPELINE</strong></div><div className="technical-workflow-list">{workflowItems.map((workflow) => <button type="button" key={workflow.id} onClick={() => onOpenWorkflow?.(workflow.id)}><i /> <span>{workflow.name}</span><small>{workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleDateString() : "READY"}</small></button>)}</div><button type="button" className="technical-add-workflow" onClick={() => onControl("workflow")}>+ ADD WORKFLOW</button><p>{facts.workflowCount} workflows / {facts.nodeCount} active nodes / {facts.connectionCount} connections</p></footer>
+  </section>;
+}
 export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive = false, workflowError = false, healthContext = {}, executions = [], lastExecutionAt = null, activeWorkflowId = "local-workflow", onOpenWorkflow }) {
   const [detail, setDetail] = useState(null); const [draft, setDraft] = useState(""); const [messages, setMessages] = useState([]); const [savedWorkflows, setSavedWorkflows] = useState([]); const [agentStates, setAgentStates] = useState({}); const [tasks, setTasks] = useState([]); const [activeWorkspace, setActiveWorkspace] = useState(null); const [officeHandoff, setOfficeHandoff] = useState(null); const inputRef = useRef(null); const taskSequence = useRef(0);
   const healthStates = graph.nodes.map((node) => nodeConnectionHealth(node, healthContext)); const state = controlCenterState({ graph, workflowActive, workflowError, healthStates });
@@ -50,7 +87,5 @@ export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive
     setMessages((current) => [...current, { id: `${id}-result`, role: "jarvis", text: `${name}: ${result}` }]);
   };
   const sendMessage = (event) => { event.preventDefault(); const text = draft.trim(); if (!text) return; taskSequence.current += 1; setMessages((current) => [...current, { id: `message-${taskSequence.current}`, role: "user", text }]); setDraft(""); routeCommand(text); };
-  const summaries = { upload: `${facts.queuedItems.length} ready`, workflow: `${facts.workflowCount} workflows`, facebook: facts.facebookCredentials.length ? "Connected" : "Not connected", youtube: "Not connected", storage: facts.googleCredentials.length ? "Drive ready" : "Not connected" };
-  const liveAgentStates = { ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit };
-  return <section className={`dashboard-page jarvis-control-center control-${state}`} data-control-state={state}><div className="dashboard-main-column"><header className="jarvis-core-header"><div><span>AI CONTROL SYSTEM</span><h1>COREX CORE</h1><p>Live command headquarters</p></div><button type="button" className="isk-core-button" onClick={focusConversation} aria-label="ISK - focus Corex conversation"><span>ISK</span></button><div className="core-state"><i />{state.toUpperCase()}</div></header><div className="control-center-grid"><nav className="operational-controls" aria-label="Operational controls">{CONTROLS.map(([id, icon, label]) => <button type="button" key={id} onClick={() => setDetail(id)}><i>{icon}</i><span><strong>{label}</strong><small>{summaries[id]}</small></span></button>)}</nav><CommandPipeline graph={graph} workflows={workflows} activeWorkflowId={activeWorkflowId} workflowActive={workflowActive} workflowError={workflowError} healthContext={healthContext} executions={executions} onOpenWorkflow={onOpenWorkflow} /></div><OfficeSimulation agentStates={liveAgentStates} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
+  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}`} data-control-state={state}><div className="dashboard-main-column"><TechnicalPipelineBoard facts={facts} workflows={workflows} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} /></div><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
 }

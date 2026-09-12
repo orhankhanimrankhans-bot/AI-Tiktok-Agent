@@ -161,7 +161,7 @@ test("dashboard pipeline consumes real workflow state and animates only while ru
   const dashboard = fs.readFileSync(new URL("./JarvisDashboard.jsx", import.meta.url), "utf8");
   const pipeline = fs.readFileSync(new URL("./CommandPipeline.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("./App.css", import.meta.url), "utf8");
-  assert.match(source, /JarvisDashboard apiBaseUrl=\{API_BASE_URL\} graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/); assert.match(dashboard, /CommandPipeline graph=\{graph\}/); assert.match(pipeline, /workflow-wire-layer/);
+  assert.match(source, /JarvisDashboard apiBaseUrl=\{API_BASE_URL\} graph=\{dashboardGraph\} workflowActive=\{isWorkflowRunning\}/); assert.match(dashboard, /technical-pipeline-board/); assert.match(dashboard, /workflowActive \? "Active routing" : "Ready routing"/); assert.match(pipeline, /workflow-wire-layer/);
   assert.match(pipeline, /workflowError \? "error" : workflowActive \? "running" : healthStates\.includes\("error"\)/); assert.match(pipeline, /healthStates\.includes\("disconnected"\)/);
   assert.match(styles, /\.wire-running \.wire-energy[^}]*animation-duration: 1s/);
   assert.match(styles, /\.pipeline-running \.core-ring-outer[^}]*animation:/);
