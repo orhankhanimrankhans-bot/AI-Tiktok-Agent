@@ -16,10 +16,10 @@ test("public metric parser normalizes social counts and extracts page data", () 
   assert.equal(parseSocialCount("48.2K"), 48200);
   assert.equal(parseSocialCount("1.2M"), 1200000);
   assert.equal(parseSocialCount("2.4B views"), 2400000000);
-  const html = '<html><head><meta property="og:title" content="Mega Crush Lab | Facebook"><meta property="og:image" content="https://cdn.test/page.jpg"><meta name="description" content="48,213 followers"></head><body><a href="/megacrush/posts/111">A</a><a href="/megacrush/reel/222">B</a>120K views 85K views</body></html>';
+  const html = '<html><head><meta property="og:title" content="Mega Crush Lab | Facebook"><meta property="og:image" content="https://cdn.test/page.jpg"><meta name="description" content="48,213 followers"></head><body><a href="/megacrush/posts/111">A</a><a href="/megacrush/reel/222">B</a>120K views 85K views {"play_count_reduced":"7.9K"}</body></html>';
   assert.equal(extractPageName(html), "Mega Crush Lab");
   assert.deepEqual(extractFollowerCount(html), { count: 48213, display: "48,213", source: "public_text" });
-  assert.deepEqual(extractVideoViews(html, 10), { total: 205000, sampled: 2, samples: [{ count: 120000, display: "120K" }, { count: 85000, display: "85K" }] });
+  assert.deepEqual(extractVideoViews(html, 10), { total: 212900, sampled: 3, samples: [{ count: 120000, display: "120K" }, { count: 85000, display: "85K" }, { count: 7900, display: "7.9K" }] });
   assert.deepEqual(extractRecentPosts(html, 10), { count: 2, type: "recent-public-sample", window: "latest-10-public-items" });
 });
 
@@ -42,7 +42,10 @@ test("public scanner tries mobile basic and page-id variants before declaring me
   assert.equal(scan.recentViewsTotal, 900);
   assert.equal(scan.postsCount, 1);
   assert.ok(requested.some((url) => url.includes("mbasic.facebook.com/profile.php?id=61593949095532")));
-  assert.ok(scanUrlsForPage({ pageId: "61593949095532" }, "https://www.facebook.com/range").some((url) => url.includes("sk=about")));
+  const scanUrls = scanUrlsForPage({ pageId: "61593949095532" }, "https://www.facebook.com/range");
+  assert.ok(scanUrls.some((url) => url.includes("sk=about")));
+  assert.ok(scanUrls.some((url) => url.includes("sk=reels_tab")));
+  assert.ok(scanUrls.findIndex((url) => url.includes("sk=reels_tab")) < scanUrls.findIndex((url) => url.includes("/posts")));
 });
 
 test("public scanner follows detected video targets for visible view counts", async () => {
@@ -78,6 +81,25 @@ test("video target parser normalizes public Facebook reel and watch links", () =
   assert.equal(targets.length, 2);
   assert.ok(targets.some((url) => url.includes('/reel/abc123')));
   assert.ok(targets.some((url) => url.includes('/watch/?v=987654')));
+});
+
+test("public scanner prioritizes the Facebook reels tab and sums visible tile views", async () => {
+  const requested = [];
+  const service = createFacebookPublicMetricsService({
+    now: () => "2026-09-12T14:00:00.000Z",
+    fetchImpl: async (url) => {
+      requested.push(url);
+      if (url.includes("sk=reels_tab")) {
+        return { status: 200, url, async text() { return '<title>Wings & War Reels</title><body>2.1K followers <a href="/wings/posts/1">Post</a><script>{"play_count_reduced":"7.9K"},{"play_count_reduced":"8.2K"},{"play_count_reduced":"6.2K"},{"play_count_reduced":"9.5K"},{"play_count_reduced":"13K"}</script></body>'; } };
+      }
+      return { status: 200, url, async text() { return '<title>Wings & War</title><body>2.1K followers <a href="/wings/posts/1">Post</a>466 views</body>'; } };
+    },
+  });
+  const scan = await service.scanPage({ id: "wings", pageUrl: "https://www.facebook.com/people/Wings-War/61594103515251/", pageId: "61594103515251" });
+  assert.equal(scan.followersCount, 2100);
+  assert.equal(scan.recentViewsTotal, 44800);
+  assert.equal(scan.videosSampled, 5);
+  assert.ok(requested[1].includes("sk=reels_tab"));
 });
 
 test("public scanner never invents missing numbers", async () => {

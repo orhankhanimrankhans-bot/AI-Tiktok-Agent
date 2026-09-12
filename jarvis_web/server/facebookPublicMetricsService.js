@@ -77,8 +77,18 @@ function facebookUrlVariant(original, host, suffix = "") {
   return url.toString();
 }
 
+function facebookReelsTabVariant(original, host) {
+  const url = new URL(original);
+  url.hostname = host;
+  url.protocol = "https:";
+  url.hash = "";
+  url.searchParams.set("sk", "reels_tab");
+  return url.toString();
+}
+
 function scanUrlsForPage(page, pageUrl) {
   const urls = new Set([pageUrl]);
+  for (const host of ["www.facebook.com", "m.facebook.com", "mobile.facebook.com", "mbasic.facebook.com"]) urls.add(facebookReelsTabVariant(pageUrl, host));
   for (const host of ["m.facebook.com", "mbasic.facebook.com", "mobile.facebook.com", "www.facebook.com"]) {
     urls.add(facebookUrlVariant(pageUrl, host));
     for (const suffix of ["about", "posts", "reels", "videos"]) urls.add(facebookUrlVariant(pageUrl, host, suffix));
@@ -86,6 +96,7 @@ function scanUrlsForPage(page, pageUrl) {
   const pageId = String(page?.pageId || page?.page_id || "").trim();
   if (/^\d{5,}$/.test(pageId)) {
     for (const host of ["www.facebook.com", "m.facebook.com", "mbasic.facebook.com"]) {
+      urls.add(`https://${host}/profile.php?id=${encodeURIComponent(pageId)}&sk=reels_tab`);
       urls.add(`https://${host}/profile.php?id=${encodeURIComponent(pageId)}`);
       urls.add(`https://${host}/profile.php?id=${encodeURIComponent(pageId)}&sk=about`);
       urls.add(`https://${host}/profile.php?id=${encodeURIComponent(pageId)}&sk=videos`);
@@ -165,7 +176,7 @@ function uniqueStructuredCounts(html, regex, limit) {
 function extractVideoViews(html, depth = DEFAULT_SCAN_DEPTH) {
   const text = publicText(html);
   const explicitCounts = uniqueCounts(text, /([0-9][0-9,\.]*\s*[KMB]?)\s+(?:views|plays|video views|reel views)/gi, depth);
-  const structuredCounts = uniqueStructuredCounts(text, /"(?:play_count|playCount|view_count|viewCount|video_view_count|videoViewCount|total_video_views|totalVideoViews|views_count|viewsCount)"\s*:?\s*(?:\{[^{}]{0,80}?"(?:count|value)"\s*:?\s*)?"?([0-9][0-9,\.]*\s*[KMB]?)"?/gi, depth);
+  const structuredCounts = uniqueStructuredCounts(text, /"(?:play_count_reduced|playCountReduced|play_count|playCount|view_count|viewCount|video_view_count|videoViewCount|total_video_views|totalVideoViews|views_count|viewsCount)"\s*:?\s*(?:\{[^{}]{0,80}?"(?:count|value)"\s*:?\s*)?"?([0-9][0-9,\.]*\s*[KMB]?)"?/gi, depth);
   const seen = new Set();
   const samples = [];
   for (const item of [...explicitCounts, ...structuredCounts]) {
