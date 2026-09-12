@@ -10,15 +10,22 @@ const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
 test("dashboard renders a clean Corex summary dashboard", () => {
   assert.match(dashboard, /className="corex-summary-dashboard"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="corex-summary-orb"/); assert.match(dashboard, /<span>ISK<\/span>/);
-  for (const label of ["Workflows", "Active Nodes", "Connections", "Google Drive", "Facebook", "Queue", "LIVE WORKFLOWS", "Command pipeline"]) assert.match(dashboard, new RegExp(label));
+  for (const label of ["Facebook Pages", "Active Nodes", "Connections", "Google Drive", "Facebook", "Queue", "LIVE WORKFLOWS", "Command pipeline"]) assert.match(dashboard, new RegExp(label));
   assert.doesNotMatch(dashboard, /technical-pipeline-board compact-technical-board balanced-technical-board/); assert.doesNotMatch(dashboard, /INPUT<br \/>CHANNELS/); assert.doesNotMatch(dashboard, /MEMORY SERVICES/);
-  assert.match(styles, /\.corex-summary-dashboard/); assert.match(styles, /\.corex-summary-grid/); assert.match(styles, /\.corex-summary-card/); assert.match(styles, /\.corex-summary-workflows/);
+  assert.match(styles, /\.corex-summary-dashboard/); assert.match(styles, /\.corex-summary-grid/); assert.match(styles, /\.corex-summary-card/); assert.match(styles, /\.corex-summary-workflows/); assert.match(dashboard, /onOpenFacebookPages/);
 })
 
 test("saved workflows and real execution inputs feed the technical dashboard", () => {
   assert.match(dashboard, /listWorkflows\(fetch, apiBaseUrl\)/); assert.match(dashboard, /savedWorkflows\.filter/); assert.match(dashboard, /dashboardFacts\(\{ graph, googleCredentials: healthContext\.googleCredentials, facebookCredentials: healthContext\.facebookCredentials, executions/);
-  assert.match(dashboard, /workflowItems = workflows\.slice\(0, 4\)/); assert.match(dashboard, /onOpenWorkflow\?\.\(workflow\.id\)/); assert.match(dashboard, /\["Workflows", String\(facts\.workflowCount\)/); assert.match(dashboard, /\["Active Nodes", String\(facts\.nodeCount\)/); assert.match(dashboard, /\["Connections", String\(facts\.connectionCount\)/);
+  assert.match(dashboard, /workflowItems = workflows\.slice\(0, 4\)/); assert.match(dashboard, /onOpenWorkflow\?\.\(workflow\.id\)/); assert.match(dashboard, /\["Facebook Pages", String\(facts\.facebookCredentials\.length \|\| facts\.workflowCount\)/); assert.match(dashboard, /\["Active Nodes", String\(facts\.nodeCount\)/); assert.match(dashboard, /\["Connections", String\(facts\.connectionCount\)/);
   assert.match(app, /apiBaseUrl=\{API_BASE_URL\}/); assert.match(app, /activeWorkflowId=\{editorWorkflowSource/); assert.match(app, /requestOpenServerWorkflow\(workflowId\)/);
+});
+
+
+test("facebook pages card opens a custom analytics page", () => {
+  assert.match(dashboard, /function FacebookPagesDashboard/); assert.match(dashboard, /dashboardView === "facebookPages"/); assert.match(dashboard, /setDashboardView\("facebookPages"\)/);
+  for (const label of ["Most improved pages", "Page leaderboard", "Split of Page Scores", "Channel Wise Split", "Areas of Improvement", "Areas of Strength"]) assert.match(dashboard, new RegExp(label));
+  assert.match(styles, /\.facebook-pages-dashboard/); assert.match(styles, /\.facebook-report-card/); assert.match(styles, /\.facebook-page-table/); assert.match(styles, /\.facebook-metric-list/);
 });
 
 test("conversation routes tasks to agents and reports unavailable connectors honestly", () => {

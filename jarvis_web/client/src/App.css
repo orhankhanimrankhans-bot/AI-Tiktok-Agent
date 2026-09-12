@@ -6286,3 +6286,166 @@ button {
   .technical-dashboard .corex-summary-grid,
   .technical-dashboard .corex-summary-workflow-list { grid-template-columns: 1fr; }
 }
+
+
+/* Facebook Pages analytics dashboard opened from the dashboard card. */
+.technical-dashboard .facebook-pages-dashboard {
+  padding: 22px;
+  border: 1px solid rgba(69, 226, 246, .24);
+  border-radius: 16px;
+  background: #eef2f5;
+  color: #111821;
+  box-shadow: 0 20px 45px rgba(0,0,0,.18);
+}
+
+.technical-dashboard .facebook-pages-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(18, 38, 63, .08);
+}
+
+.technical-dashboard .facebook-pages-header span {
+  display: block;
+  color: #078aa4;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+.technical-dashboard .facebook-pages-header h1 { margin: 6px 0 4px; font-size: 30px; }
+.technical-dashboard .facebook-pages-header p { margin: 0; color: #667085; }
+.technical-dashboard .facebook-pages-header button {
+  padding: 12px 16px;
+  border: 1px solid #cfd8e3;
+  border-radius: 10px;
+  background: #fff;
+  color: #101828;
+  font-weight: 800;
+}
+
+.technical-dashboard .facebook-pages-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.technical-dashboard .facebook-report-card {
+  min-height: 250px;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(18, 38, 63, .08);
+}
+
+.technical-dashboard .facebook-report-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: 0 22px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.technical-dashboard .facebook-report-card h2 { margin: 0; font-size: 20px; color: #111821; }
+.technical-dashboard .facebook-report-card select {
+  padding: 7px 28px 7px 12px;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  background: #fff;
+  color: #111821;
+}
+
+.technical-dashboard .facebook-page-table { display: grid; padding: 10px 14px 16px; }
+.technical-dashboard .facebook-page-table button {
+  display: grid;
+  grid-template-columns: 30px 38px minmax(0, 1fr) 110px 44px 50px;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: #111821;
+  text-align: left;
+}
+
+.technical-dashboard .facebook-page-table b {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #eef1f5;
+  color: #667085;
+}
+
+.technical-dashboard .facebook-page-table i {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #dff7ff, #f1fff2);
+  color: #078aa4;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.technical-dashboard .facebook-page-table span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.technical-dashboard .facebook-page-table em {
+  height: 16px;
+  max-width: 110px;
+  border-radius: 3px;
+  background: #7dc475;
+}
+.technical-dashboard .facebook-page-table button:nth-child(n+6) em { background: #d43f5b; }
+.technical-dashboard .facebook-page-table strong,
+.technical-dashboard .facebook-page-table small { text-align: right; }
+
+.technical-dashboard .facebook-bars.vertical {
+  display: flex;
+  align-items: end;
+  gap: 22px;
+  height: 190px;
+  padding: 32px 28px 28px;
+}
+.technical-dashboard .facebook-bars.vertical i {
+  flex: 1;
+  border-radius: 5px 5px 0 0;
+  background: #efc542;
+}
+.technical-dashboard .facebook-bars.vertical i:first-child { background: #cf3f67; }
+.technical-dashboard .facebook-bars.vertical i:last-child { background: #80c477; }
+
+.technical-dashboard .facebook-metric-list { display: grid; gap: 18px; padding: 28px 24px; }
+.technical-dashboard .facebook-metric-list div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 42px 42px;
+  align-items: center;
+  gap: 12px;
+  color: #111821;
+}
+.technical-dashboard .facebook-metric-list span { font-weight: 800; }
+.technical-dashboard .facebook-metric-list em { height: 18px; border-radius: 4px; background: #eef1f5; overflow: hidden; }
+.technical-dashboard .facebook-metric-list i { display: block; height: 100%; border-radius: inherit; background: #6abde8; }
+.technical-dashboard .facebook-metric-list.warn i { background: #efc542; }
+.technical-dashboard .facebook-metric-list.good i { background: #80c477; }
+.technical-dashboard .facebook-metric-list strong,
+.technical-dashboard .facebook-metric-list small { text-align: right; }
+
+.dashboard-page.control-ready .facebook-pages-dashboard,
+.dashboard-page.control-running .facebook-pages-dashboard,
+.dashboard-page.control-error .facebook-pages-dashboard {
+  background: #eef2f5;
+}
+
+@media (max-width: 1200px) {
+  .technical-dashboard .facebook-pages-grid { grid-template-columns: 1fr; }
+  .technical-dashboard .facebook-page-table button { grid-template-columns: 28px 34px minmax(0, 1fr) 80px 38px 42px; }
+}

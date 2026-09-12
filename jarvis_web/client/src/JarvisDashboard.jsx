@@ -26,10 +26,10 @@ function ConversationPanel({ inputRef, messages, draft, onDraft, onSend }) {
 }
 
 
-function CorexSummaryDashboard({ facts, workflows, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation }) {
+function CorexSummaryDashboard({ facts, workflows, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation, onOpenFacebookPages }) {
   const workflowItems = workflows.slice(0, 4);
   const statusCards = [
-    ["Workflows", String(facts.workflowCount), "Saved automation plans", "workflow"],
+    ["Facebook Pages", String(facts.facebookCredentials.length || facts.workflowCount), facts.facebookCredentials.length ? "Connected page records" : "Set page data here", "facebookPages"],
     ["Active Nodes", String(facts.nodeCount), "Canvas modules ready", "workflow"],
     ["Connections", String(facts.connectionCount), "Linked workflow routes", "workflow"],
     ["Google Drive", facts.googleCredentials.length ? "Connected" : "Offline", facts.googleCredentials.length ? `${facts.googleCredentials.length} credential record(s)` : "Connect storage first", "storage"],
@@ -44,7 +44,7 @@ function CorexSummaryDashboard({ facts, workflows, state, workflowActive, workfl
       <strong className={`corex-summary-state ${workflowError ? "error" : workflowActive ? "running" : "ready"}`}><i />{stateLabel}</strong>
     </header>
     <div className="corex-summary-grid">
-      {statusCards.map(([label, value, meta, control]) => <button type="button" className="corex-summary-card" key={label} onClick={() => onControl(control)}><span>{label}</span><strong>{value}</strong><small>{meta}</small></button>)}
+      {statusCards.map(([label, value, meta, control]) => <button type="button" className="corex-summary-card" key={label} onClick={() => control === "facebookPages" ? onOpenFacebookPages() : onControl(control)}><span>{label}</span><strong>{value}</strong><small>{meta}</small></button>)}
     </div>
     <footer className="corex-summary-workflows">
       <div><span>LIVE WORKFLOWS</span><strong>Command pipeline</strong></div>
@@ -54,8 +54,40 @@ function CorexSummaryDashboard({ facts, workflows, state, workflowActive, workfl
   </section>;
 }
 
+
+function FacebookPagesDashboard({ facts, onBack }) {
+  const connectedCount = facts.facebookCredentials.length;
+  const pages = (connectedCount ? facts.facebookCredentials : [
+    { id: "demo-1", pageName: "Corex Main Page", status: "Ready", quality: 96, posts: 65, growth: 82 },
+    { id: "demo-2", pageName: "Mega Crush Publisher", status: "Planning", quality: 92, posts: 74, growth: 77 },
+    { id: "demo-3", pageName: "Future Forge", status: "Draft", quality: 90, posts: 22, growth: 74 },
+    { id: "demo-4", pageName: "Magic Reel Studio", status: "Review", quality: 89, posts: 56, growth: 72 },
+  ]).slice(0, 7);
+  const pageRows = pages.map((page, index) => ({
+    id: page.id || `page-${index}`,
+    name: page.pageName || page.name || `Facebook Page ${index + 1}`,
+    status: page.status || (connectedCount ? "Connected" : "Setup"),
+    quality: page.quality || Math.max(74, 96 - index * 4),
+    posts: page.posts || Math.max(12, 65 - index * 7),
+    growth: page.growth || Math.max(45, 82 - index * 5),
+  }));
+  const channels = [["Reach", 54, 34], ["Posts", 87, 15], ["Messages", 92, 80], ["Followers", 98, 90]];
+  const improvements = [["Profile Setup", 54, 52], ["Posting Quality", 87, 82], ["Response Speed", 92, 87], ["Consistency", 70, 90]];
+  return <section className="facebook-pages-dashboard" aria-label="Facebook Pages dashboard">
+    <header className="facebook-pages-header"><div><span>FACEBOOK CONTROL</span><h1>Facebook Pages</h1><p>Custom page performance dashboard. Real Facebook page data can be connected here next.</p></div><button type="button" onClick={onBack}>Back to Dashboard</button></header>
+    <div className="facebook-pages-grid">
+      <article className="facebook-report-card wide"><header><h2>Most improved pages</h2><small>{connectedCount ? "Connected data" : "Template data"}</small></header><div className="facebook-page-table">{pageRows.map((page, index) => <button type="button" key={page.id}><b>{index + 1}</b><i>{page.name.slice(0, 2).toUpperCase()}</i><span>{page.name}</span><em style={{ width: `${page.quality}%` }} /><strong>{page.quality}</strong><small>{page.growth}%</small></button>)}</div></article>
+      <article className="facebook-report-card wide"><header><h2>Page leaderboard</h2><select aria-label="Sort Facebook pages"><option>Highest</option><option>Newest</option></select></header><div className="facebook-page-table leaderboard">{pageRows.map((page, index) => <button type="button" key={page.id}><b>{index + 1}</b><i>{page.name.slice(0, 2).toUpperCase()}</i><span>{page.name}</span><em style={{ width: `${page.quality}%` }} /><strong>{page.posts}</strong><small>{page.growth}%</small></button>)}</div></article>
+      <article className="facebook-report-card"><header><h2>Split of Page Scores</h2></header><div className="facebook-bars vertical"><i style={{ height: "26%" }} /><i style={{ height: "48%" }} /><i style={{ height: "64%" }} /><i style={{ height: "88%" }} /></div></article>
+      <article className="facebook-report-card"><header><h2>Channel Wise Split</h2><select aria-label="Filter channels"><option>All Channels</option></select></header><div className="facebook-metric-list">{channels.map(([label, current, previous]) => <div key={label}><span>{label}</span><em><i style={{ width: `${current}%` }} /></em><strong>{current}</strong><small>{previous}</small></div>)}</div></article>
+      <article className="facebook-report-card"><header><h2>Areas of Improvement</h2><select aria-label="Filter improvements"><option>All Pages</option></select></header><div className="facebook-metric-list warn">{improvements.map(([label, current, previous]) => <div key={label}><span>{label}</span><em><i style={{ width: `${current}%` }} /></em><strong>{current}</strong><small>{previous}</small></div>)}</div></article>
+      <article className="facebook-report-card"><header><h2>Areas of Strength</h2><select aria-label="Filter strengths"><option>All Pages</option></select></header><div className="facebook-metric-list good">{channels.map(([label, current, previous]) => <div key={label}><span>{label}</span><em><i style={{ width: `${current}%` }} /></em><strong>{current}</strong><small>{previous}</small></div>)}</div></article>
+    </div>
+  </section>;
+}
+
 export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive = false, workflowError = false, healthContext = {}, executions = [], lastExecutionAt = null, activeWorkflowId = "local-workflow", onOpenWorkflow }) {
-  const [detail, setDetail] = useState(null); const [draft, setDraft] = useState(""); const [messages, setMessages] = useState([]); const [savedWorkflows, setSavedWorkflows] = useState([]); const [agentStates, setAgentStates] = useState({}); const [tasks, setTasks] = useState([]); const [activeWorkspace, setActiveWorkspace] = useState(null); const [officeHandoff, setOfficeHandoff] = useState(null); const inputRef = useRef(null); const taskSequence = useRef(0);
+  const [detail, setDetail] = useState(null); const [dashboardView, setDashboardView] = useState("overview"); const [draft, setDraft] = useState(""); const [messages, setMessages] = useState([]); const [savedWorkflows, setSavedWorkflows] = useState([]); const [agentStates, setAgentStates] = useState({}); const [tasks, setTasks] = useState([]); const [activeWorkspace, setActiveWorkspace] = useState(null); const [officeHandoff, setOfficeHandoff] = useState(null); const inputRef = useRef(null); const taskSequence = useRef(0);
   const healthStates = graph.nodes.map((node) => nodeConnectionHealth(node, healthContext)); const state = controlCenterState({ graph, workflowActive, workflowError, healthStates });
   const workflows = useMemo(() => [{ id: "local-workflow", name: "My Workflow", status: "LOCAL", updatedAt: lastExecutionAt }, ...savedWorkflows.filter((item) => item.id !== "local-workflow")], [savedWorkflows, lastExecutionAt]);
   const facts = useMemo(() => ({ ...dashboardFacts({ graph, googleCredentials: healthContext.googleCredentials, facebookCredentials: healthContext.facebookCredentials, executions, lastExecutionAt }), workflowCount: workflows.length }), [graph, healthContext.googleCredentials, healthContext.facebookCredentials, executions, lastExecutionAt, workflows.length]);
@@ -78,5 +110,5 @@ export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive
     setMessages((current) => [...current, { id: `${id}-result`, role: "jarvis", text: `${name}: ${result}` }]);
   };
   const sendMessage = (event) => { event.preventDefault(); const text = draft.trim(); if (!text) return; taskSequence.current += 1; setMessages((current) => [...current, { id: `message-${taskSequence.current}`, role: "user", text }]); setDraft(""); routeCommand(text); };
-  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}`} data-control-state={state}><div className="dashboard-main-column"><CorexSummaryDashboard facts={facts} workflows={workflows} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} /><OfficeSimulation agentStates={{ ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit }} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
+  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}`} data-control-state={state}><div className="dashboard-main-column">{dashboardView === "facebookPages" ? <FacebookPagesDashboard facts={facts} onBack={() => setDashboardView("overview")} /> : <CorexSummaryDashboard facts={facts} workflows={workflows} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} onOpenFacebookPages={() => setDashboardView("facebookPages")} />}<OfficeSimulation agentStates={{ ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit }} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
 }
