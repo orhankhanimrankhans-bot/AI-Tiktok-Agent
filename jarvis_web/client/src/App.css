@@ -4757,3 +4757,82 @@ button {
   color: #eefcff !important;
   border-color: #263b44 !important;
 }
+
+/* Final dashboard dark contrast polish. */
+.jarvis-app.theme-dark-mode .jarvis-core-header h1,
+.jarvis-app.theme-dark-mode .jarvis-core-header p,
+.jarvis-app.theme-dark-mode .jarvis-conversation h2,
+.jarvis-app.theme-dark-mode .conversation-empty b,
+.jarvis-app.theme-dark-mode .conversation-empty span,
+.jarvis-app.theme-dark-mode .operations-floor h2,
+.jarvis-app.theme-dark-mode .office-simulation h2,
+.jarvis-app.theme-dark-mode .office-floor h2 {
+  color: #eafcff !important;
+  opacity: 1 !important;
+  text-shadow: 0 0 10px rgba(53, 228, 255, .12) !important;
+}
+
+.jarvis-app.theme-dark-mode .jarvis-core-header p,
+.jarvis-app.theme-dark-mode .conversation-empty span,
+.jarvis-app.theme-dark-mode .pipeline-workflow small,
+.jarvis-app.theme-dark-mode .pipeline-count-summary,
+.jarvis-app.theme-dark-mode .strong-engine small,
+.jarvis-app.theme-dark-mode .pipeline-routing-hub small,
+.jarvis-app.theme-dark-mode .operations-floor small,
+.jarvis-app.theme-dark-mode .office-simulation small {
+  color: #9fb8c2 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-dark-mode .jarvis-core-header span,
+.jarvis-app.theme-dark-mode .jarvis-conversation header span,
+.jarvis-app.theme-dark-mode .command-pipeline-heading span,
+.jarvis-app.theme-dark-mode .pipeline-bay-label,
+.jarvis-app.theme-dark-mode .operations-floor header span,
+.jarvis-app.theme-dark-mode .office-simulation header span {
+  color: #35e4ff !important;
+  opacity: 1 !important;
+  text-shadow: 0 0 8px rgba(53, 228, 255, .18) !important;
+}
+
+.jarvis-app.theme-dark-mode .pipeline-workflow,
+.jarvis-app.theme-dark-mode .pipeline-empty-copy,
+.jarvis-app.theme-dark-mode .pipeline-add-workflow,
+.jarvis-app.theme-dark-mode .conversation-message {
+  background: #09242d !important;
+  color: #eafcff !important;
+  border-color: #1f8aa0 !important;
+  opacity: 1 !important;
+}
+
+.jarvis-app.theme-dark-mode .pipeline-workflow strong,
+.jarvis-app.theme-dark-mode .pipeline-empty-copy strong,
+.jarvis-app.theme-dark-mode .pipeline-routing-status strong,
+.jarvis-app.theme-dark-mode .pipeline-routing-hub strong,
+.jarvis-app.theme-dark-mode .strong-engine strong {
+  color: #f4feff !important;
+  opacity: 1 !important;
+  text-shadow: 0 0 8px rgba(53, 228, 255, .14) !important;
+}
+
+.jarvis-app.theme-dark-mode .operational-controls button {
+  background: #ffffff !important;
+  color: #0e1d24 !important;
+  opacity: 1 !important;
+}
+
+.jarvis-app.theme-dark-mode .operational-controls button strong,
+.jarvis-app.theme-dark-mode .operational-controls button small {
+  color: #0e1d24 !important;
+  opacity: 1 !important;
+}
+
+.jarvis-app.theme-dark-mode .jarvis-conversation,
+.jarvis-app.theme-dark-mode .jarvis-core-header,
+.jarvis-app.theme-dark-mode .command-pipeline,
+.jarvis-app.theme-dark-mode .operations-floor,
+.jarvis-app.theme-dark-mode .office-simulation {
+  background: #0f1a20 !important;
+  border-color: #294955 !important;
+}
