@@ -145,3 +145,35 @@ test("Facebook Graph errors are converted to safe public sync states", () => {
   assert.deepEqual(publicSyncError(new FacebookGraphError(429, "meta_4", "limit")), { status: "rate_limited", message: "Facebook API temporarily rate limited." });
   assert.deepEqual(publicSyncError(new FacebookGraphError(400, "meta_100", "bad metric")), { status: "metric_unavailable", message: "Metric unavailable with current Facebook API permissions." });
 });
+
+test("Facebook Control manual sync scans public Page URLs without credentials and preserves manager association", async () => {
+  const db = new DatabaseSync(":memory:");
+  const ids = { fbteam: ["fbteam_aaaaaaaa", "fbteam_bbbbbbbb"], fbpage: ["fbpage_aaaaaaaa", "fbpage_bbbbbbbb"], metric: ["metric_aaaaaaaa", "metric_bbbbbbbb"] };
+  const store = createFacebookControlStore({ db, now: () => "2026-09-12T12:00:00.000Z", generateId: (prefix) => ids[prefix].shift() });
+  const owner = { ownerType: "admin", ownerId: "primary" };
+  const imran = store.createTeam({ name: "Imran Khan" }, owner);
+  const shahab = store.createTeam({ name: "Shahab Khan" }, owner);
+  store.createPage({ pageUrl: "https://www.facebook.com/mega", pageName: "Mega Crush Lab", teamMemberId: imran.id }, owner);
+  store.createPage({ pageUrl: "https://www.facebook.com/range", pageName: "RANGE MASTERS", teamMemberId: shahab.id }, owner);
+  const scans = [];
+  const publicMetricsService = { async scanPage(page) { scans.push(page.pageUrl); return { status: "synced", message: "Public scan collected followers, views, posts.", pageUrl: page.pageUrl, pageName: page.pageName, followersCount: page.pageUrl.includes("mega") ? 1000 : 2000, recentViewsTotal: 3000, postsCount: 4, postsCountType: "recent-public-sample", postsWindow: "latest-10-public-items", capturedAt: "2026-09-12T12:01:00.000Z", source: "public_http_fetch" }; } };
+  const result = await syncFacebookControl({ owner, store, publicMetricsService, logger: { warn() {}, error() {} } });
+  assert.equal(result.status, "synced");
+  assert.deepEqual(scans, ["https://www.facebook.com/mega", "https://www.facebook.com/range"]);
+  assert.equal(result.pages.find((page) => page.pageName === "Mega Crush Lab").teamMemberName, "Imran Khan");
+  assert.equal(result.pages.find((page) => page.pageName === "RANGE MASTERS").metrics.followers, 2000);
+  db.close();
+});
+
+test("Facebook Control public sync keeps last good metrics when a later scan has no public numbers", async () => {
+  const { db, store, owner, page } = setupStore();
+  store.recordPublicMetrics(page.id, { status: "synced", pageUrl: page.pageUrl, followersCount: 100, recentViewsTotal: 200, postsCount: 3, capturedAt: "2026-09-12T12:00:00.000Z", source: "public_http_fetch" }, owner);
+  const publicMetricsService = { async scanPage() { return { status: "metric_unavailable", message: "Public metrics are unavailable.", pageUrl: page.pageUrl, capturedAt: "2026-09-12T12:05:00.000Z", source: "public_http_fetch" }; } };
+  const result = await syncFacebookControl({ owner, store, publicMetricsService, logger: { warn() {}, error() {} } });
+  assert.equal(result.status, "partial");
+  assert.equal(result.pages[0].syncStatus, "metric_unavailable");
+  assert.equal(result.pages[0].metrics.followers, 100);
+  assert.equal(result.pages[0].metrics.views, 200);
+  assert.equal(result.pages[0].metrics.posts, 3);
+  db.close();
+});

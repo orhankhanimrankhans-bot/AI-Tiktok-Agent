@@ -9,17 +9,17 @@ const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 test("Facebook Performance page uses backend sync and the required compact sections", () => {
   assert.match(api, /\/api\/facebook\/performance/);
   assert.match(api, /\/api\/facebook\/sync/);
-  assert.match(performancePage, /Update Metrics/);
+  assert.match(performancePage, /Scan Now/);
   assert.match(performancePage, /Page Performance \/ Ranking/);
   assert.match(performancePage, /Team Performance Graph/);
   for (const column of ["Rank", "Page", "Manager", "Followers", "Views", "Posts", "Score", "Updated", "Open Page"]) {
     assert.match(performancePage, new RegExp(column));
   }
-  assert.match(performancePage, /Waiting for first successful Facebook sync/);
+  assert.match(performancePage, /Waiting for first successful Facebook scan/);
   assert.match(performancePage, /metricStatus\(page, "posts"\)/);
   assert.match(performancePage, /Not available/);
   assert.match(performancePage, /Not synced/);
-  assert.match(performancePage, /some\(\(page\) => !page\.metrics\?\.capturedAt\)/);
+  assert.match(performancePage, /every\(\(page\) => !page\.metrics\?\.capturedAt/);
   assert.doesNotMatch(performancePage, /Pending/);
   assert.match(performancePage, /window\.open\(page\.pageUrl/);
   assert.match(styles, /\.facebook-performance-row/);
@@ -27,8 +27,7 @@ test("Facebook Performance page uses backend sync and the required compact secti
 
 test("team performance logic aggregates synced pages and normalizes scores", () => {
   assert.match(performancePage, /export function teamPerformanceRows\(pages = \[\]\)/);
-  assert.match(performancePage, /if \(!page\.metrics\?\.capturedAt\) continue/);
-  assert.match(performancePage, /const name = page\.teamMemberName \|\| "Unassigned"/);
+  assert.match(performancePage, /const key = page\.teamMemberName \|\| "Unassigned"/);
   assert.match(performancePage, /current\.rawScore \+= page\.performanceScore \|\| facebookPerformanceScore\(page\.metrics\)/);
-  assert.match(performancePage, /Math\.round\(\(row\.rawScore \/ max\) \* 100\)/);
+  assert.match(performancePage, /Math\.round\(\(item\.rawScore \/ max\) \* 100\)/);
 });

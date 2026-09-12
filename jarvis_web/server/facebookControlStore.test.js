@@ -5,7 +5,7 @@ const { createFacebookControlStore, score } = require("./facebookControlStore");
 
 function testStore() {
   const db = new DatabaseSync(":memory:");
-  const ids = { fbteam: ["fbteam_aaaaaaaa"], fbpage: ["fbpage_aaaaaaaa", "fbpage_bbbbbbbb"], metric: ["metric_aaaaaaaa", "metric_bbbbbbbb"] };
+  const ids = { fbteam: ["fbteam_aaaaaaaa"], fbpage: ["fbpage_aaaaaaaa", "fbpage_bbbbbbbb"], metric: ["metric_aaaaaaaa", "metric_bbbbbbbb", "metric_cccccccc"] };
   const store = createFacebookControlStore({ db, now: () => "2026-09-12T12:00:00.000Z", generateId: (prefix) => ids[prefix].shift() });
   return { db, store };
 }
@@ -17,11 +17,12 @@ test("Facebook Control persists pages, teams, sync settings, and empty real metr
   const team = store.createTeam({ name: "Imran", notes: "owner" }, owner);
   const page = store.createPage({ pageUrl: "https://www.facebook.com/corexpage", pageName: "Corex Page", pageId: "123", teamMemberId: team.id, status: "ACTIVE" }, owner);
   assert.equal(page.status, "ACTIVE");
-  assert.equal(page.dataConnectionStatus, "connection_required");
-  assert.deepEqual(page.metrics, { followers: null, views: null, posts: null, reels: null, engagement: null, followerGrowth: null, capturedAt: null });
+  assert.equal(page.dataConnectionStatus, "public_scan_pending");
+  assert.deepEqual(page.metrics, { followers: null, views: null, posts: null, reels: null, engagement: null, followerGrowth: null, capturedAt: null, metricMeta: null });
   assert.equal(store.list(owner).pages[0].performanceScore, 0);
   assert.deepEqual(store.list(otherOwner).pages, []);
   assert.equal(store.updateSync({ refreshIntervalMinutes: 15 }, owner).refreshIntervalMinutes, 15);
+  assert.throws(() => store.updateSync({ refreshIntervalMinutes: 5 }, owner), /Refresh interval is invalid/);
   assert.throws(() => store.createPage({ pageUrl: "https://example.com/not-facebook", pageName: "Bad" }, owner), /Only Facebook Page URLs/);
   db.close();
 });
@@ -74,6 +75,39 @@ test("Facebook Control uses stored metric snapshots without fabricating values a
   assert.equal(failed.lastSyncAt, "2026-09-12T12:00:00.000Z");
   assert.equal(store.deletePage(page.id, owner), true);
   assert.equal(db.prepare("SELECT count(*) AS count FROM facebook_page_metrics").get().count, 0);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM facebook_public_metric_snapshots").get().count, 0);
   assert.equal(store.deletePage(page.id, owner), false);
+  db.close();
+});
+
+test("Facebook Control stores public metric snapshots and preserves last good values on scan failure", () => {
+  const { db, store } = testStore();
+  const owner = { ownerType: "admin", ownerId: "primary" };
+  const page = store.createPage({ pageUrl: "https://www.facebook.com/megacrush", pageName: "Mega Crush Lab" }, owner);
+  const scanned = store.recordPublicMetrics(page.id, {
+    status: "synced",
+    message: "Public scan collected followers, views, posts.",
+    pageName: "Mega Crush Lab",
+    pageUrl: "https://www.facebook.com/megacrush",
+    followersCount: 48200,
+    followersDisplay: "48.2K",
+    followersSource: "public_text",
+    recentViewsTotal: 1800000,
+    videosSampled: 3,
+    postsCount: 23,
+    postsCountType: "recent-public-sample",
+    postsWindow: "latest-10-public-items",
+    scanDepth: 10,
+    source: "public_http_fetch",
+  }, owner);
+  assert.equal(scanned.syncStatus, "synced");
+  assert.equal(scanned.metrics.followers, 48200);
+  assert.equal(scanned.metrics.views, 1800000);
+  assert.equal(scanned.metrics.posts, 23);
+  assert.equal(scanned.metrics.metricMeta.posts.quality, "recent-public-sample");
+  const failed = store.recordPublicMetrics(page.id, { status: "temporarily_blocked", message: "Facebook temporarily blocked public scan.", pageUrl: "https://www.facebook.com/megacrush" }, owner);
+  assert.equal(failed.syncStatus, "temporarily_blocked");
+  assert.equal(failed.metrics.followers, 48200);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM facebook_public_metric_snapshots").get().count, 1);
   db.close();
 });

@@ -32,6 +32,8 @@ const { createWorkflowScheduler } = require("./workflowScheduler");
 const { YouTubeUploadError } = require("./youtubeUpload");
 const { createFacebookControlStore } = require("./facebookControlStore");
 const { registerFacebookControlRoutes } = require("./facebookControlRoutes");
+const { createFacebookPublicMetricsService } = require("./facebookPublicMetricsService");
+const { createFacebookPublicScanScheduler } = require("./facebookPublicScanScheduler");
 
 dotenv.config();
 
@@ -270,6 +272,7 @@ let workflowExecutor;
 let workflowStore;
 let workflowScheduler;
 let facebookVerificationWorker;
+let facebookPublicScanScheduler;
 const BINARY_DATA_DIR = path.join(path.dirname(JARVIS_DB_PATH), "binary-data");
 
 function makePopupResultHtml({ status, message = "", credentialId = null, service = "drive" }) {
@@ -924,7 +927,8 @@ async function startServer() {
   facebookCredentialStore.open();
   const facebookPublicationStore = new FacebookPublicationStore(credentialStore.db); facebookPublicationStore.open();
   const facebookControlStore = createFacebookControlStore({ db: credentialStore.db });
-  registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore), facebookCredentialStore, graphServiceFactory: facebookGraphService, logger: console });
+  const facebookPublicMetricsService = createFacebookPublicMetricsService({ logger: console });
+  registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore), facebookCredentialStore, graphServiceFactory: facebookGraphService, publicMetricsService: facebookPublicMetricsService, logger: console });
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   executionServices = createExecutionServices({ credentialStore, createOAuthClient,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
@@ -948,9 +952,11 @@ async function startServer() {
     }, logger: console });
   workflowScheduler = createWorkflowScheduler({ workflowStore, workflowExecutor, executionStore, logger: console });
   facebookVerificationWorker = createFacebookVerificationWorker({ store: facebookPublicationStore, credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, logger: console });
+  facebookPublicScanScheduler = createFacebookPublicScanScheduler({ store: facebookControlStore, publicMetricsService: facebookPublicMetricsService, logger: console });
   const server = app.listen(PORT, () => {
     workflowScheduler.start();
     facebookVerificationWorker.start();
+    facebookPublicScanScheduler.start();
     console.log("");
     console.log("=================================");
     console.log(" COREX BACKEND");
@@ -969,6 +975,7 @@ async function startServer() {
     else console.error("FATAL ERROR: Corex backend listener failed.");
     workflowScheduler.stop();
     facebookVerificationWorker.stop();
+    facebookPublicScanScheduler?.stop();
     process.exitCode = 1;
   });
   return server;
