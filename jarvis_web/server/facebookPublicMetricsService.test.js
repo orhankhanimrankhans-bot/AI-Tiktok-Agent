@@ -1,6 +1,6 @@
 ﻿const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createFacebookPublicMetricsService, extractFollowerCount, extractPageName, extractRecentPosts, extractVideoTargets, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime } = require("./facebookPublicMetricsService");
+const { createFacebookPublicMetricsService, extractFollowerCount, extractPageName, extractRecentPosts, extractVideoTargets, extractReelViews, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime } = require("./facebookPublicMetricsService");
 
 test("public Facebook URL validation accepts only expected Facebook hosts", () => {
   assert.equal(normalizeFacebookUrl("facebook.com/corex"), "https://facebook.com/corex");
@@ -83,6 +83,15 @@ test("video target parser normalizes public Facebook reel and watch links", () =
   assert.ok(targets.some((url) => url.includes('/watch/?v=987654')));
 });
 
+
+test("reel parser counts every visible reel view chip including repeated values", () => {
+  const html = '<script>{"video_id":"r1","play_count_reduced":"1K"},{"video_id":"r2","play_count_reduced":"1K"},{"video_id":"r3","play_count_reduced":"2.5K"}</script>';
+  const reels = extractReelViews(html, 10);
+  assert.equal(reels.sampled, 3);
+  assert.equal(reels.total, 4500);
+  assert.equal(reels.type, "public-reels-visible-views");
+});
+
 test("public scanner prioritizes the Facebook reels tab and sums visible tile views", async () => {
   const requested = [];
   const service = createFacebookPublicMetricsService({
@@ -99,6 +108,8 @@ test("public scanner prioritizes the Facebook reels tab and sums visible tile vi
   assert.equal(scan.followersCount, 2100);
   assert.equal(scan.recentViewsTotal, 44800);
   assert.equal(scan.videosSampled, 5);
+  assert.equal(scan.postsCount, 5);
+  assert.equal(scan.postsCountType, "public-reels-count");
   assert.ok(requested[1].includes("sk=reels_tab"));
 });
 

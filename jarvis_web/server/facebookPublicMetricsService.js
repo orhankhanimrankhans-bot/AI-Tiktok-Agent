@@ -1,10 +1,10 @@
-﻿"use strict";
+"use strict";
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const ALLOWED_FACEBOOK_HOSTS = new Set(["facebook.com", "www.facebook.com", "m.facebook.com", "mbasic.facebook.com", "mobile.facebook.com", "web.facebook.com"]);
-const DEFAULT_SCAN_DEPTH = 10;
+const DEFAULT_SCAN_DEPTH = 100;
 const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_REASONABLE_PUBLIC_COUNT = 2_500_000_000;
 const SUCCESS_STATUSES = new Set([200, 201, 202]);
@@ -189,6 +189,40 @@ function extractVideoViews(html, depth = DEFAULT_SCAN_DEPTH) {
   return { total: samples.reduce((sum, item) => sum + item.count, 0), sampled: samples.length, samples };
 }
 
+function extractReelViews(html, depth = DEFAULT_SCAN_DEPTH) {
+  const source = decodeEntities(String(html || '').replace(/\n/g, ' ').replace(/\\\"/g, '"'));
+  const patterns = [
+    /"(?:play_count_reduced|playCountReduced)"\s*:?\s*"([^"{}]+)"/gi,
+    /"(?:play_count|playCount|video_view_count|videoViewCount|view_count|viewCount)"\s*:?\s*(?:\{[^{}]{0,100}?"(?:count|value|text)"\s*:?\s*)?"?([0-9][0-9,\.]*\s*[KMB]?)"?/gi,
+  ];
+  const samples = [];
+  const seenKeys = new Set();
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(source)) && samples.length < depth) {
+      const display = decodeEntities(match[1] || '').trim();
+      const count = parseSocialCount(display);
+      if (count === null) continue;
+      const contextStart = Math.max(0, match.index - 900);
+      const contextEnd = Math.min(source.length, pattern.lastIndex + 900);
+      const context = source.slice(contextStart, contextEnd);
+      const idMatch = context.match(/"(?:video_id|videoID|videoId|reel_id|reelID|reelId|post_id|postID|storyID|story_id|id)"\s*:?\s*"?([A-Za-z0-9_.:-]{5,})"?/i);
+      const key = idMatch ? `${idMatch[1]}:${display.toLowerCase()}` : `${match.index}:${display.toLowerCase()}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      samples.push({ count, display, key: idMatch?.[1] || null });
+    }
+    if (samples.length >= depth) break;
+  }
+  return {
+    total: samples.reduce((sum, item) => sum + item.count, 0),
+    sampled: samples.length,
+    samples,
+    type: samples.length ? 'public-reels-visible-views' : null,
+    window: samples.length ? `latest-${samples.length}-public-reels` : null,
+  };
+}
+
 function normalizeFacebookTargetUrl(rawUrl, baseUrl) {
   const decoded = decodeEntities(String(rawUrl || "")).replace(/\\\//g, "/").trim();
   if (!decoded || /^(?:#|javascript:|mailto:)/i.test(decoded)) return null;
@@ -307,18 +341,21 @@ async function fetchWithTimeout(fetchImpl, url, timeoutMs) {
 
 function mergeHtmlScan(scan, html, sourceUrl, depth, page) {
   const followers = extractFollowerCount(html, page);
-  const views = extractVideoViews(html, depth);
-  const posts = extractRecentPosts(html, depth);
+  const reelViews = extractReelViews(html, depth);
+  const views = reelViews.sampled ? reelViews : extractVideoViews(html, depth);
+  const posts = reelViews.sampled
+    ? { count: reelViews.sampled, type: 'public-reels-count', window: reelViews.window }
+    : extractRecentPosts(html, depth);
   scan.pageName ||= extractPageName(html, page?.pageName || page?.page_name || "");
   scan.pagePictureUrl ||= extractPagePicture(html);
   if (scan.followersCount === null && followers.count !== null) { scan.followersCount = followers.count; scan.followersDisplay = followers.display; scan.followersSource = `${followers.source}:${new URL(sourceUrl).hostname}`; }
   if (views.sampled && (scan.recentViewsTotal === null || views.total > scan.recentViewsTotal)) { scan.recentViewsTotal = views.total; scan.videosSampled = views.sampled; }
-  if (posts.count && (scan.postsCount === null || posts.count > scan.postsCount)) { scan.postsCount = posts.count; scan.postsCountType = posts.type; scan.postsWindow = posts.window; }
+  if (posts.count && (scan.postsCount === null || posts.count > scan.postsCount || posts.type === 'public-reels-count')) { scan.postsCount = posts.count; scan.postsCountType = posts.type; scan.postsWindow = posts.window; }
 }
 
 function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), scanDepth = DEFAULT_SCAN_DEPTH, timeoutMs = DEFAULT_TIMEOUT_MS, logger = console, snapshotDir = path.join(__dirname, "tmp-diagnostics") } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("fetch implementation is required");
-  const depth = Math.max(1, Math.min(20, Number(scanDepth) || DEFAULT_SCAN_DEPTH));
+  const depth = Math.max(1, Math.min(200, Number(scanDepth) || DEFAULT_SCAN_DEPTH));
   return Object.freeze({
     async scanPage(page, options = {}) {
       const pageUrl = normalizeFacebookUrl(page?.pageUrl || page?.page_url);
@@ -370,8 +407,7 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
         }
         let followers; let views; let posts;
         try { followers = extractFollowerCount(html, page); } catch (error) { followers = { count: null, display: null, source: null }; attempt.parserErrors.push(`followers:${error?.message || String(error)}`); }
-        try { views = extractVideoViews(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; attempt.parserErrors.push(`views:${error?.message || String(error)}`); }
-        try { posts = extractRecentPosts(html, depth); } catch (error) { posts = { count: null, type: null, window: null }; attempt.parserErrors.push(`posts:${error?.message || String(error)}`); }
+        try { const reelViews = extractReelViews(html, depth); views = reelViews.sampled ? reelViews : extractVideoViews(html, depth); posts = reelViews.sampled ? { count: reelViews.sampled, type: 'public-reels-count', window: reelViews.window } : extractRecentPosts(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; posts = { count: null, type: null, window: null }; attempt.parserErrors.push(`views_posts:${error?.message || String(error)}`); }
         try {
           for (const targetUrl of extractVideoTargets(html, response.url || url, depth)) {
             if (!videoTargets.has(videoKeyForUrl(targetUrl))) videoTargets.set(videoKeyForUrl(targetUrl), targetUrl);
@@ -411,7 +447,7 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
           targetAttempt.pageTitle = extractPageName(html, "") || (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ? stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)[1]) : "");
           targetAttempt.responseType = classifyFacebookResponse({ status: response.status, finalUrl: response.url || targetUrl, title: targetAttempt.pageTitle, html });
           let views;
-          try { views = extractVideoViews(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; targetAttempt.parserErrors.push(`views:${error?.message || String(error)}`); }
+          try { const reelViews = extractReelViews(html, depth); views = reelViews.sampled ? reelViews : extractVideoViews(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; targetAttempt.parserErrors.push(`views:${error?.message || String(error)}`); }
           if (targetAttempt.parserErrors.length) diagnostics.parserErrors.push({ url: targetAttempt.url, errors: targetAttempt.parserErrors });
           targetAttempt.extraction = { viewsFound: Boolean(views.sampled), videosDetected: views.sampled, viewsDetected: views.sampled ? views.total : null };
           diagnostics.videoTargetAttempts.push(targetAttempt);
@@ -471,4 +507,4 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
   });
 }
 
-module.exports = { FacebookPublicMetricsError, createFacebookPublicMetricsService, decodeEntities, extractFollowerCount, extractPageName, extractPagePicture, extractRecentPosts, extractVideoTargets, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime };
+module.exports = { FacebookPublicMetricsError, createFacebookPublicMetricsService, decodeEntities, extractFollowerCount, extractPageName, extractPagePicture, extractRecentPosts, extractReelViews, extractVideoTargets, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime };
