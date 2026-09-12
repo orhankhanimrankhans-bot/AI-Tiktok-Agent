@@ -31,8 +31,8 @@ test("conversation routes tasks to agents and reports unavailable connectors hon
   assert.match(dashboard, /handoffIntent\(text\)/); assert.match(dashboard, /setOfficeHandoff/); assert.match(dashboard, /No external action was claimed/);
 });
 
-test("technical dashboard replaces the office with coded pipeline modules", () => {
-  assert.doesNotMatch(dashboard, /<OfficeSimulation/); assert.doesNotMatch(dashboard, /jarvis-ai-office\.webp/);
+test("technical dashboard keeps the office below coded pipeline modules", () => {
+  assert.match(dashboard, /<OfficeSimulation/); assert.match(office, /jarvis-ai-office\.webp/);
   assert.match(dashboard, /technical-plane-labels/); assert.match(dashboard, /INTERFACES/); assert.match(dashboard, /CONTROL PLANE/); assert.match(dashboard, /DATA PLANE/);
   assert.match(dashboard, /privacy-shield/); assert.match(dashboard, /technical-flow-lines/); assert.match(dashboard, /technical-workflow-strip/);
   assert.match(dashboard, /facts\.facebookCredentials\.length \? "Facebook connected" : "Limited"/); assert.match(dashboard, /Amazon is not connected/);
