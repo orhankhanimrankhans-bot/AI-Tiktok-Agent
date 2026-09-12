@@ -2275,6 +2275,7 @@ function App() {
   const [topPage, setTopPage] =
     useState(() => (typeof window !== "undefined" && window.location.pathname === "/facebook-performance") ? "FACEBOOK PERFORMANCE" : "WORKFLOW");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [workflowTab, setWorkflowTab] =
     useState("EDITOR");
@@ -2285,7 +2286,7 @@ function App() {
   const [pendingOpenWorkflowId, setPendingOpenWorkflowId] = useState(null);
   const [openingWorkflowId, setOpeningWorkflowId] = useState(null);
   const [workflowManagerRefreshKey, setWorkflowManagerRefreshKey] = useState(0);
-  const navigateTopPage = (page, path = null) => { setTopPage(page); if (path && typeof window !== "undefined" && window.location.pathname !== path) window.history.pushState({ corexPage: page }, "", path); };
+  const navigateTopPage = (page, path = null) => { setTopPage(page); setMobileMenuOpen(false); if (path && typeof window !== "undefined" && window.location.pathname !== path) window.history.pushState({ corexPage: page }, "", path); };
   useEffect(() => { const handlePopState = () => { setTopPage((current) => window.location.pathname === "/facebook-performance" ? "FACEBOOK PERFORMANCE" : current === "FACEBOOK PERFORMANCE" ? "DASHBOARD" : current); }; window.addEventListener("popstate", handlePopState); handlePopState(); return () => window.removeEventListener("popstate", handlePopState); }, []);
 
   const [showNodePicker, setShowNodePicker] =
@@ -3369,9 +3370,18 @@ function App() {
   const themeModeClass = isLightTheme ? " theme-light-mode" : " theme-dark-mode";
 
   return (
-    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${themeModeClass}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
+    <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${themeModeClass}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}${mobileMenuOpen ? " mobile-menu-open" : ""}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
       data-can-edit-workflow={can("edit_workflow") ? "true" : "false"} style={appearanceCssVariables(canvasAppearance)}>
+      <header className="mobile-app-header" aria-label="Corex mobile header">
+        <button type="button" className="mobile-menu-button" aria-label="Open Corex navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}>☰</button>
+        <div><strong>COREX</strong><span>{workflowStatus === "running" ? "Running" : "Online"}</span></div>
+        <button type="button" className="mobile-header-orb" aria-label="Toggle desktop sidebar" onClick={() => setSidebarOpen((open) => !open)}>ISK</button>
+      </header>
+
+      <button type="button" className="mobile-sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)} />
+
       <aside className="sidebar" aria-label="Corex navigation">
+        <button type="button" className="mobile-sidebar-close" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}>×</button>
 
         <button
           type="button"
@@ -3408,7 +3418,7 @@ function App() {
             ["⚙", "Settings"],
             ["〽", "System Health"],
           ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label]))).map(([icon, label]) => (
-            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") navigateTopPage("DASHBOARD", "/"); else if (label === "Facebook Control") navigateTopPage("FACEBOOK CONTROL", "/"); }}>
+            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") navigateTopPage("DASHBOARD", "/"); else if (label === "Facebook Control") navigateTopPage("FACEBOOK CONTROL", "/"); else setMobileMenuOpen(false); }}>
               <span>{icon}</span>
               {label}
             </button>

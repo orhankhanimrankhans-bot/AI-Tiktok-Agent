@@ -6623,3 +6623,349 @@ html[data-theme="light"] .access-preset,
 .facebook-page-name small { margin-top: 2px; color: #8fb4c1; font-weight: 600; }
 .facebook-waiting-state { margin: 0; padding: 18px; border: 1px dashed rgba(69,226,246,.26); border-radius: 12px; color: #9bb3bf; text-align: center; }
 @media (max-width: 1080px) { .facebook-performance-hero { align-items: flex-start; flex-direction: column; } .facebook-performance-meta { flex-direction: column; } }
+
+/* =========================================================
+   COREX responsive system: desktop unchanged, tablet/mobile usable.
+   Breakpoints: desktop >=1200px, tablet 768-1199px, mobile <=767px, small <=480px.
+   ========================================================= */
+html, body, #root { max-width: 100%; overflow-x: hidden; }
+.mobile-app-header,
+.mobile-sidebar-backdrop,
+.mobile-sidebar-close,
+.mobile-conversation-fab,
+.conversation-mobile-backdrop,
+.conversation-close { display: none; }
+.jarvis-app { min-height: 100dvh; }
+.main-area { min-width: 0; }
+button, a, input, select, textarea { max-width: 100%; }
+input, select, textarea { font-size: 16px; }
+
+@media (max-width: 1199px) {
+  .jarvis-app .top-nav { overflow-x: auto; justify-content: flex-start; gap: 8px; padding-inline: 14px; scrollbar-width: thin; }
+  .jarvis-app .top-nav button { min-width: 132px; border-radius: 12px !important; flex: 0 0 auto; }
+  .jarvis-app .workflow-header { grid-template-columns: 1fr !important; gap: 10px !important; align-items: stretch !important; }
+  .jarvis-app .workflow-title { white-space: normal !important; }
+  .jarvis-app .workflow-title h1 { max-width: 100% !important; white-space: normal !important; }
+  .jarvis-app .workflow-tabs { display: flex !important; width: 100%; overflow-x: auto; }
+  .jarvis-app .workflow-tabs button { min-width: 120px; }
+  .jarvis-app .workflow-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .jarvis-app .workflow-actions button { min-height: 40px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facebook-control-layout,
+  .security-console-layout,
+  .security-overview,
+  .security-advanced-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 767px) {
+  :root { font-size: 15px; }
+  .jarvis-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: block;
+    overflow: hidden;
+    padding-top: calc(58px + env(safe-area-inset-top, 0px));
+  }
+  .mobile-app-header {
+    position: fixed;
+    z-index: 1200;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: calc(58px + env(safe-area-inset-top, 0px));
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    align-items: center;
+    gap: 8px;
+    padding: env(safe-area-inset-top, 0px) 10px 0;
+    color: #eaffff;
+    background: linear-gradient(180deg, rgba(5,17,24,.98), rgba(5,13,18,.96));
+    border-bottom: 1px solid rgba(69,226,246,.24);
+    box-shadow: 0 12px 30px rgba(0,0,0,.28);
+  }
+  .mobile-app-header strong { display: block; color: #35e7ff; font-size: 17px; letter-spacing: .18em; }
+  .mobile-app-header span { display: block; margin-top: 2px; color: #8fb4c1; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+  .mobile-menu-button,
+  .mobile-header-orb,
+  .mobile-sidebar-close {
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    color: #eaffff;
+    background: rgba(12,38,48,.86);
+    border: 1px solid rgba(69,226,246,.42);
+    border-radius: 14px;
+    font-weight: 900;
+  }
+  .mobile-menu-button { font-size: 22px; }
+  .mobile-header-orb { color: #35e7ff; font-size: 12px; letter-spacing: .08em; }
+  .mobile-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    display: block;
+    pointer-events: none;
+    opacity: 0;
+    background: rgba(0,0,0,.58);
+    border: 0;
+    transition: opacity .2s ease;
+  }
+  .jarvis-app.mobile-menu-open .mobile-sidebar-backdrop { pointer-events: auto; opacity: 1; }
+  .jarvis-app .sidebar,
+  .jarvis-app.sidebar-open .sidebar,
+  .jarvis-app.sidebar-collapsed .sidebar {
+    position: fixed !important;
+    z-index: 1100 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: min(86vw, 320px) !important;
+    min-width: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 14px calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    overflow-y: auto !important;
+    transform: translateX(-105%) !important;
+    transition: transform .22s ease !important;
+    border-right: 1px solid rgba(69,226,246,.24) !important;
+    box-shadow: 24px 0 60px rgba(0,0,0,.48);
+  }
+  .jarvis-app.mobile-menu-open .sidebar { transform: translateX(0) !important; }
+  .jarvis-app.sidebar-collapsed .sidebar * { visibility: visible !important; }
+  .jarvis-app.sidebar-collapsed .brand,
+  .jarvis-app.sidebar-collapsed .sidebar-brand-toggle { justify-content: flex-start !important; }
+  .jarvis-app.sidebar-collapsed .brand > div:not(.jarvis-logo),
+  .jarvis-app.sidebar-collapsed .sidebar-brand-toggle > div:not(.jarvis-logo),
+  .jarvis-app.sidebar-collapsed .sidebar-bottom small,
+  .jarvis-app.sidebar-collapsed .version,
+  .jarvis-app.sidebar-collapsed .assisted { display: block !important; }
+  .jarvis-app.sidebar-collapsed .side-nav { align-items: stretch !important; }
+  .jarvis-app.sidebar-collapsed .side-nav button,
+  .jarvis-app .side-nav button {
+    width: 100% !important;
+    min-height: 48px !important;
+    height: auto !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    padding: 10px 12px !important;
+    overflow: visible !important;
+    border-radius: 14px !important;
+    font-size: 15px !important;
+    line-height: 1.2 !important;
+    white-space: normal !important;
+  }
+  .jarvis-app.sidebar-collapsed .side-nav button span,
+  .jarvis-app .side-nav button span { width: 34px !important; min-width: 34px !important; height: 34px !important; font-size: 13px !important; }
+  .mobile-sidebar-close { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; }
+  .jarvis-app .sidebar-brand-toggle { padding-right: 48px !important; }
+  .jarvis-app .main-area {
+    width: 100%;
+    height: calc(100vh - 58px);
+    height: calc(100dvh - 58px - env(safe-area-inset-top, 0px));
+    overflow: hidden;
+  }
+  .jarvis-app .top-nav {
+    height: auto;
+    min-height: 54px;
+    padding: 8px 10px;
+    justify-content: flex-start;
+    background: rgba(9,18,24,.96);
+  }
+  .jarvis-app .top-nav button { min-width: auto; flex: 1 0 112px; min-height: 42px; font-size: 12px; }
+  .workflow-page,
+  .facebook-control-page,
+  .facebook-performance-page,
+  .placeholder-page,
+  .simple-page,
+  .security-page { min-height: 0; height: 100%; overflow-y: auto; overflow-x: hidden; }
+  .workflow-header { position: relative; z-index: 8; }
+  .jarvis-app .workflow-tabs { gap: 6px; padding: 0; background: transparent; border: 0; }
+  .jarvis-app .workflow-tabs button { min-width: 112px; min-height: 42px; border: 1px solid rgba(69,226,246,.22); background: rgba(8,24,32,.72); }
+  .jarvis-app .workflow-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .jarvis-app .workflow-actions button { min-width: 0; min-height: 44px; padding-inline: 8px; }
+  .editor-layout { min-height: 0; height: 100%; }
+  .workflow-canvas { min-height: 0; touch-action: none; overflow: hidden; }
+  .canvas-command-tools { top: 10px !important; right: 10px !important; grid-auto-flow: column; grid-template-columns: repeat(4, 44px); }
+  .jarvis-app .canvas-command-tools button,
+  .jarvis-app .zoom-tools button { width: 44px !important; min-width: 44px !important; height: 44px !important; border-radius: 12px !important; }
+  .zoom-tools { left: 10px; bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
+  .logs-bar { height: 34px; padding-inline: 10px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .empty-workflow { flex-direction: column; gap: 12px; padding: 18px; }
+  .empty-card { width: min(100%, 210px); height: 118px; }
+  .node-picker { position: fixed; inset: auto 0 0 0; z-index: 95; width: 100vw !important; min-width: 0 !important; height: min(82dvh, 640px); border-left: 0; border-top: 1px solid rgba(69,226,246,.24); border-radius: 20px 20px 0 0; }
+  .node-editor-overlay { padding: 0 !important; align-items: stretch; }
+  .node-editor-window { width: 100vw !important; height: 100dvh !important; border-radius: 0 !important; }
+  .node-editor-body,
+  .node-editor-body.google-three-column { grid-template-columns: 1fr !important; overflow-y: auto; }
+  .node-editor-tabs { overflow-x: auto; }
+  .node-editor-tabs > button,
+  .node-editor-tabs .execute-step { min-height: 44px; flex: 0 0 auto; }
+  .workflow-manager { width: 100vw !important; border-left: 0; }
+  .workflow-manager-row { min-height: 86px; max-height: none; align-items: flex-start; }
+  .workflow-manager-toolbar,
+  .workflow-manager-create > div,
+  .workflow-manager-selection-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .workflow-manager-toolbar button,
+  .workflow-manager-create button,
+  .workflow-manager-selection-actions button { min-height: 44px; }
+  .dashboard-page,
+  .jarvis-control-center { padding: 10px !important; overflow-x: hidden; }
+  .jarvis-control-center { grid-template-columns: 1fr !important; }
+  .technical-dashboard .corex-summary-hero { grid-template-columns: 1fr !important; gap: 14px; padding: 18px !important; }
+  .technical-dashboard .corex-summary-hero h1 { font-size: clamp(24px, 8vw, 34px); }
+  .technical-dashboard .corex-summary-grid.top-three,
+  .technical-dashboard .corex-summary-grid { grid-template-columns: 1fr !important; }
+  .technical-dashboard .corex-summary-card { min-height: 118px; padding: 18px; }
+  .technical-dashboard .corex-summary-card strong { font-size: clamp(30px, 11vw, 44px); }
+  .technical-dashboard .corex-live-engine { min-height: auto; padding: 14px; }
+  .technical-dashboard .corex-live-engine > header { align-items: flex-start; gap: 8px; flex-direction: column; }
+  .technical-dashboard .engine-stage { grid-template-columns: 1fr !important; min-height: 0; gap: 12px; }
+  .technical-dashboard .engine-core { width: 132px; height: 132px; order: -1; }
+  .technical-dashboard .engine-core strong { font-size: 24px; }
+  .technical-dashboard .engine-pipeline { min-height: 62px; padding: 12px 14px; }
+  .technical-dashboard .engine-pipeline::after { display: none !important; }
+  .jarvis-conversation {
+    position: fixed !important;
+    z-index: 1040;
+    inset: auto 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    height: min(78dvh, 640px) !important;
+    min-height: 0 !important;
+    transform: translateY(calc(100% + 28px));
+    opacity: 0;
+    pointer-events: none;
+    border-radius: 20px;
+    transition: transform .22s ease, opacity .22s ease;
+  }
+  .jarvis-control-center.conversation-open .jarvis-conversation { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  .mobile-conversation-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 1030;
+    min-width: 68px;
+    min-height: 48px;
+    display: grid;
+    place-items: center;
+    color: #06141a;
+    background: linear-gradient(135deg, #35e7ff, #40e88f);
+    border: 0;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: .1em;
+    box-shadow: 0 14px 30px rgba(0,0,0,.32);
+  }
+  .conversation-mobile-backdrop { position: fixed; inset: 0; z-index: 1035; display: block; pointer-events: none; opacity: 0; background: rgba(0,0,0,.5); border: 0; transition: opacity .2s ease; }
+  .jarvis-control-center.conversation-open .conversation-mobile-backdrop { pointer-events: auto; opacity: 1; }
+  .conversation-close { display: grid; place-items: center; width: 40px; height: 40px; color: var(--jarvis-dashboard-heading); background: var(--jarvis-dashboard-card); border: 1px solid var(--jarvis-dashboard-border); border-radius: 12px; font-size: 22px; }
+  .jarvis-conversation header i { display: none; }
+  .conversation-input { grid-template-columns: 44px minmax(0, 1fr) 58px; }
+  .conversation-input button { min-height: 44px; }
+  .conversation-input input { min-height: 44px; }
+  .control-detail-backdrop { padding: calc(68px + env(safe-area-inset-top, 0px)) 10px 10px !important; align-items: flex-end; }
+  .control-detail-drawer { width: 100%; max-height: 82dvh; overflow: auto; border-radius: 18px; }
+  .facebook-performance-page,
+  .facebook-control-page,
+  .security-console,
+  .security-page { padding: 12px !important; }
+  .facebook-performance-hero,
+  .facebook-control-hero { flex-direction: column; align-items: stretch; padding: 16px; }
+  .facebook-performance-hero h1,
+  .facebook-control-hero h1 { font-size: clamp(22px, 8vw, 28px); }
+  .facebook-performance-hero > div:last-child,
+  .facebook-control-hero > div:last-child,
+  .facebook-control-actions,
+  .team-add-row { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .facebook-performance-hero button,
+  .facebook-control-hero button,
+  .facebook-control-actions button,
+  .team-add-row button,
+  .facebook-control-table button { min-height: 44px; }
+  .facebook-performance-meta { display: grid; grid-template-columns: 1fr; }
+  .facebook-performance-table { display: grid; gap: 12px; overflow: visible; border: 0; }
+  .facebook-performance-row.head { display: none; }
+  .facebook-performance-row {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    padding: 14px;
+    border: 1px solid rgba(69,226,246,.18);
+    border-radius: 14px;
+    background: rgba(8,35,46,.74);
+  }
+  .facebook-performance-row b { grid-column: 1 / -1; color: #72edff; }
+  .facebook-performance-row .facebook-page-name { grid-column: 1 / -1; min-height: 44px; }
+  .facebook-performance-row > span,
+  .facebook-performance-row > strong { white-space: normal; overflow: visible; text-overflow: clip; }
+  .facebook-performance-row > span:nth-child(n+4)::before,
+  .facebook-performance-row > strong::before { display: block; margin-bottom: 2px; color: #8fb4c1; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .facebook-performance-row > span:nth-child(4)::before { content: "Manager"; }
+  .facebook-performance-row > span:nth-child(5)::before { content: "Followers"; }
+  .facebook-performance-row > span:nth-child(6)::before { content: "Views"; }
+  .facebook-performance-row > span:nth-child(7)::before { content: "Reels"; }
+  .facebook-performance-row > strong::before { content: "Score"; }
+  .facebook-performance-row > span:nth-child(9)::before { content: "Updated"; }
+  .facebook-performance-row a { grid-column: 1 / -1; min-height: 44px; display: grid; place-items: center; }
+  .technical-dashboard .team-performance-row { grid-template-columns: 1fr; gap: 8px; }
+  .technical-dashboard .team-performance-row strong { justify-self: end; }
+  .facebook-control-toolbar { flex-direction: column; align-items: stretch; }
+  .facebook-control-toolbar label { display: grid; gap: 8px; }
+  .page-form,
+  .security-form-grid,
+  .access-preset-grid { grid-template-columns: 1fr !important; }
+  .facebook-control-table article { grid-template-columns: 1fr !important; gap: 12px; }
+  .facebook-control-table article > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }
+  .security-console-heading,
+  .security-card-title { flex-direction: column; align-items: stretch; }
+  .security-status-pill { min-width: 0; }
+  .security-table { border: 0; gap: 10px; overflow: visible; }
+  .security-row-head { display: none; }
+  .security-row,
+  .security-session-table .security-row { grid-template-columns: 1fr !important; gap: 8px; border: 1px solid rgba(66,223,245,.18); border-radius: 14px; }
+  .security-row-actions { display: grid; grid-template-columns: 1fr 1fr; justify-content: stretch; }
+  .security-row-actions button,
+  .security-card button,
+  .security-card input,
+  .security-card select,
+  .security-confirm-dialog button { min-height: 44px; }
+  .metrics { grid-template-columns: 1fr; }
+  .simple-page,
+  .placeholder-page { padding: 18px; }
+}
+
+@media (max-width: 480px) {
+  .jarvis-app .top-nav button { flex-basis: 96px; font-size: 11px; }
+  .jarvis-app .workflow-actions { grid-template-columns: 1fr; }
+  .jarvis-app .workflow-tabs button { min-width: 98px; }
+  .canvas-command-tools { grid-template-columns: repeat(2, 44px); }
+  .zoom-tools { transform: scale(.96); transform-origin: left bottom; }
+  .technical-dashboard .corex-summary-card { min-height: 104px; }
+  .technical-dashboard .engine-core { width: 112px; height: 112px; }
+  .facebook-performance-row { grid-template-columns: 1fr; }
+  .facebook-control-table article > div:last-child,
+  .security-row-actions { grid-template-columns: 1fr; }
+  .conversation-input { grid-template-columns: 44px minmax(0, 1fr); }
+  .conversation-input button[type="submit"] { grid-column: 1 / -1; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .workflow-node { touch-action: none; }
+  .node-delete-button { opacity: 1; }
+  .workflow-node,
+  .corex-summary-card,
+  .facebook-page-name,
+  .workflow-manager-row { -webkit-tap-highlight-color: transparent; }
+}
+
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
+  .technical-dashboard .engine-core .ring,
+  .workflow-canvas.active-server-workflow .workflow-node,
+  .workflow-canvas.active-server-workflow .node-port,
+  .pipeline-running .pipeline-route-map path,
+  .pipeline-running .pipeline-core-ring,
+  .pipeline-running .pipeline-core-axis,
+  .pipeline-running .engine-ring { animation-duration: 0s !important; animation: none !important; }
+}
