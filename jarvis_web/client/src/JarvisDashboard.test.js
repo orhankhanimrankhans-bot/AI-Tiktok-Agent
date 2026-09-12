@@ -33,7 +33,7 @@ test("conversation routes tasks to agents and reports unavailable connectors hon
 
 test("technical dashboard keeps the office below coded pipeline modules", () => {
   assert.match(dashboard, /<OfficeSimulation/); assert.match(office, /jarvis-ai-office\.webp/);
-  assert.match(dashboard, /compact-plane-labels/); assert.match(dashboard, /INTERFACES/); assert.match(dashboard, /CONTROL PLANE/); assert.match(dashboard, /DATA PLANE/);
+  assert.doesNotMatch(dashboard, /compact-plane-labels/); assert.doesNotMatch(dashboard, /CONTROL PLANE/); assert.match(dashboard, /input-grid/); assert.match(dashboard, /tool-grid/); assert.match(dashboard, /memory-grid/);
   assert.doesNotMatch(dashboard, /privacy-shield/); assert.doesNotMatch(dashboard, /technical-flow-lines/); assert.match(dashboard, /compact-flow-arrow/); assert.match(dashboard, /technical-workflow-strip/);
   assert.match(dashboard, /facts\.facebookCredentials\.length \? "Facebook connected" : "Limited"/); assert.match(dashboard, /Amazon is not connected/);
   assert.match(styles, /\.compact-pipeline-grid/); assert.match(styles, /\.compact-flow-arrow/); assert.match(styles, /\.technical-workflow-strip/); assert.match(styles, /@media \(max-width: 1080px\)[\s\S]*compact-pipeline-grid/);

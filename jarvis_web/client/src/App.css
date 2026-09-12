@@ -5952,3 +5952,87 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+/* Clean balanced dashboard cards: remove plane gutter and give every card room. */
+.technical-dashboard .balanced-technical-board .compact-pipeline-grid {
+  grid-template-columns: minmax(340px, .9fr) 84px minmax(430px, 1.25fr) !important;
+  column-gap: 0 !important;
+}
+
+.technical-dashboard .balanced-technical-board .compact-plane-labels {
+  display: none !important;
+}
+
+.technical-dashboard .balanced-technical-board .input-channel-column,
+.technical-dashboard .balanced-technical-board .compact-tools-column {
+  padding: 12px 14px !important;
+}
+
+.technical-dashboard .balanced-technical-board .input-channel-column h2,
+.technical-dashboard .balanced-technical-board .compact-tools-column > h2:first-child,
+.technical-dashboard .balanced-technical-board .memory-title {
+  margin-bottom: 8px !important;
+  font-size: 10px !important;
+}
+
+.technical-dashboard .balanced-technical-board .input-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-auto-rows: 1fr !important;
+  gap: 10px !important;
+  height: calc(100% - 30px) !important;
+}
+
+.technical-dashboard .balanced-technical-board .compact-tools-column {
+  display: grid !important;
+  grid-template-rows: 18px minmax(0, 1fr) 18px minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+
+.technical-dashboard .balanced-technical-board .tool-grid,
+.technical-dashboard .balanced-technical-board .memory-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-auto-rows: 1fr !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+}
+
+.technical-dashboard .balanced-technical-board .input-grid button,
+.technical-dashboard .balanced-technical-board .tool-grid button,
+.technical-dashboard .balanced-technical-board .memory-grid button {
+  height: auto !important;
+  min-height: 0 !important;
+  align-content: center !important;
+  border-radius: 9px !important;
+  padding: 9px 10px !important;
+}
+
+.technical-dashboard .balanced-technical-board .input-grid span,
+.technical-dashboard .balanced-technical-board .tool-grid span,
+.technical-dashboard .balanced-technical-board .memory-grid span {
+  font-size: 10px !important;
+}
+
+.technical-dashboard .balanced-technical-board .input-grid small,
+.technical-dashboard .balanced-technical-board .tool-grid small,
+.technical-dashboard .balanced-technical-board .memory-grid small {
+  margin-top: 2px !important;
+  font-size: 8px !important;
+}
+
+.technical-dashboard .balanced-technical-board .compact-flow-arrow {
+  border-left: 1px dashed rgba(83, 231, 255, .16) !important;
+  border-right: 1px dashed rgba(83, 231, 255, .16) !important;
+}
+
+@media (max-width: 1450px) {
+  .technical-dashboard .balanced-technical-board .compact-pipeline-grid {
+    grid-template-columns: minmax(250px, .9fr) 58px minmax(330px, 1.2fr) !important;
+  }
+  .technical-dashboard .balanced-technical-board .input-channel-column,
+  .technical-dashboard .balanced-technical-board .compact-tools-column { padding: 8px 10px !important; }
+  .technical-dashboard .balanced-technical-board .input-grid,
+  .technical-dashboard .balanced-technical-board .tool-grid,
+  .technical-dashboard .balanced-technical-board .memory-grid { gap: 7px !important; }
+}
