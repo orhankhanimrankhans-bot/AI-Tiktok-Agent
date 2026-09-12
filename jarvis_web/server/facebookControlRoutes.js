@@ -1,8 +1,56 @@
-
 "use strict";
 const { FacebookControlError } = require("./facebookControlStore");
+const { credentialPageToken, FacebookGraphError } = require("./facebookGraph");
 function safe(res, error, logger) { if (error instanceof FacebookControlError) return res.status(400).json({ error: error.message, code: error.code }); logger?.error?.("Facebook Control operation failed safely."); return res.status(500).json({ error: "Facebook Control operation could not be completed." }); }
-function registerFacebookControlRoutes(app, { store, workspaceForRequest = () => ({ ownerType: "admin", ownerId: "primary" }), facebookCredentialStore = null, logger = console } = {}) {
+function publicSyncError(error) {
+  if (error instanceof FacebookGraphError) {
+    if (error.statusCode === 401 || error.code === "meta_190") return { status: "token_expired", message: "Facebook token expired." };
+    if (error.statusCode === 429) return { status: "rate_limited", message: "Facebook API temporarily rate limited." };
+    if (error.statusCode === 403) return { status: "permission_required", message: error.permission ? `Page permission required: ${error.permission}.` : "Page permission required." };
+    if (error.statusCode === 400 || error.code === "meta_100") return { status: "metric_unavailable", message: "Metric unavailable with current Facebook API permissions." };
+  }
+  return { status: "sync_failed", message: "Facebook metrics could not be synced." };
+}
+function latestInsightValue(data, metricName) {
+  const metric = Array.isArray(data?.data) ? data.data.find((item) => item?.name === metricName) : null;
+  const values = Array.isArray(metric?.values) ? metric.values : [];
+  for (const item of [...values].reverse()) { const number = Number(item?.value); if (Number.isFinite(number)) return number; }
+  return null;
+}
+async function syncPage({ page, owner, store, facebookCredentialStore, graphServiceFactory, logger }) {
+  if (!page.credentialId) return store.markPageSyncIssue(page.id, "connection_required", "Facebook connection required.", owner);
+  if (!facebookCredentialStore) return store.markPageSyncIssue(page.id, "connection_required", "Facebook connection required.", owner);
+  const credential = facebookCredentialStore.get(page.credentialId, { includeTokens: true, owner });
+  if (!credential) return store.markPageSyncIssue(page.id, "credential_not_found", "Selected Facebook credential was not found.", owner);
+  const pageId = page.pageId || credential.pageId;
+  if (!pageId) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
+  const service = graphServiceFactory(); const token = credentialPageToken(credential, pageId);
+  if (!token) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
+  try {
+    const metadata = await service.pageMetadata(pageId, token);
+    let videos = null; let insights = null; const warnings = [];
+    try { videos = await service.pageVideos(pageId, token); } catch (error) { warnings.push(publicSyncError(error).message); }
+    try { insights = await service.pageInsights(pageId, token); } catch (error) { warnings.push(publicSyncError(error).message); }
+    const followers = Number(metadata.followers_count ?? metadata.fan_count);
+    const views = latestInsightValue(insights, "page_impressions_unique") ?? latestInsightValue(insights, "page_video_views");
+    const reels = Number(videos?.summary?.total_count);
+    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || page.pageName, pageUrl: metadata.link || page.pageUrl, pagePictureUrl: metadata.picture?.data?.url || page.pagePictureUrl, followers: Number.isFinite(followers) ? followers : null, views, reels: Number.isFinite(reels) ? reels : null, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
+  } catch (error) {
+    const issue = publicSyncError(error); logger?.warn?.("Facebook Control sync page failed safely.", { status: issue.status, pageRecordId: page.id }); return store.markPageSyncIssue(page.id, issue.status, issue.message, owner);
+  }
+}
+async function syncFacebookControl({ owner, store, facebookCredentialStore, graphServiceFactory = null, logger = console }) {
+  if (!graphServiceFactory) return { ...store.list(owner), status: "unavailable", message: "Facebook connection required." };
+  const before = store.list(owner);
+  const results = [];
+  for (const page of before.pages) results.push(await syncPage({ page, owner, store, facebookCredentialStore, graphServiceFactory, logger }));
+  const sync = store.markSync(owner);
+  const after = store.list(owner);
+  const synced = after.pages.filter((page) => page.syncStatus === "synced").length;
+  const failed = after.pages.length - synced;
+  return { ...after, sync, status: failed ? "partial" : "synced", message: after.pages.length ? `${synced} page${synced === 1 ? "" : "s"} synced${failed ? `, ${failed} need attention` : ""}.` : "No Facebook Pages added yet.", results };
+}
+function registerFacebookControlRoutes(app, { store, workspaceForRequest = () => ({ ownerType: "admin", ownerId: "primary" }), facebookCredentialStore = null, graphServiceFactory = null, logger = console } = {}) {
   if (!store) throw new Error("store is required");
   const workspace = (req, res) => { const owner = workspaceForRequest(req); if (!owner) { res.status(401).json({ error: "Authentication is required." }); return null; } return owner; };
   app.get("/api/facebook/control", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.json(store.list(owner)); } catch (error) { return safe(res, error, logger); } });
@@ -14,6 +62,6 @@ function registerFacebookControlRoutes(app, { store, workspaceForRequest = () =>
   app.delete("/api/facebook/pages/:pageId", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return store.deletePage(req.params.pageId, owner) ? res.json({ ok: true, id: req.params.pageId }) : res.status(404).json({ error: "Facebook Page record not found." }); } catch (error) { return safe(res, error, logger); } });
   app.post("/api/facebook/pages/:pageId/test-connection", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const data = store.list(owner); const page = data.pages.find((item) => item.id === req.params.pageId); if (!page) return res.status(404).json({ error: "Facebook Page record not found." }); if (!page.credentialId) return res.json({ ok: false, status: "connection_required", message: "Data connection required. Select an existing Facebook credential before live metrics can sync." }); if (facebookCredentialStore && !facebookCredentialStore.get(page.credentialId, { owner })) return res.status(404).json({ ok: false, status: "credential_not_found", message: "Selected Facebook credential was not found." }); return res.json({ ok: true, status: "connected", message: "Credential record is available. Live metric sync can use the server-side Meta integration." }); } catch (error) { return safe(res, error, logger); } });
   app.put("/api/facebook/sync-settings", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.json(store.updateSync(req.body, owner)); } catch (error) { return safe(res, error, logger); } });
-  app.post("/api/facebook/sync", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { const sync = store.markSync(owner); return res.json({ ...store.list(owner), sync, status: "queued", message: "Refresh recorded. Live Meta metric fetching requires connected page permissions." }); } catch (error) { return safe(res, error, logger); } });
+  app.post("/api/facebook/sync", async (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.json(await syncFacebookControl({ owner, store, facebookCredentialStore, graphServiceFactory, logger })); } catch (error) { return safe(res, error, logger); } });
 }
-module.exports = { registerFacebookControlRoutes };
+module.exports = { registerFacebookControlRoutes, syncFacebookControl, publicSyncError };

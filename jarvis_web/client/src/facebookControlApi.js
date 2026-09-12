@@ -6,6 +6,7 @@ export async function facebookJson(fetchImpl, apiBaseUrl, path, options = {}) {
   return body;
 }
 export function getFacebookControl(fetchImpl = fetch, apiBaseUrl = "") { return facebookJson(fetchImpl, apiBaseUrl, "/api/facebook/control"); }
+export function getFacebookPerformance(fetchImpl = fetch, apiBaseUrl = "") { return facebookJson(fetchImpl, apiBaseUrl, "/api/facebook/performance"); }
 export function createFacebookTeam(fetchImpl, apiBaseUrl, payload) { return facebookJson(fetchImpl, apiBaseUrl, "/api/facebook/team-members", { method: "POST", body: JSON.stringify(payload) }); }
 export function updateFacebookTeam(fetchImpl, apiBaseUrl, teamId, payload) { return facebookJson(fetchImpl, apiBaseUrl, `/api/facebook/team-members/${encodeURIComponent(teamId)}`, { method: "PUT", body: JSON.stringify(payload) }); }
 export function createFacebookPage(fetchImpl, apiBaseUrl, payload) { return facebookJson(fetchImpl, apiBaseUrl, "/api/facebook/pages", { method: "POST", body: JSON.stringify(payload) }); }
@@ -16,5 +17,5 @@ export function updateFacebookSyncSettings(fetchImpl, apiBaseUrl, payload) { ret
 export function refreshFacebookPages(fetchImpl, apiBaseUrl) { return facebookJson(fetchImpl, apiBaseUrl, "/api/facebook/sync", { method: "POST", body: JSON.stringify({}) }); }
 export function facebookPerformanceScore(metrics = {}) {
   const followers = Number(metrics.followers) || 0; const views = Number(metrics.views) || 0; const reels = Number(metrics.reels) || 0; const growth = Number(metrics.followerGrowth) || 0; const engagement = Number(metrics.engagement) || 0;
-  return Math.round((Math.log10(followers + 1) * 18) + (Math.log10(views + 1) * 22) + Math.min(reels, 250) * .12 + Math.max(0, growth) * 1.7 + Math.max(0, engagement) * 1.3);
+  return Math.max(0, Math.min(100, Math.round((Math.log10(followers + 1) * 14) + (Math.log10(views + 1) * 18) + Math.min(reels, 250) * .09 + Math.max(0, growth) * 1.2 + Math.max(0, engagement) * 1.1)));
 }

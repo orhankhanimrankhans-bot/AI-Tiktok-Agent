@@ -39,13 +39,17 @@ test("saved workflows and persisted Facebook control feed the dashboard", () => 
 });
 
 
-test("facebook pages card opens the custom performance page", () => {
-  assert.match(dashboard, /function FacebookPagesDashboard/);
-  assert.match(dashboard, /dashboardView === "facebookPages"/);
-  assert.match(dashboard, /setDashboardView\("facebookPages"\)/);
-  for (const label of ["Facebook Page Performance / Ranking", "Team Performance Graph", "Data connection required", "Not synced"]) assert.match(dashboard, new RegExp(label));
-  assert.match(styles, /\.corex-facebook-performance/);
-  assert.match(styles, /\.facebook-ranking-list/);
+test("facebook pages card opens the dedicated performance route instead of an embedded widget", () => {
+  assert.doesNotMatch(dashboard, /function FacebookPagesDashboard/);
+  assert.doesNotMatch(dashboard, /dashboardView === "facebookPages"/);
+  assert.doesNotMatch(dashboard, /setDashboardView\("facebookPages"\)/);
+  assert.match(dashboard, /onOpenFacebookPages\(\)/);
+  assert.match(app, /import FacebookPerformancePage from "\.\/FacebookPerformancePage\.jsx"/);
+  assert.match(app, /\/facebook-performance/);
+  assert.match(app, /visibleTopPage === "FACEBOOK PERFORMANCE"/);
+  assert.match(app, /<FacebookPerformancePage apiBaseUrl=\{API_BASE_URL\}/);
+  assert.match(styles, /\.facebook-performance-page/);
+  assert.match(styles, /\.facebook-performance-table/);
   assert.match(styles, /\.team-performance-row/);
   assert.match(styles, /\.facebook-empty-state/);
 });

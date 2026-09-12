@@ -6597,3 +6597,29 @@ html[data-theme="light"] .access-preset,
 .light .access-preset { background: #f9fcfe !important; color: #061721 !important; }
 @media (max-width: 980px) { .security-overview,.security-console-layout,.security-advanced-grid { grid-template-columns: 1fr; } .security-row,.security-session-table .security-row { grid-template-columns: 1fr; align-items: start; } .security-row-actions { justify-content: flex-start; } }
 @media (max-width: 560px) { .security-console { padding: 12px; } .security-form-grid,.access-preset-grid { grid-template-columns: 1fr; } .security-console-heading { flex-direction: column; } }
+
+.facebook-performance-page { min-height: calc(100vh - 72px); padding: 22px; color: #f4fbff; background: linear-gradient(135deg, #06131a, #071c24); overflow: auto; }
+.facebook-performance-hero, .facebook-performance-section, .facebook-performance-meta { border: 1px solid rgba(69,226,246,.22); border-radius: 16px; background: rgba(5,23,31,.92); box-shadow: 0 16px 40px rgba(0,0,0,.16); }
+.facebook-performance-hero { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 20px; }
+.facebook-performance-hero span, .facebook-performance-section h2 { color: #35e7ff; letter-spacing: .14em; font-weight: 900; }
+.facebook-performance-hero h1 { margin: 6px 0; font-size: 28px; }
+.facebook-performance-hero p { margin: 0; color: #9bb3bf; }
+.facebook-performance-hero > div:last-child { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.facebook-performance-hero button, .facebook-performance-row a, .facebook-page-name { border: 1px solid rgba(69,226,246,.35); border-radius: 10px; background: rgba(53,231,255,.12); color: #f4fbff; padding: 9px 12px; font-weight: 900; text-decoration: none; }
+.facebook-performance-hero button:disabled { opacity: .58; cursor: progress; }
+.facebook-performance-meta { display: flex; justify-content: space-between; gap: 12px; margin: 12px 0; padding: 10px 14px; color: #9bb3bf; font-size: 12px; }
+.facebook-performance-section { margin-top: 12px; padding: 16px; }
+.facebook-performance-section > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.facebook-performance-section h2 { margin: 0; font-size: 15px; }
+.facebook-performance-section header span { color: #9bb3bf; }
+.facebook-performance-table { display: grid; overflow-x: auto; border: 1px solid rgba(69,226,246,.18); border-radius: 12px; }
+.facebook-performance-row { display: grid; grid-template-columns: 70px minmax(230px,1.5fr) minmax(130px,.7fr) repeat(4,minmax(95px,.55fr)) minmax(140px,.8fr) minmax(96px,.5fr); gap: 10px; align-items: center; min-width: 1120px; padding: 10px 12px; border-top: 1px solid rgba(69,226,246,.12); background: rgba(8,35,46,.6); font-size: 13px; }
+.facebook-performance-row:first-child { border-top: 0; }
+.facebook-performance-row.head { min-height: 38px; color: #72edff; font-size: 10px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; background: rgba(53,231,255,.08); }
+.facebook-performance-row > span, .facebook-performance-row > strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.facebook-page-name { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; text-align: left; min-width: 0; }
+.facebook-page-name img, .facebook-page-name i { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(53,231,255,.45); background: rgba(53,231,255,.12); color: #35e7ff; font-style: normal; font-weight: 900; object-fit: cover; }
+.facebook-page-name span { min-width: 0; display: grid; color: #f4fbff; font-weight: 900; }
+.facebook-page-name small { margin-top: 2px; color: #8fb4c1; font-weight: 600; }
+.facebook-waiting-state { margin: 0; padding: 18px; border: 1px dashed rgba(69,226,246,.26); border-radius: 12px; color: #9bb3bf; text-align: center; }
+@media (max-width: 1080px) { .facebook-performance-hero { align-items: flex-start; flex-direction: column; } .facebook-performance-meta { flex-direction: column; } }

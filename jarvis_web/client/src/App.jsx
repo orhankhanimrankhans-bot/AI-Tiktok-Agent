@@ -9,6 +9,7 @@ import { definitionFingerprint, editorDefinition, validateStoredWorkflow } from 
 import JarvisDashboard from "./JarvisDashboard.jsx";
 import DataViewer from "./DataViewer.jsx";
 import FacebookControl from "./FacebookControl.jsx";
+import FacebookPerformancePage from "./FacebookPerformancePage.jsx";
 import { buildDashboardGraph } from "./dashboardPipeline.js";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import { ARCHIVE_AFTER_PUBLISH_ERROR, buildArchiveMoveRequest, preservePublishedSource } from "./postPublishArchive.js";
@@ -2272,7 +2273,7 @@ function App() {
     ? `${session.role}:${session.profileId || "primary"}`
     : "unauthenticated";
   const [topPage, setTopPage] =
-    useState("WORKFLOW");
+    useState(() => (typeof window !== "undefined" && window.location.pathname === "/facebook-performance") ? "FACEBOOK PERFORMANCE" : "WORKFLOW");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [workflowTab, setWorkflowTab] =
@@ -2284,6 +2285,8 @@ function App() {
   const [pendingOpenWorkflowId, setPendingOpenWorkflowId] = useState(null);
   const [openingWorkflowId, setOpeningWorkflowId] = useState(null);
   const [workflowManagerRefreshKey, setWorkflowManagerRefreshKey] = useState(0);
+  const navigateTopPage = (page, path = null) => { setTopPage(page); if (path && typeof window !== "undefined" && window.location.pathname !== path) window.history.pushState({ corexPage: page }, "", path); };
+  useEffect(() => { const handlePopState = () => { setTopPage((current) => window.location.pathname === "/facebook-performance" ? "FACEBOOK PERFORMANCE" : current === "FACEBOOK PERFORMANCE" ? "DASHBOARD" : current); }; window.addEventListener("popstate", handlePopState); handlePopState(); return () => window.removeEventListener("popstate", handlePopState); }, []);
 
   const [showNodePicker, setShowNodePicker] =
     useState(false);
@@ -3405,7 +3408,7 @@ function App() {
             ["⚙", "Settings"],
             ["〽", "System Health"],
           ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label]))).map(([icon, label]) => (
-            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") setTopPage("DASHBOARD"); else if (label === "Facebook Control") setTopPage("FACEBOOK CONTROL"); }}>
+            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") navigateTopPage("DASHBOARD", "/"); else if (label === "Facebook Control") navigateTopPage("FACEBOOK CONTROL", "/"); }}>
               <span>{icon}</span>
               {label}
             </button>
@@ -3445,7 +3448,7 @@ function App() {
                   : ""
               }
               onClick={() =>
-                setTopPage(item)
+                navigateTopPage(item, "/")
               }
             >
               {item}
@@ -3870,7 +3873,10 @@ function App() {
           <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
             healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
-            onOpenWorkflow={(workflowId) => { if (!workflowId) { if (can("edit_workflow")) setShowWorkflowManager(true); return; } if (!can("view_workflow")) return; setTopPage("WORKFLOW"); if (workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
+            onOpenFacebookPages={() => navigateTopPage("FACEBOOK PERFORMANCE", "/facebook-performance")}
+            onOpenWorkflow={(workflowId) => { if (!workflowId) { if (can("edit_workflow")) setShowWorkflowManager(true); return; } if (!can("view_workflow")) return; navigateTopPage("WORKFLOW", "/"); if (workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
+        ) : visibleTopPage === "FACEBOOK PERFORMANCE" ? (
+          <FacebookPerformancePage apiBaseUrl={API_BASE_URL} onBack={() => navigateTopPage("DASHBOARD", "/")} />
         ) : visibleTopPage === "FACEBOOK CONTROL" ? (
           <FacebookControl apiBaseUrl={API_BASE_URL} credentials={facebookCredentials} />
         ) : visibleTopPage === "TOOLS" ? (

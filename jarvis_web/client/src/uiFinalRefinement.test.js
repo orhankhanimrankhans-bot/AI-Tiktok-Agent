@@ -17,6 +17,6 @@ test("dashboard workflow nodes open the actual workflow editor without fake card
   assert.match(dashboard, /activeWorkflowId/);
   assert.match(dashboard, /onOpenWorkflow/);
   assert.match(app, /activeWorkflowId=\{editorWorkflowSource/);
-  assert.match(app, /setTopPage\("WORKFLOW"\)/);
+  assert.match(app, /navigateTopPage\("WORKFLOW", "\/"\)/);
   assert.doesNotMatch(dashboard, /Workflow 2|Workflow 3|Workflow 4|Workflow 5/);
 });
