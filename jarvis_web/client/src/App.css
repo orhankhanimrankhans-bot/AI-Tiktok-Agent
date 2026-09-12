@@ -4580,3 +4580,180 @@ button {
 .jarvis-app.theme-dark-mode .workflow-live-status {
   color: #8fa6b0 !important;
 }
+
+/* Complete dashboard theme coverage for Dashboard, Command Pipeline, and local conversation. */
+.jarvis-app.theme-light-mode .dashboard-page,
+.jarvis-app.theme-light-mode .jarvis-control-center {
+  background: #f6f8fb !important;
+  color: #14212a !important;
+}
+
+.jarvis-app.theme-light-mode .dashboard-page::before,
+.jarvis-app.theme-light-mode .jarvis-control-center::before {
+  opacity: .45 !important;
+}
+
+.jarvis-app.theme-light-mode .dashboard-main-column,
+.jarvis-app.theme-light-mode .control-center-grid,
+.jarvis-app.theme-light-mode .pipeline-live-stage {
+  color: #14212a !important;
+}
+
+.jarvis-app.theme-light-mode .jarvis-core-header,
+.jarvis-app.theme-light-mode .command-pipeline,
+.jarvis-app.theme-light-mode .jarvis-conversation,
+.jarvis-app.theme-light-mode .control-detail-drawer,
+.jarvis-app.theme-light-mode .office-simulation,
+.jarvis-app.theme-light-mode .office-floor,
+.jarvis-app.theme-light-mode .operations-floor {
+  background: #ffffff !important;
+  color: #14212a !important;
+  border-color: #c7d8e1 !important;
+  box-shadow: 0 16px 34px rgba(23, 52, 65, .10) !important;
+}
+
+.jarvis-app.theme-light-mode .command-pipeline-heading,
+.jarvis-app.theme-light-mode .jarvis-conversation header,
+.jarvis-app.theme-light-mode .control-detail-drawer header,
+.jarvis-app.theme-light-mode .office-simulation header,
+.jarvis-app.theme-light-mode .operations-floor header {
+  background: #eef5f8 !important;
+  color: #14212a !important;
+  border-color: #c7d8e1 !important;
+}
+
+.jarvis-app.theme-light-mode .jarvis-core-header span,
+.jarvis-app.theme-light-mode .command-pipeline-heading span,
+.jarvis-app.theme-light-mode .pipeline-bay-label,
+.jarvis-app.theme-light-mode .jarvis-conversation header span,
+.jarvis-app.theme-light-mode .office-simulation header span,
+.jarvis-app.theme-light-mode .operations-floor header span,
+.jarvis-app.theme-light-mode .control-detail-drawer header span {
+  color: #087f9a !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .jarvis-core-header h1,
+.jarvis-app.theme-light-mode .command-pipeline-heading h2,
+.jarvis-app.theme-light-mode .jarvis-conversation h2,
+.jarvis-app.theme-light-mode .office-simulation h2,
+.jarvis-app.theme-light-mode .operations-floor h2,
+.jarvis-app.theme-light-mode .control-detail-drawer h2,
+.jarvis-app.theme-light-mode .pipeline-routing-hub strong,
+.jarvis-app.theme-light-mode .strong-engine strong,
+.jarvis-app.theme-light-mode .pipeline-routing-status strong,
+.jarvis-app.theme-light-mode .conversation-empty b,
+.jarvis-app.theme-light-mode .conversation-message strong {
+  color: #14212a !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .jarvis-core-header p,
+.jarvis-app.theme-light-mode .pipeline-routing-hub small,
+.jarvis-app.theme-light-mode .strong-engine small,
+.jarvis-app.theme-light-mode .pipeline-empty-copy span,
+.jarvis-app.theme-light-mode .pipeline-count-summary,
+.jarvis-app.theme-light-mode .conversation-empty span,
+.jarvis-app.theme-light-mode .conversation-message p,
+.jarvis-app.theme-light-mode .control-detail-drawer p,
+.jarvis-app.theme-light-mode .pipeline-routing-status {
+  color: #60717d !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .operational-controls button,
+.jarvis-app.theme-light-mode .pipeline-workflow,
+.jarvis-app.theme-light-mode .pipeline-empty-copy,
+.jarvis-app.theme-light-mode .pipeline-add-workflow,
+.jarvis-app.theme-light-mode .pipeline-state-indicator,
+.jarvis-app.theme-light-mode .conversation-input,
+.jarvis-app.theme-light-mode .conversation-input input,
+.jarvis-app.theme-light-mode .conversation-input button,
+.jarvis-app.theme-light-mode .conversation-message,
+.jarvis-app.theme-light-mode .control-detail-drawer button {
+  background: #ffffff !important;
+  color: #14212a !important;
+  border-color: #b8cbd6 !important;
+  box-shadow: 0 10px 22px rgba(23, 52, 65, .08) !important;
+}
+
+.jarvis-app.theme-light-mode .operational-controls button i,
+.jarvis-app.theme-light-mode .isk-core-button,
+.jarvis-app.theme-light-mode .routing-status-light,
+.jarvis-app.theme-light-mode .workflow-node-led,
+.jarvis-app.theme-light-mode .core-state i,
+.jarvis-app.theme-light-mode .jarvis-conversation header i {
+  background: #e8f7fa !important;
+  color: #087f9a !important;
+  border-color: #9bd5e2 !important;
+  box-shadow: 0 0 16px rgba(8, 148, 173, .18) !important;
+}
+
+.jarvis-app.theme-light-mode .pipeline-routing-core,
+.jarvis-app.theme-light-mode .strong-engine-orb,
+.jarvis-app.theme-light-mode .pipeline-core-orb {
+  background: radial-gradient(circle, #ffffff 0%, #dff6fa 48%, #b8e5ee 100%) !important;
+  color: #087f9a !important;
+  border-color: #8fcfdd !important;
+  box-shadow: 0 0 28px rgba(8, 148, 173, .22) !important;
+}
+
+.jarvis-app.theme-light-mode .pipeline-core-ring,
+.jarvis-app.theme-light-mode .engine-ring,
+.jarvis-app.theme-light-mode .atom-orbit {
+  border-color: rgba(8, 148, 173, .42) !important;
+  stroke: rgba(8, 148, 173, .72) !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-wire-layer .wire-base,
+.jarvis-app.theme-light-mode .workflow-wire-layer .module-engine-wire {
+  stroke: rgba(59, 142, 161, .45) !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-wire-layer .wire-energy,
+.jarvis-app.theme-light-mode .workflow-wire-layer .wire-tracer,
+.jarvis-app.theme-light-mode .workflow-wire-layer .route-tracer {
+  stroke: #3b8ea1 !important;
+  filter: none !important;
+}
+
+.jarvis-app.theme-light-mode .core-state {
+  color: #a97600 !important;
+}
+
+.jarvis-app.theme-light-mode .app-lock-panel,
+.jarvis-app.theme-light-mode .bottom-actions button,
+.jarvis-app.theme-light-mode .auth-footer button {
+  background: #ffffff !important;
+  color: #073947 !important;
+  border-color: #9fc6d3 !important;
+  box-shadow: 0 8px 18px rgba(23, 52, 65, .10) !important;
+}
+
+.jarvis-app.theme-dark-mode .dashboard-page,
+.jarvis-app.theme-dark-mode .jarvis-control-center {
+  background: #0d1117 !important;
+  color: #eefcff !important;
+}
+
+.jarvis-app.theme-dark-mode .jarvis-core-header,
+.jarvis-app.theme-dark-mode .command-pipeline,
+.jarvis-app.theme-dark-mode .jarvis-conversation,
+.jarvis-app.theme-dark-mode .control-detail-drawer,
+.jarvis-app.theme-dark-mode .office-simulation,
+.jarvis-app.theme-dark-mode .office-floor,
+.jarvis-app.theme-dark-mode .operations-floor {
+  background: #10171b !important;
+  color: #eefcff !important;
+  border-color: #263b44 !important;
+}
+
+.jarvis-app.theme-dark-mode .command-pipeline-heading,
+.jarvis-app.theme-dark-mode .jarvis-conversation header,
+.jarvis-app.theme-dark-mode .control-detail-drawer header,
+.jarvis-app.theme-dark-mode .office-simulation header,
+.jarvis-app.theme-dark-mode .operations-floor header {
+  background: #0d1c22 !important;
+  color: #eefcff !important;
+  border-color: #263b44 !important;
+}

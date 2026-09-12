@@ -3361,7 +3361,8 @@ function App() {
   const activeServerWorkflowPresentation = isPersistedWorkflowActive(editorWorkflowSource, activeServerWorkflow);
   const dashboardGraph = buildDashboardGraph(canvasNodes, connections);
   const visibleTopPage = topPage === "WORKFLOW" && !can("view_workflow") ? (can("dashboard") ? "DASHBOARD" : "TOOLS") : topPage === "DASHBOARD" && !can("dashboard") ? (can("view_workflow") ? "WORKFLOW" : "TOOLS") : topPage;
-  const themeModeClass = canvasAppearance.preset === "white" ? " theme-light-mode" : " theme-dark-mode";
+  const isLightTheme = canvasAppearance.preset === "white" || [canvasAppearance.canvasColor, canvasAppearance.headerColor, canvasAppearance.sidebarBackground].some((value) => /^#f/i.test(String(value || ""))) || canvasAppearance.sidebarBackground === "#ffffff";
+  const themeModeClass = isLightTheme ? " theme-light-mode" : " theme-dark-mode";
 
   return (
     <div className={`jarvis-app theme-${workflowStatus} provider-logos-${canvasAppearance.providerLogoMode}${themeModeClass}${sidebarOpen ? " sidebar-open" : " sidebar-collapsed"}`} data-workflow-active={isWorkflowRunning ? "true" : "false"}
