@@ -1,6 +1,6 @@
 ﻿const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createFacebookPublicMetricsService, extractFollowerCount, extractPageName, extractRecentPosts, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime } = require("./facebookPublicMetricsService");
+const { createFacebookPublicMetricsService, extractFollowerCount, extractPageName, extractRecentPosts, extractVideoTargets, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime } = require("./facebookPublicMetricsService");
 
 test("public Facebook URL validation accepts only expected Facebook hosts", () => {
   assert.equal(normalizeFacebookUrl("facebook.com/corex"), "https://facebook.com/corex");
@@ -43,6 +43,41 @@ test("public scanner tries mobile basic and page-id variants before declaring me
   assert.equal(scan.postsCount, 1);
   assert.ok(requested.some((url) => url.includes("mbasic.facebook.com/profile.php?id=61593949095532")));
   assert.ok(scanUrlsForPage({ pageId: "61593949095532" }, "https://www.facebook.com/range").some((url) => url.includes("sk=about")));
+});
+
+test("public scanner follows detected video targets for visible view counts", async () => {
+  const requested = [];
+  const service = createFacebookPublicMetricsService({
+    now: () => "2026-09-12T13:00:00.000Z",
+    scanDepth: 5,
+    fetchImpl: async (url) => {
+      requested.push(url);
+      if (url.includes("/reel/abc123")) {
+        return { status: 200, url, async text() { return '<title>Demo Reel | Facebook</title><body>1.2K views</body>'; } };
+      }
+      const postLinks = Array.from({ length: url.includes("/posts") ? 5 : 1 }, (_, index) => `<a href="/demo/posts/${index + 1}">Post ${index + 1}</a>`).join("");
+      return {
+        status: 200,
+        url,
+        async text() { return `<title>Demo Page | Facebook</title><main>966 followers ${postLinks}<a href="/reel/abc123">Reel</a></main>`; },
+      };
+    },
+  });
+  const scan = await service.scanPage({ id: "fbpage_demo", pageUrl: "https://www.facebook.com/demo" }, { includeDiagnostics: true });
+  assert.equal(scan.followersCount, 966);
+  assert.equal(scan.postsCount, 5);
+  assert.equal(scan.recentViewsTotal, 1200);
+  assert.equal(scan.videosSampled, 1);
+  assert.equal(scan.diagnostics.summary.videoTargetsDetected, 1);
+  assert.equal(scan.diagnostics.summary.videoTargetsScanned, 1);
+  assert.ok(requested.some((url) => url.includes("/reel/abc123")));
+});
+
+test("video target parser normalizes public Facebook reel and watch links", () => {
+  const targets = extractVideoTargets('<a href="/reel/abc123?mibextid=x">R</a><a href="https://www.facebook.com/watch/?v=987654">W</a>', 'https://www.facebook.com/demo', 10);
+  assert.equal(targets.length, 2);
+  assert.ok(targets.some((url) => url.includes('/reel/abc123')));
+  assert.ok(targets.some((url) => url.includes('/watch/?v=987654')));
 });
 
 test("public scanner never invents missing numbers", async () => {

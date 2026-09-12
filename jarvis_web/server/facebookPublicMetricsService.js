@@ -149,10 +149,80 @@ function uniqueCounts(html, regex, limit) {
   }
   return found;
 }
-function extractVideoViews(html, depth = DEFAULT_SCAN_DEPTH) {
-  const counts = uniqueCounts(publicText(html), /([0-9][0-9,\.]*\s*[KMB]?)\s+(?:views|plays|video views|reel views)/gi, depth);
-  return { total: counts.reduce((sum, item) => sum + item.count, 0), sampled: counts.length, samples: counts };
+
+function uniqueStructuredCounts(html, regex, limit) {
+  const found = []; const seen = new Set(); let match;
+  while ((match = regex.exec(html)) && found.length < limit) {
+    const raw = decodeEntities(match[1] || match[2] || "").trim();
+    const count = parseSocialCount(raw);
+    if (count === null) continue;
+    const key = `${count}:${raw.toLowerCase()}`; if (seen.has(key)) continue;
+    seen.add(key); found.push({ count, display: raw });
+  }
+  return found;
 }
+
+function extractVideoViews(html, depth = DEFAULT_SCAN_DEPTH) {
+  const text = publicText(html);
+  const explicitCounts = uniqueCounts(text, /([0-9][0-9,\.]*\s*[KMB]?)\s+(?:views|plays|video views|reel views)/gi, depth);
+  const structuredCounts = uniqueStructuredCounts(text, /"(?:play_count|playCount|view_count|viewCount|video_view_count|videoViewCount|total_video_views|totalVideoViews|views_count|viewsCount)"\s*:?\s*(?:\{[^{}]{0,80}?"(?:count|value)"\s*:?\s*)?"?([0-9][0-9,\.]*\s*[KMB]?)"?/gi, depth);
+  const seen = new Set();
+  const samples = [];
+  for (const item of [...explicitCounts, ...structuredCounts]) {
+    const key = `${item.count}:${item.display.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    samples.push(item);
+    if (samples.length >= depth) break;
+  }
+  return { total: samples.reduce((sum, item) => sum + item.count, 0), sampled: samples.length, samples };
+}
+
+function normalizeFacebookTargetUrl(rawUrl, baseUrl) {
+  const decoded = decodeEntities(String(rawUrl || "")).replace(/\\\//g, "/").trim();
+  if (!decoded || /^(?:#|javascript:|mailto:)/i.test(decoded)) return null;
+  try {
+    const target = new URL(decoded, baseUrl || "https://www.facebook.com/");
+    if (!ALLOWED_FACEBOOK_HOSTS.has(target.hostname.toLowerCase())) return null;
+    target.protocol = "https:";
+    target.hash = "";
+    target.hostname = target.hostname.toLowerCase() === "mbasic.facebook.com" ? "m.facebook.com" : target.hostname;
+    return normalizeFacebookUrl(target.toString());
+  } catch { return null; }
+}
+
+function videoKeyForUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const text = decodeEntities(`${parsed.pathname}?${parsed.search}`);
+    const direct = text.match(/\/(?:reel|videos)\/([A-Za-z0-9_.:-]{3,})/i) || text.match(/[?&]v=([A-Za-z0-9_.:-]{3,})/i);
+    return direct?.[1] || parsed.toString();
+  } catch { return String(url); }
+}
+
+function extractVideoTargets(html, baseUrl, depth = DEFAULT_SCAN_DEPTH) {
+  const source = decodeEntities(String(html || "").replace(/\\\//g, "/"));
+  const patterns = [
+    /https?:\/\/(?:www\.|m\.|mobile\.|web\.)?facebook\.com\/(?:reel|watch|videos)[^\s"'<>\\]+/gi,
+    /["']((?:\/[^"'<>\\]*)?(?:reel|watch|videos)(?:\/|\?v=)[^"'<>\\]+)["']/gi,
+    /href=["']([^"']*(?:reel|watch|videos)(?:\/|\?v=)[^"']*)["']/gi,
+  ];
+  const targets = [];
+  const seen = new Set();
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(source)) && targets.length < depth) {
+      const normalized = normalizeFacebookTargetUrl(match[1] || match[0], baseUrl);
+      if (!normalized) continue;
+      const key = videoKeyForUrl(normalized);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push(normalized);
+    }
+  }
+  return targets;
+}
+
 function extractRecentPosts(html, depth = DEFAULT_SCAN_DEPTH) {
   const patterns = [/\/posts\/([A-Za-z0-9_.:-]+)/gi, /story_fbid[=:]([A-Za-z0-9_.:-]+)/gi, /\/reel\/([A-Za-z0-9_.:-]+)/gi, /\/videos\/([A-Za-z0-9_.:-]+)/gi, /"post_id"\s*:?\s*"?([A-Za-z0-9_.:-]+)/gi];
   const ids = new Set();
@@ -253,10 +323,13 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
         timeoutErrors: [],
         blockedResponses: [],
         snapshotPath: null,
+        videoTargetsDetected: 0,
+        videoTargetAttempts: [],
       };
       logger?.info?.("Facebook public scan started", { pageRecordId: page?.id, pageUrl: diagnostics.pageUrl, scanDepth: depth, variants: urls.length, browserMode: diagnostics.browser.mode });
       const scan = { status: "metric_unavailable", message: "Public metrics are unavailable from the current Facebook page response.", pageUrl, pageName: page?.pageName || page?.page_name || "", pagePictureUrl: "", followersCount: null, followersDisplay: null, followersSource: null, recentViewsTotal: null, videosSampled: 0, postsCount: null, postsCountType: null, postsWindow: null, scanDepth: depth, source: "public_http_fetch", capturedAt: now() };
       let sawSuccess = false; let lastFailure = null;
+      const videoTargets = new Map();
       for (const url of urls) {
         const attempt = { url: safeUrlForLog(url), httpStatus: null, redirects: [], finalUrl: null, responseType: "not_started", browserLaunched: false, browserLaunchStatus: diagnostics.browser.message, pageTitle: "", contentLength: 0, extraction: null, parserErrors: [], timeoutError: null };
         let response;
@@ -288,6 +361,12 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
         try { followers = extractFollowerCount(html, page); } catch (error) { followers = { count: null, display: null, source: null }; attempt.parserErrors.push(`followers:${error?.message || String(error)}`); }
         try { views = extractVideoViews(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; attempt.parserErrors.push(`views:${error?.message || String(error)}`); }
         try { posts = extractRecentPosts(html, depth); } catch (error) { posts = { count: null, type: null, window: null }; attempt.parserErrors.push(`posts:${error?.message || String(error)}`); }
+        try {
+          for (const targetUrl of extractVideoTargets(html, response.url || url, depth)) {
+            if (!videoTargets.has(videoKeyForUrl(targetUrl))) videoTargets.set(videoKeyForUrl(targetUrl), targetUrl);
+          }
+          diagnostics.videoTargetsDetected = videoTargets.size;
+        } catch (error) { attempt.parserErrors.push(`video_targets:${error?.message || String(error)}`); }
         if (attempt.parserErrors.length) diagnostics.parserErrors.push({ url: attempt.url, errors: attempt.parserErrors });
         attempt.extraction = extractionSummary({ followers, posts, views });
         diagnostics.attempts.push(attempt);
@@ -295,7 +374,42 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
         if (!SUCCESS_STATUSES.has(response.status)) { lastFailure = response.status === 404 ? "Facebook Page not found." : response.status === 401 || response.status === 403 || response.status === 429 ? "Facebook temporarily blocked public scan." : "Facebook public scan did not return a readable page."; continue; }
         sawSuccess = true;
         mergeHtmlScan(scan, html, response.url || url, depth, page);
-        if (scan.followersCount !== null && scan.recentViewsTotal !== null && scan.postsCount !== null) break;
+        if (scan.followersCount !== null && scan.recentViewsTotal !== null && scan.postsCount !== null && scan.postsCount >= depth) break;
+      }
+      if (sawSuccess && scan.recentViewsTotal === null && videoTargets.size) {
+        for (const targetUrl of [...videoTargets.values()].slice(0, depth)) {
+          const targetAttempt = { url: safeUrlForLog(targetUrl), httpStatus: null, redirects: [], finalUrl: null, responseType: "not_started", pageTitle: "", contentLength: 0, extraction: null, parserErrors: [], timeoutError: null };
+          let response;
+          try { response = await fetchWithTimeout(fetchImpl, targetUrl, timeoutMs); }
+          catch (error) {
+            targetAttempt.responseType = error?.name === "AbortError" ? "timeout" : "request_error";
+            targetAttempt.timeoutError = error?.name === "AbortError" ? { timeoutMs } : null;
+            targetAttempt.error = error?.message || String(error);
+            if (targetAttempt.timeoutError) diagnostics.timeoutErrors.push({ url: targetAttempt.url, timeoutMs });
+            diagnostics.videoTargetAttempts.push(targetAttempt);
+            logger?.warn?.("Facebook public video scan request failed", { pageRecordId: page?.id, url: targetAttempt.url, responseType: targetAttempt.responseType, error: targetAttempt.error });
+            continue;
+          }
+          targetAttempt.httpStatus = response.status;
+          targetAttempt.finalUrl = safeUrlForLog(response.url || targetUrl);
+          if ((response.url || targetUrl) !== targetUrl) targetAttempt.redirects.push({ from: safeUrlForLog(targetUrl), to: targetAttempt.finalUrl });
+          if (response.status === 403 || response.status === 429) diagnostics.blockedResponses.push({ url: targetAttempt.url, httpStatus: response.status, finalUrl: targetAttempt.finalUrl });
+          let html = "";
+          try { html = await response.text(); } catch (error) { targetAttempt.parserErrors.push(`response_text:${error?.message || String(error)}`); diagnostics.parserErrors.push({ url: targetAttempt.url, error: targetAttempt.parserErrors.at(-1) }); }
+          targetAttempt.contentLength = html.length;
+          targetAttempt.pageTitle = extractPageName(html, "") || (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ? stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)[1]) : "");
+          targetAttempt.responseType = classifyFacebookResponse({ status: response.status, finalUrl: response.url || targetUrl, title: targetAttempt.pageTitle, html });
+          let views;
+          try { views = extractVideoViews(html, depth); } catch (error) { views = { total: null, sampled: 0, samples: [] }; targetAttempt.parserErrors.push(`views:${error?.message || String(error)}`); }
+          if (targetAttempt.parserErrors.length) diagnostics.parserErrors.push({ url: targetAttempt.url, errors: targetAttempt.parserErrors });
+          targetAttempt.extraction = { viewsFound: Boolean(views.sampled), videosDetected: views.sampled, viewsDetected: views.sampled ? views.total : null };
+          diagnostics.videoTargetAttempts.push(targetAttempt);
+          logger?.info?.("Facebook public video scan attempt", { pageRecordId: page?.id, url: targetAttempt.url, httpStatus: targetAttempt.httpStatus, finalUrl: targetAttempt.finalUrl, responseType: targetAttempt.responseType, pageTitle: targetAttempt.pageTitle, contentLength: targetAttempt.contentLength, extraction: targetAttempt.extraction });
+          if (SUCCESS_STATUSES.has(response.status) && views.sampled) {
+            scan.recentViewsTotal = (scan.recentViewsTotal || 0) + views.total;
+            scan.videosSampled += views.sampled;
+          }
+        }
       }
       diagnostics.summary = {
         pageLoaded: sawSuccess,
@@ -306,6 +420,8 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
         postsDetected: scan.postsCount || 0,
         videosDetected: scan.videosSampled || 0,
         viewsDetected: scan.recentViewsTotal,
+        videoTargetsDetected: diagnostics.videoTargetsDetected,
+        videoTargetsScanned: diagnostics.videoTargetAttempts.length,
         error: null,
       };
       if (!sawSuccess) {
@@ -324,15 +440,24 @@ function createFacebookPublicMetricsService({ fetchImpl = globalThis.fetch, now 
       } else if (!diagnostics.browser.available) {
         scan.message = "Public HTTP scan loaded Facebook, but visible metrics were not present in returned HTML. Browser rendering is not configured on this server.";
       }
+      if (scan.recentViewsTotal === null && sawSuccess && scan.postsCount !== null) {
+        const reason = diagnostics.videoTargetsDetected
+          ? "Public posts were found, but Facebook did not expose visible video/reel view counts in the public HTML for the page or detected video URLs."
+          : "Public posts were found, but no public video/reel URLs with visible view counts were present in the returned Facebook HTML.";
+        scan.viewsUnavailableReason = diagnostics.browser.available ? reason : `${reason} Browser rendering is not configured on this server.`;
+      }
       diagnostics.summary.followersFound = scan.followersCount !== null;
       diagnostics.summary.followers = scan.followersCount;
       diagnostics.summary.postsDetected = scan.postsCount || 0;
       diagnostics.summary.videosDetected = scan.videosSampled || 0;
       diagnostics.summary.viewsDetected = scan.recentViewsTotal;
+      diagnostics.summary.videoTargetsDetected = diagnostics.videoTargetsDetected;
+      diagnostics.summary.videoTargetsScanned = diagnostics.videoTargetAttempts.length;
+      diagnostics.summary.viewsUnavailableReason = scan.viewsUnavailableReason || null;
       logger?.info?.("Facebook public scan completed", { pageRecordId: page?.id, status: scan.status, videosSampled: scan.videosSampled, summary: diagnostics.summary, parserErrors: diagnostics.parserErrors.length, timeoutErrors: diagnostics.timeoutErrors.length, blockedResponses: diagnostics.blockedResponses.length });
       return options.includeDiagnostics ? { ...scan, diagnostics } : scan;
     },
   });
 }
 
-module.exports = { FacebookPublicMetricsError, createFacebookPublicMetricsService, decodeEntities, extractFollowerCount, extractPageName, extractPagePicture, extractRecentPosts, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime };
+module.exports = { FacebookPublicMetricsError, createFacebookPublicMetricsService, decodeEntities, extractFollowerCount, extractPageName, extractPagePicture, extractRecentPosts, extractVideoTargets, extractVideoViews, normalizeFacebookUrl, parseSocialCount, scanUrlsForPage, classifyFacebookResponse, detectChromiumRuntime };
