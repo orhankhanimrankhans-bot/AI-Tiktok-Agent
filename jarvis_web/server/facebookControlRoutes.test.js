@@ -122,6 +122,24 @@ test("Facebook Control sync maps Graph permission errors without deleting last g
   db.close();
 });
 
+
+test("Facebook Control sync does not create fake zero metrics when Meta returns no numbers", async () => {
+  const { db, store, owner } = setupStore();
+  const graphServiceFactory = () => ({
+    async pageMetadata() { return { id: "123", name: "Corex Page", link: "https://www.facebook.com/corexpage" }; },
+    async pagePosts() { return { summary: {} }; },
+    async pageInsights() { return { data: [] }; },
+  });
+  const result = await syncFacebookControl({ owner, store, facebookCredentialStore: credentialStore(), graphServiceFactory, logger: { warn() {}, error() {} } });
+  assert.equal(result.status, "partial");
+  assert.equal(result.pages[0].syncStatus, "metric_unavailable");
+  assert.equal(result.pages[0].metrics.capturedAt, null);
+  assert.equal(result.pages[0].metrics.followers, null);
+  assert.equal(result.pages[0].metrics.views, null);
+  assert.equal(result.pages[0].metrics.posts, null);
+  db.close();
+});
+
 test("Facebook Graph errors are converted to safe public sync states", () => {
   assert.deepEqual(publicSyncError(new FacebookGraphError(401, "meta_190", "expired")), { status: "token_expired", message: "Facebook token expired." });
   assert.deepEqual(publicSyncError(new FacebookGraphError(429, "meta_4", "limit")), { status: "rate_limited", message: "Facebook API temporarily rate limited." });

@@ -66,7 +66,12 @@ async function syncPage({ page, owner, store, facebookCredentialStore, graphServ
     const followers = Number(metadata.followers_count ?? metadata.fan_count);
     const views = latestInsightValue(insights, "page_impressions_unique") ?? latestInsightValue(insights, "page_video_views");
     const postsCount = Number(posts?.summary?.total_count);
-    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || workingPage.pageName, pageUrl: metadata.link || workingPage.pageUrl, pagePictureUrl: metadata.picture?.data?.url || workingPage.pagePictureUrl, followers: Number.isFinite(followers) ? followers : null, views, posts: Number.isFinite(postsCount) ? postsCount : null, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
+    const metrics = { followers: Number.isFinite(followers) ? followers : null, views, posts: Number.isFinite(postsCount) ? postsCount : null };
+    if (metrics.followers === null && metrics.views === null && metrics.posts === null) {
+      const message = warnings.length ? `Meta did not return numeric metrics: ${[...new Set(warnings)].join(" ")}` : "Meta did not return numeric followers, views, or posts for this Page.";
+      return store.markPageSyncIssue(page.id, "metric_unavailable", message, owner);
+    }
+    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || workingPage.pageName, pageUrl: metadata.link || workingPage.pageUrl, pagePictureUrl: metadata.picture?.data?.url || workingPage.pagePictureUrl, ...metrics, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
   } catch (error) {
     const issue = publicSyncError(error); logger?.warn?.("Facebook Control sync page failed safely.", { status: issue.status, pageRecordId: page.id }); return store.markPageSyncIssue(page.id, issue.status, issue.message, owner);
   }

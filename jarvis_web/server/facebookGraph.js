@@ -87,7 +87,17 @@ class FacebookGraphService {
     }
     return result;
   }
-  pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,link,picture{url}" }, PERMISSIONS.page_metadata, "page_metadata"); }
+  async pageMetadata(pageId, token) {
+    const id = validatePageId(pageId);
+    try {
+      return await this.request(id, token, { fields: "id,name,category,followers_count,fan_count,link,picture{url}" }, PERMISSIONS.page_metadata, "page_metadata");
+    } catch (error) {
+      if (error instanceof FacebookGraphError && error.code === "meta_100") {
+        return this.request(id, token, { fields: "id,name,category,fan_count,link,picture{url}" }, PERMISSIONS.page_metadata, "page_metadata");
+      }
+      throw error;
+    }
+  }
   pageVideos(pageId, token) { return this.request(`${validatePageId(pageId)}/videos`, token, { limit: "0", summary: "true" }, PERMISSIONS.page_metadata, "page_videos"); }
   pagePosts(pageId, token) { return this.request(`${validatePageId(pageId)}/posts`, token, { fields: "id", limit: "0", summary: "true" }, PERMISSIONS.page_metadata, "page_posts"); }
   pageInsights(pageId, token) { return this.request(`${validatePageId(pageId)}/insights`, token, { metric: "page_impressions_unique,page_video_views", period: "day", limit: "5" }, PERMISSIONS.page_metadata, "page_insights"); }

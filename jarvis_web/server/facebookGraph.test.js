@@ -117,3 +117,18 @@ test("Graph service rejects non-approved hosts and paths by construction", async
   await assert.rejects(() => service.request("https://evil.example/token", "secret"), /Unsupported Facebook Graph path/);
   assert.equal(calls.length, 0); assert.equal(service.baseUrl, "https://graph.facebook.com/v26.0");
 });
+
+
+test("pageMetadata retries without followers_count when Meta rejects that field", async () => {
+  const calls = [];
+  const service = new FacebookGraphService({ version: "v26.0", fetchImpl: async (url) => {
+    calls.push(url.searchParams.get("fields"));
+    if (calls.length === 1) return { ok: false, status: 400, json: async () => ({ error: { code: 100, message: "Unknown field followers_count" } }) };
+    return { ok: true, status: 200, json: async () => ({ id: "123", name: "Corex", fan_count: 42 }) };
+  } });
+  const result = await service.pageMetadata("123", "token");
+  assert.equal(result.fan_count, 42);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /followers_count/);
+  assert.doesNotMatch(calls[1], /followers_count/);
+});
