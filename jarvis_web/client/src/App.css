@@ -4364,3 +4364,144 @@ button {
   border-color: #0894ad !important;
   box-shadow: inset 0 -3px #0894ad, 0 8px 18px rgba(8, 148, 173, .13) !important;
 }
+
+/* Final unified Dark/Light theme layer. */
+.jarvis-app.theme-dark-mode,
+.jarvis-app.theme-dark-mode .main-area,
+.jarvis-app.theme-dark-mode .workflow-page,
+.jarvis-app.theme-dark-mode .workflow-canvas {
+  background: #0d1117 !important;
+  color: #eefcff !important;
+}
+
+.jarvis-app.theme-dark-mode .top-nav,
+.jarvis-app.theme-dark-mode .sidebar,
+.jarvis-app.theme-dark-mode .workflow-header,
+.jarvis-app.theme-dark-mode .logs-bar {
+  background: #10171b !important;
+  color: #eefcff !important;
+  border-color: #263b44 !important;
+}
+
+.jarvis-app.theme-light-mode,
+.jarvis-app.theme-light-mode .main-area,
+.jarvis-app.theme-light-mode .workflow-page,
+.jarvis-app.theme-light-mode .workflow-canvas,
+.jarvis-app.theme-light-mode .editor-layout {
+  background: #f6f8fb !important;
+  color: #14212a !important;
+}
+
+.jarvis-app.theme-light-mode .top-nav,
+.jarvis-app.theme-light-mode .workflow-header,
+.jarvis-app.theme-light-mode .logs-bar {
+  background: #ffffff !important;
+  color: #14212a !important;
+  border-color: #d4e0e8 !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-title h1,
+.jarvis-app.theme-light-mode .workflow-live-status,
+.jarvis-app.theme-light-mode .breadcrumb,
+.jarvis-app.theme-light-mode .server-workflow-binding > span,
+.jarvis-app.theme-light-mode .logs-bar,
+.jarvis-app.theme-light-mode .empty-card,
+.jarvis-app.theme-light-mode .empty-card div,
+.jarvis-app.theme-light-mode .empty-card span {
+  color: #14212a !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .breadcrumb,
+.jarvis-app.theme-light-mode .workflow-live-status,
+.jarvis-app.theme-light-mode .empty-card span {
+  color: #60717d !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-manager-entry,
+.jarvis-app.theme-light-mode .workflow-actions button,
+.jarvis-app.theme-light-mode .workflow-tabs button,
+.jarvis-app.theme-light-mode .top-nav button,
+.jarvis-app.theme-light-mode .zoom-tools button,
+.jarvis-app.theme-light-mode .canvas-command-tools button,
+.jarvis-app.theme-light-mode .node-editor-tabs > button,
+.jarvis-app.theme-light-mode .workflow-manager-toolbar button,
+.jarvis-app.theme-light-mode .workflow-manager-create button,
+.jarvis-app.theme-light-mode .workflow-manager-state button,
+.jarvis-app.theme-light-mode .workflow-manager-selection-actions button {
+  color: #14212a !important;
+  background: #ffffff !important;
+  border-color: #b8cbd6 !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-actions .run-button,
+.jarvis-app.theme-light-mode .workflow-actions .publish-button,
+.jarvis-app.theme-light-mode .workflow-manager-toolbar .workflow-manager-new,
+.jarvis-app.theme-light-mode .workflow-manager-create .workflow-manager-new {
+  color: #ffffff !important;
+  background: #087f9a !important;
+  border-color: #0794b2 !important;
+}
+
+.jarvis-app.theme-light-mode .top-nav .top-active,
+.jarvis-app.theme-light-mode .workflow-tabs .tab-active,
+.jarvis-app.theme-light-mode .node-editor-tabs .node-tab-active {
+  color: #07191d !important;
+  background: #e9f8fb !important;
+  border-color: #0794b2 !important;
+}
+
+.jarvis-app.theme-light-mode .canvas-viewport .workflow-node,
+.jarvis-app.theme-light-mode .pipeline-workflow-node {
+  color: #14212a !important;
+  background: linear-gradient(145deg, #ffffff, #edf3f7) !important;
+  border-color: #aac4d0 !important;
+  box-shadow: 0 10px 24px rgba(23, 52, 65, .12) !important;
+}
+
+.jarvis-app.theme-light-mode .canvas-viewport .workflow-node-copy strong,
+.jarvis-app.theme-light-mode .pipeline-workflow-node strong {
+  color: #13222b !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .canvas-viewport .workflow-node-copy small,
+.jarvis-app.theme-light-mode .pipeline-workflow-node small {
+  color: #5f737e !important;
+  text-shadow: none !important;
+}
+
+.jarvis-app.theme-light-mode .canvas-viewport .workflow-node-icon,
+.jarvis-app.theme-light-mode .pipeline-node-icon {
+  color: #087f9a !important;
+  background: #e8f7fa !important;
+  border-color: #acd9e4 !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-connections path {
+  stroke: #3b8ea1 !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-manager,
+.jarvis-app.theme-light-mode .workflow-manager-selection,
+.jarvis-app.theme-light-mode .workflow-manager-row,
+.jarvis-app.theme-light-mode .workflow-manager-confirm,
+.jarvis-app.theme-light-mode .node-editor-window,
+.jarvis-app.theme-light-mode .command-panel {
+  color: #14212a !important;
+  background: #ffffff !important;
+  border-color: #c7d8e1 !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-manager-row small,
+.jarvis-app.theme-light-mode .workflow-manager-selection small,
+.jarvis-app.theme-light-mode .command-panel p {
+  color: #60717d !important;
+}
+
+.jarvis-app.theme-light-mode .workflow-notice,
+.jarvis-app.theme-light-mode .node-editor-overlay,
+.jarvis-app.theme-light-mode .workflow-manager-overlay {
+  color: #14212a !important;
+}
