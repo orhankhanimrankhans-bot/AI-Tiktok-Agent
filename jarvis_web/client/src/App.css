@@ -6449,3 +6449,96 @@ button {
   .technical-dashboard .facebook-pages-grid { grid-template-columns: 1fr; }
   .technical-dashboard .facebook-page-table button { grid-template-columns: 28px 34px minmax(0, 1fr) 80px 38px 42px; }
 }
+
+/* Corex master dashboard update: three cards, live engine, Facebook Control. */
+.technical-dashboard .corex-summary-grid.top-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.technical-dashboard .corex-summary-card.active { border-color: rgba(67,230,143,.58); box-shadow: inset 0 0 0 1px rgba(67,230,143,.14), 0 0 24px rgba(67,230,143,.08); animation: corexHealthyBreath 4.8s ease-in-out infinite; }
+.technical-dashboard .corex-summary-card.inactive { border-color: rgba(255,89,104,.62); box-shadow: inset 0 0 0 1px rgba(255,89,104,.12), 0 0 24px rgba(255,89,104,.08); animation: corexAlertBreath 5.2s ease-in-out infinite; }
+.technical-dashboard .corex-summary-card.inactive.neutral { border-color: rgba(69,226,246,.25); animation: none; }
+@keyframes corexHealthyBreath { 0%,100% { box-shadow: inset 0 0 0 1px rgba(67,230,143,.1), 0 0 16px rgba(67,230,143,.05); } 50% { box-shadow: inset 0 0 0 1px rgba(67,230,143,.32), 0 0 30px rgba(67,230,143,.14); } }
+@keyframes corexAlertBreath { 0%,100% { box-shadow: inset 0 0 0 1px rgba(255,89,104,.08), 0 0 16px rgba(255,89,104,.04); } 50% { box-shadow: inset 0 0 0 1px rgba(255,89,104,.28), 0 0 30px rgba(255,89,104,.14); } }
+
+.technical-dashboard .corex-live-engine { min-height: 320px; padding: 16px; border: 1px solid rgba(69,226,246,.24); border-radius: 14px; background: radial-gradient(circle at 50% 45%, rgba(35,220,255,.14), transparent 30%), linear-gradient(135deg, rgba(2,16,22,.96), rgba(4,28,32,.95)); overflow: hidden; }
+.technical-dashboard .corex-live-engine > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.technical-dashboard .corex-live-engine header span { color: #35e7ff; font-size: 10px; font-weight: 900; letter-spacing: .18em; }
+.technical-dashboard .corex-live-engine h2 { margin: 5px 0 0; font-size: 20px; letter-spacing: .12em; }
+.technical-dashboard .corex-live-engine header strong { color: #40e88f; font-size: 11px; letter-spacing: .16em; }
+.technical-dashboard .corex-live-engine.mixed header strong { color: #ffc94a; }
+.technical-dashboard .engine-stage { display: grid; grid-template-columns: minmax(180px, 1fr) 220px minmax(180px, 1fr); align-items: center; gap: 22px; min-height: 244px; }
+.technical-dashboard .engine-pipelines { display: grid; gap: 14px; }
+.technical-dashboard .engine-pipeline { position: relative; display: grid; gap: 5px; padding: 14px 16px; border: 1px solid rgba(69,226,246,.22); border-radius: 12px; background: rgba(7,32,42,.9); }
+.technical-dashboard .engine-pipeline::after { content: ""; position: absolute; top: 50%; width: 42px; height: 2px; background: linear-gradient(90deg, currentColor, transparent); color: #35e7ff; opacity: .75; }
+.technical-dashboard .engine-pipelines.left .engine-pipeline::after { right: -42px; }
+.technical-dashboard .engine-pipelines.right .engine-pipeline::after { left: -42px; transform: rotate(180deg); }
+.technical-dashboard .engine-pipeline b { font-size: 12px; letter-spacing: .15em; }
+.technical-dashboard .engine-pipeline small { color: var(--muted-text, #9bb3bf); }
+.technical-dashboard .engine-pipeline i { position: absolute; right: 12px; top: 14px; width: 9px; height: 9px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
+.technical-dashboard .engine-pipeline.healthy { color: #38e997; border-color: rgba(56,233,151,.36); }
+.technical-dashboard .engine-pipeline.warning { color: #ffc94a; border-color: rgba(255,201,74,.36); }
+.technical-dashboard .engine-pipeline.disabled { color: #8da1aa; border-color: rgba(141,161,170,.24); }
+.technical-dashboard .engine-pipeline.error { color: #ff5968; border-color: rgba(255,89,104,.42); }
+.technical-dashboard .engine-core { position: relative; display: grid; place-items: center; width: 190px; height: 190px; margin: auto; border-radius: 50%; background: radial-gradient(circle, rgba(67,240,255,.9), rgba(7,75,92,.55) 42%, rgba(2,15,21,.92) 68%); box-shadow: 0 0 40px rgba(53,231,255,.35); }
+.technical-dashboard .engine-core .ring { position: absolute; border: 1px solid rgba(53,231,255,.55); border-radius: 50%; animation: corexSpin 18s linear infinite; }
+.technical-dashboard .engine-core .one { inset: 16px; }
+.technical-dashboard .engine-core .two { inset: 34px; border-style: dashed; animation-duration: 11s; animation-direction: reverse; }
+.technical-dashboard .engine-core .three { inset: 56px; border-color: rgba(64,232,143,.62); animation-duration: 7s; }
+.technical-dashboard .engine-core strong { z-index: 1; font-size: 34px; letter-spacing: .12em; }
+@keyframes corexSpin { to { transform: rotate(360deg); } }
+
+.workflow-status-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(0,0,0,.48); }
+.workflow-status-modal { width: min(620px, calc(100vw - 40px)); max-height: 72vh; overflow: auto; border: 1px solid rgba(69,226,246,.28); border-radius: 16px; background: #07151c; color: #f4fbff; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+.workflow-status-modal header { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid rgba(69,226,246,.18); }
+.workflow-status-modal header span { color: #35e7ff; font-size: 10px; font-weight: 900; letter-spacing: .18em; }
+.workflow-status-modal h2 { margin: 4px 0 0; }
+.workflow-status-modal header button { border: 1px solid rgba(69,226,246,.35); border-radius: 8px; background: transparent; color: inherit; padding: 7px 10px; }
+.workflow-status-list { display: grid; gap: 10px; padding: 16px; }
+.workflow-status-list button { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 12px; text-align: left; border: 1px solid rgba(69,226,246,.18); border-radius: 10px; color: inherit; background: rgba(9,34,45,.88); }
+.workflow-status-list i { width: 10px; height: 10px; border-radius: 50%; background: #40e88f; box-shadow: 0 0 12px #40e88f; }
+.workflow-status-modal.inactive .workflow-status-list i { background: #ff5968; box-shadow: 0 0 12px #ff5968; }
+.workflow-status-list small { grid-column: 2 / 4; color: var(--muted-text, #9bb3bf); }
+.workflow-status-empty { padding: 24px; color: var(--muted-text, #9bb3bf); }
+
+.technical-dashboard .corex-facebook-performance { background: linear-gradient(135deg, #06131a, #08242c); color: #f4fbff; }
+.technical-dashboard .corex-facebook-performance .facebook-pages-header { background: rgba(5,23,31,.92); border: 1px solid rgba(69,226,246,.24); box-shadow: none; }
+.technical-dashboard .corex-facebook-performance .facebook-pages-header h1, .technical-dashboard .corex-facebook-performance .facebook-performance-section h2 { color: #f4fbff; }
+.technical-dashboard .facebook-performance-section { margin-top: 16px; padding: 18px; border: 1px solid rgba(69,226,246,.22); border-radius: 14px; background: rgba(3,18,25,.82); }
+.technical-dashboard .facebook-performance-section > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.technical-dashboard .facebook-ranking-list { display: grid; gap: 10px; }
+.technical-dashboard .facebook-ranking-list article { display: grid; grid-template-columns: 52px 42px minmax(160px,1fr) minmax(300px,1.2fr) 150px 100px; gap: 12px; align-items: center; padding: 12px; border: 1px solid rgba(69,226,246,.18); border-radius: 12px; background: rgba(8,35,46,.9); cursor: pointer; }
+.technical-dashboard .facebook-ranking-list i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(53,231,255,.16); color: #35e7ff; font-style: normal; font-weight: 900; }
+.technical-dashboard .facebook-ranking-list dl { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px 12px; margin: 0; }
+.technical-dashboard .facebook-ranking-list dt { color: #8fb4c1; font-size: 10px; }
+.technical-dashboard .facebook-ranking-list dd { margin: 0; font-weight: 800; }
+.technical-dashboard .facebook-ranking-list a { color: #35e7ff; font-weight: 900; }
+.technical-dashboard .team-performance-row { display: grid; grid-template-columns: 190px minmax(0, 1fr) 80px; gap: 14px; align-items: center; margin: 14px 0; }
+.technical-dashboard .team-performance-row span { display: grid; font-weight: 900; }
+.technical-dashboard .team-performance-row small { color: #8fb4c1; font-weight: 500; }
+.technical-dashboard .team-performance-row em { height: 18px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+.technical-dashboard .team-performance-row i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #35e7ff, #40e88f); }
+.facebook-empty-state.performance { display: grid; gap: 8px; padding: 38px; border: 1px dashed rgba(69,226,246,.35); border-radius: 14px; background: rgba(4,21,29,.86); color: #f4fbff; }
+
+.facebook-control-page { min-height: calc(100vh - 72px); padding: 24px; color: #f4fbff; background: linear-gradient(135deg, #06131a, #08242c); overflow: auto; }
+.facebook-control-hero, .facebook-control-card, .facebook-control-toolbar, .facebook-control-notice { border: 1px solid rgba(69,226,246,.22); border-radius: 14px; background: rgba(5,23,31,.92); box-shadow: 0 16px 40px rgba(0,0,0,.18); }
+.facebook-control-hero { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 20px; }
+.facebook-control-hero span, .facebook-control-card h2, .facebook-control-toolbar label { color: #35e7ff; letter-spacing: .14em; font-weight: 900; }
+.facebook-control-hero h1 { margin: 6px 0; font-size: 32px; }
+.facebook-control-hero p { margin: 0; color: #9bb3bf; }
+.facebook-control-hero button, .facebook-control-actions button, .team-add-row button, .facebook-control-table button { border: 1px solid rgba(69,226,246,.35); border-radius: 10px; background: rgba(53,231,255,.12); color: #f4fbff; padding: 10px 12px; font-weight: 900; }
+.facebook-control-notice { margin: 14px 0; padding: 12px 16px; color: #35e7ff; }
+.facebook-control-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 14px 0; padding: 14px 16px; }
+.facebook-control-toolbar label { display: flex; align-items: center; gap: 12px; }
+.facebook-control-page input, .facebook-control-page select, .facebook-control-page textarea { width: 100%; border: 1px solid rgba(69,226,246,.24); border-radius: 9px; background: #071922; color: #f4fbff; padding: 10px; }
+.facebook-control-layout { display: grid; grid-template-columns: minmax(340px, 1.2fr) minmax(260px, .8fr); gap: 16px; align-items: start; }
+.facebook-control-card { padding: 18px; }
+.facebook-control-card h2 { margin: 0 0 14px; font-size: 16px; }
+.page-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.page-form h2, .page-form label:nth-of-type(1), .page-form label:last-of-type, .facebook-control-actions { grid-column: 1 / -1; }
+.page-form label, .team-add-row { display: grid; gap: 6px; color: #9bb3bf; }
+.facebook-control-actions, .team-add-row { display: flex; gap: 10px; }
+.team-panel article, .facebook-control-table article { display: grid; gap: 8px; padding: 12px; margin-top: 10px; border: 1px solid rgba(69,226,246,.16); border-radius: 10px; background: rgba(8,35,46,.82); }
+.facebook-control-table article { grid-template-columns: minmax(220px,1fr) repeat(4, minmax(120px,.55fr)) minmax(240px,.9fr); align-items: center; }
+.facebook-control-table article > div:first-child { display: grid; gap: 5px; }
+.facebook-control-table a { color: #35e7ff; }
+.facebook-control-table article > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; }
+.facebook-empty-state { display: grid; gap: 8px; color: #9bb3bf; }
+@media (max-width: 1280px) { .technical-dashboard .engine-stage, .facebook-control-layout { grid-template-columns: 1fr; } .technical-dashboard .engine-pipeline::after { display: none; } .technical-dashboard .facebook-ranking-list article, .facebook-control-table article { grid-template-columns: 1fr; } }

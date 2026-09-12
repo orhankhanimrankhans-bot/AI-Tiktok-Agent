@@ -12,7 +12,7 @@ test("pipeline renders every real workflow, including third and fourth entries",
   assert.match(component, /displayed\.map\(\(workflow\)/);
   assert.doesNotMatch(component, /workflows\.slice|displayed\.slice/);
   assert.match(styles, /pipeline-workflow-stack[^}]*overflow-y: auto/);
-  assert.match(dashboard, /My Workflow/);
+  assert.match(dashboard, /savedWorkflows\.filter/);
 });
 
 test("workflow cards show live metadata and open the selected workflow", () => {

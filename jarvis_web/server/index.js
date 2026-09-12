@@ -30,6 +30,8 @@ const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
 const { SqliteSessionStore } = require("./sqliteSessionStore");
 const { createWorkflowScheduler } = require("./workflowScheduler");
 const { YouTubeUploadError } = require("./youtubeUpload");
+const { createFacebookControlStore } = require("./facebookControlStore");
+const { registerFacebookControlRoutes } = require("./facebookControlRoutes");
 
 dotenv.config();
 
@@ -921,6 +923,8 @@ async function startServer() {
     legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();
   const facebookPublicationStore = new FacebookPublicationStore(credentialStore.db); facebookPublicationStore.open();
+  const facebookControlStore = createFacebookControlStore({ db: credentialStore.db });
+  registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore), facebookCredentialStore, logger: console });
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   executionServices = createExecutionServices({ credentialStore, createOAuthClient,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),

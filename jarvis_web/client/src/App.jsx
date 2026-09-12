@@ -8,6 +8,7 @@ import { buildLocalPublishPayload, publishLocalWorkflow, runSingleFlightPublish 
 import { definitionFingerprint, editorDefinition, validateStoredWorkflow } from "./workflowEditorBinding.js";
 import JarvisDashboard from "./JarvisDashboard.jsx";
 import DataViewer from "./DataViewer.jsx";
+import FacebookControl from "./FacebookControl.jsx";
 import { buildDashboardGraph } from "./dashboardPipeline.js";
 import { executePerItem, resolveExpression } from "./expressionResolver.js";
 import { ARCHIVE_AFTER_PUBLISH_ERROR, buildArchiveMoveRequest, preservePublishedSource } from "./postPublishArchive.js";
@@ -3396,15 +3397,15 @@ function App() {
             ["◉", "Voice"],
             ["◌", "WhatsApp"],
             ["♪", "TikTok"],
-            ["♧", "Memory"],
+            ["f", "Facebook Control"],
             ["✓", "Tasks"],
             ["▤", "Logs"],
             ["↻", "Updates"],
             ["▰", "Backups"],
             ["⚙", "Settings"],
             ["〽", "System Health"],
-          ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools" }[label]))).map(([icon, label]) => (
-            <button key={label}>
+          ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label]))).map(([icon, label]) => (
+            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") setTopPage("DASHBOARD"); else if (label === "Facebook Control") setTopPage("FACEBOOK CONTROL"); }}>
               <span>{icon}</span>
               {label}
             </button>
@@ -3870,6 +3871,8 @@ function App() {
             healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
             onOpenWorkflow={(workflowId) => { if (!workflowId) { if (can("edit_workflow")) setShowWorkflowManager(true); return; } if (!can("view_workflow")) return; setTopPage("WORKFLOW"); if (workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
+        ) : visibleTopPage === "FACEBOOK CONTROL" ? (
+          <FacebookControl apiBaseUrl={API_BASE_URL} credentials={facebookCredentials} />
         ) : visibleTopPage === "TOOLS" ? (
           session.role === "admin" ? <SecurityAccess /> : <section className="placeholder-page"><h1>TOOLS</h1><p>Child-safe tools are available according to the active permission policy.</p></section>
         ) : (
