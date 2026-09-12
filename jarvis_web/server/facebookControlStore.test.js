@@ -111,3 +111,32 @@ test("Facebook Control stores public metric snapshots and preserves last good va
   assert.equal(db.prepare("SELECT count(*) AS count FROM facebook_public_metric_snapshots").get().count, 1);
   db.close();
 });
+
+
+test("Facebook Control ignores stale impossible public follower snapshots and accepts the repaired scan", () => {
+  const { db, store } = testStore();
+  const owner = { ownerType: "admin", ownerId: "primary" };
+  const page = store.createPage({ pageUrl: "https://www.facebook.com/profile.php?id=61566901767304", pageName: "Mega Crush Lab", pageId: "61566901767304" }, owner);
+  db.prepare("INSERT INTO facebook_public_metric_snapshots (id, owner_type, owner_id, page_record_id, captured_at, followers_count, followers_display, followers_source, recent_views_total, videos_sampled, posts_count, posts_count_type, posts_window, scan_depth, scan_status, scan_error, source, metric_meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("metric_bad", owner.ownerType, owner.ownerId, page.id, "2026-09-12T11:59:00.000Z", 61566901767304, "61566901767304", "public_text", null, 0, 1, "recent-public-sample", "latest-10-public-items", 10, "synced", "", "public_http_fetch", null);
+  const stale = store.list(owner).pages[0];
+  assert.equal(stale.metrics.followers, null);
+  assert.equal(stale.metrics.posts, null);
+  const repaired = store.recordPublicMetrics(page.id, {
+    status: "synced",
+    message: "Public scan collected followers, posts.",
+    pageName: "Mega Crush Lab",
+    pageUrl: "https://www.facebook.com/people/Mega-Crush-Lab/61566901767304/",
+    followersCount: 966,
+    followersDisplay: "966",
+    followersSource: "public_text:www.facebook.com",
+    postsCount: 10,
+    postsCountType: "recent-public-sample",
+    postsWindow: "latest-10-public-items",
+    scanDepth: 10,
+    source: "public_http_fetch",
+  }, owner);
+  assert.equal(repaired.metrics.followers, 966);
+  assert.equal(repaired.metrics.posts, 10);
+  assert.equal(repaired.performanceScore, score(repaired.metrics));
+  db.close();
+});
