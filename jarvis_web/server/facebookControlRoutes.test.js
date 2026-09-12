@@ -55,8 +55,8 @@ test("Facebook Control sync fetches real Graph metrics through the existing cred
       calls.push(["metadata", pageId, token]);
       return { id: "123", name: "Corex Official", followers_count: 48200, link: "https://www.facebook.com/corexpage", picture: { data: { url: "https://example.test/corex.jpg" } } };
     },
-    async pageVideos(pageId, token) {
-      calls.push(["videos", pageId, token]);
+    async pagePosts(pageId, token) {
+      calls.push(["posts", pageId, token]);
       return { summary: { total_count: 126 } };
     },
     async pageInsights(pageId, token) {
@@ -71,11 +71,12 @@ test("Facebook Control sync fetches real Graph metrics through the existing cred
   assert.equal(result.pages[0].pagePictureUrl, "https://example.test/corex.jpg");
   assert.equal(result.pages[0].metrics.followers, 48200);
   assert.equal(result.pages[0].metrics.views, 1800000);
+  assert.equal(result.pages[0].metrics.posts, 126);
   assert.equal(result.pages[0].metrics.reels, 126);
   assert.equal(result.pages[0].metrics.capturedAt, "2026-09-12T12:00:00.000Z");
   assert.deepEqual(calls, [
     ["metadata", "123", "page-token-secret"],
-    ["videos", "123", "page-token-secret"],
+    ["posts", "123", "page-token-secret"],
     ["insights", "123", "page-token-secret"],
   ]);
   assert.doesNotMatch(JSON.stringify(result), /page-token-secret|user-token-secret/);
@@ -84,7 +85,7 @@ test("Facebook Control sync fetches real Graph metrics through the existing cred
 
 test("Facebook Control sync maps Graph permission errors without deleting last good metrics", async () => {
   const { db, store, owner, page } = setupStore();
-  store.recordPageMetrics(page.id, { pageName: "Corex Page", pageId: "123", pageUrl: "https://www.facebook.com/corexpage", followers: 100, views: 200, reels: 3 }, owner);
+  store.recordPageMetrics(page.id, { pageName: "Corex Page", pageId: "123", pageUrl: "https://www.facebook.com/corexpage", followers: 100, views: 200, posts: 3 }, owner);
   const graphServiceFactory = () => ({
     async pageMetadata() { throw new FacebookGraphError(403, "meta_200", "Permission required: pages_read_engagement.", "pages_read_engagement"); },
   });

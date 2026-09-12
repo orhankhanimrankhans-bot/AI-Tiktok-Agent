@@ -18,7 +18,7 @@ test("Facebook Control persists pages, teams, sync settings, and empty real metr
   const page = store.createPage({ pageUrl: "https://www.facebook.com/corexpage", pageName: "Corex Page", pageId: "123", teamMemberId: team.id, status: "ACTIVE" }, owner);
   assert.equal(page.status, "ACTIVE");
   assert.equal(page.dataConnectionStatus, "connection_required");
-  assert.deepEqual(page.metrics, { followers: null, views: null, reels: null, engagement: null, followerGrowth: null, capturedAt: null });
+  assert.deepEqual(page.metrics, { followers: null, views: null, posts: null, reels: null, engagement: null, followerGrowth: null, capturedAt: null });
   assert.equal(store.list(owner).pages[0].performanceScore, 0);
   assert.deepEqual(store.list(otherOwner).pages, []);
   assert.equal(store.updateSync({ refreshIntervalMinutes: 15 }, owner).refreshIntervalMinutes, 15);
@@ -43,7 +43,7 @@ test("Facebook Control records successful metric snapshots with frontend-ready t
     pagePictureUrl: "https://example.test/corex.jpg",
     followers: 48200,
     views: 1800000,
-    reels: 126,
+    posts: 126,
     engagement: 6.5,
     followerGrowth: 3.2,
   }, owner);
@@ -53,6 +53,7 @@ test("Facebook Control records successful metric snapshots with frontend-ready t
   assert.equal(synced.metrics.capturedAt, "2026-09-12T12:00:00.000Z");
   assert.equal(synced.metrics.followers, 48200);
   assert.equal(synced.metrics.views, 1800000);
+  assert.equal(synced.metrics.posts, 126);
   assert.equal(synced.metrics.reels, 126);
   assert.equal(synced.performanceScore, score(synced.metrics));
   db.close();
@@ -63,10 +64,11 @@ test("Facebook Control uses stored metric snapshots without fabricating values a
   const { db, store } = testStore();
   const owner = { ownerType: "admin", ownerId: "primary" };
   const page = store.createPage({ pageUrl: "https://facebook.com/corex", pageName: "Corex", credentialId: "fcred_1234567890123456789012" }, owner);
-  db.prepare("INSERT INTO facebook_page_metrics (id, owner_type, owner_id, page_record_id, captured_at, followers, views, reels, engagement, follower_growth) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("metric_1", owner.ownerType, owner.ownerId, page.id, "2026-09-12T12:05:00.000Z", 1000, 2500, 12, 8.5, 4.2);
+  db.prepare("INSERT INTO facebook_page_metrics (id, owner_type, owner_id, page_record_id, captured_at, followers, views, reels, posts, engagement, follower_growth) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("metric_1", owner.ownerType, owner.ownerId, page.id, "2026-09-12T12:05:00.000Z", 1000, 2500, 12, 12, 8.5, 4.2);
   const saved = store.list(owner).pages[0];
   assert.equal(saved.metrics.followers, 1000);
   assert.equal(saved.metrics.views, 2500);
+  assert.equal(saved.metrics.posts, 12);
   assert.equal(saved.performanceScore, score(saved.metrics));
   assert.equal(store.deletePage(page.id, owner), true);
   assert.equal(db.prepare("SELECT count(*) AS count FROM facebook_page_metrics").get().count, 0);

@@ -28,13 +28,13 @@ async function syncPage({ page, owner, store, facebookCredentialStore, graphServ
   if (!token) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
   try {
     const metadata = await service.pageMetadata(pageId, token);
-    let videos = null; let insights = null; const warnings = [];
-    try { videos = await service.pageVideos(pageId, token); } catch (error) { warnings.push(publicSyncError(error).message); }
+    let posts = null; let insights = null; const warnings = [];
+    try { posts = service.pagePosts ? await service.pagePosts(pageId, token) : await service.pageVideos(pageId, token); } catch (error) { warnings.push(publicSyncError(error).message); }
     try { insights = await service.pageInsights(pageId, token); } catch (error) { warnings.push(publicSyncError(error).message); }
     const followers = Number(metadata.followers_count ?? metadata.fan_count);
     const views = latestInsightValue(insights, "page_impressions_unique") ?? latestInsightValue(insights, "page_video_views");
-    const reels = Number(videos?.summary?.total_count);
-    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || page.pageName, pageUrl: metadata.link || page.pageUrl, pagePictureUrl: metadata.picture?.data?.url || page.pagePictureUrl, followers: Number.isFinite(followers) ? followers : null, views, reels: Number.isFinite(reels) ? reels : null, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
+    const postsCount = Number(posts?.summary?.total_count);
+    return store.recordPageMetrics(page.id, { pageId: String(metadata.id || pageId), pageName: metadata.name || credential.pageName || page.pageName, pageUrl: metadata.link || page.pageUrl, pagePictureUrl: metadata.picture?.data?.url || page.pagePictureUrl, followers: Number.isFinite(followers) ? followers : null, views, posts: Number.isFinite(postsCount) ? postsCount : null, engagement: null, followerGrowth: null, message: warnings.length ? `Synced with warnings: ${[...new Set(warnings)].join(" ")}` : "Facebook metrics synced." }, owner);
   } catch (error) {
     const issue = publicSyncError(error); logger?.warn?.("Facebook Control sync page failed safely.", { status: issue.status, pageRecordId: page.id }); return store.markPageSyncIssue(page.id, issue.status, issue.message, owner);
   }

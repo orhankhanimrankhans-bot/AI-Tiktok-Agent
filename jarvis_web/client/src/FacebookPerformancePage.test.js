@@ -9,10 +9,10 @@ const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 test("Facebook Performance page uses backend sync and the required compact sections", () => {
   assert.match(api, /\/api\/facebook\/performance/);
   assert.match(api, /\/api\/facebook\/sync/);
-  assert.match(performancePage, /Refresh Data/);
+  assert.match(performancePage, /Update Metrics/);
   assert.match(performancePage, /Page Performance \/ Ranking/);
   assert.match(performancePage, /Team Performance Graph/);
-  for (const column of ["Rank", "Page", "Manager", "Followers", "Views", "Reels", "Score", "Updated", "Open Page"]) {
+  for (const column of ["Rank", "Page", "Manager", "Followers", "Views", "Posts", "Score", "Updated", "Open Page"]) {
     assert.match(performancePage, new RegExp(column));
   }
   assert.match(performancePage, /Waiting for first successful Facebook sync/);

@@ -44,7 +44,7 @@ function metaErrorStatus(responseStatus, code) {
 class FacebookGraphService {
   constructor({ version, fetchImpl = fetch }) { this.version = validateGraphVersion(version); this.fetch = fetchImpl; this.baseUrl = `https://graph.facebook.com/${version}`; }
   async request(path, token, params = {}, permission = "", stage = "graph") {
-    if (!/^(me|me\/accounts|me\/permissions|\d{3,30}|\d{3,30}\/(?:insights|videos))$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
+    if (!/^(me|me\/accounts|me\/permissions|\d{3,30}|\d{3,30}\/(?:insights|videos|posts))$/.test(path)) throw new FacebookGraphError(400, "invalid_graph_path", "Unsupported Facebook Graph path.");
     const url = new URL(`${this.baseUrl}/${path}`); for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     let response; try { response = await this.fetch(url, { redirect: "error", headers: { Authorization: `Bearer ${token}` } }); }
     catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
@@ -89,6 +89,7 @@ class FacebookGraphService {
   }
   pageMetadata(pageId, token) { return this.request(validatePageId(pageId), token, { fields: "id,name,category,fan_count,followers_count,link,picture{url}" }, PERMISSIONS.page_metadata, "page_metadata"); }
   pageVideos(pageId, token) { return this.request(`${validatePageId(pageId)}/videos`, token, { limit: "0", summary: "true" }, PERMISSIONS.page_metadata, "page_videos"); }
+  pagePosts(pageId, token) { return this.request(`${validatePageId(pageId)}/posts`, token, { fields: "id", limit: "0", summary: "true" }, PERMISSIONS.page_metadata, "page_posts"); }
   pageInsights(pageId, token) { return this.request(`${validatePageId(pageId)}/insights`, token, { metric: "page_impressions_unique,page_video_views", period: "day", limit: "5" }, PERMISSIONS.page_metadata, "page_insights"); }
   async postReelForm(token, params, stage = "publishing") {
     const url = new URL(`${this.baseUrl}/me/video_reels`);
