@@ -6542,3 +6542,58 @@ button {
 .facebook-control-table article > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; }
 .facebook-empty-state { display: grid; gap: 8px; color: #9bb3bf; }
 @media (max-width: 1280px) { .technical-dashboard .engine-stage, .facebook-control-layout { grid-template-columns: 1fr; } .technical-dashboard .engine-pipeline::after { display: none; } .technical-dashboard .facebook-ranking-list article, .facebook-control-table article { grid-template-columns: 1fr; } }
+
+.security-console { width: min(1240px, 100%); padding: 18px 20px 26px; }
+.security-console-heading { margin-bottom: 12px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--border-strong, #2ddaff) 45%, transparent); border-radius: 18px; background: linear-gradient(135deg, color-mix(in srgb, var(--surface-panel, #0b2029) 92%, transparent), color-mix(in srgb, var(--surface-page, #061017) 96%, transparent)); box-shadow: 0 18px 50px rgba(0,0,0,.18); }
+.security-status-pill { min-width: 140px; display: grid; justify-items: center; gap: 2px; padding: 10px 16px; border: 1px solid rgba(66,223,245,.45); border-radius: 999px; background: rgba(46,227,255,.08); text-transform: uppercase; letter-spacing: .12em; }
+.security-status-pill b { font-size: 22px; color: #56efff; }
+.security-status-pill span { font-size: 10px; color: var(--muted-text, #9bb3bb); }
+.security-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+.security-overview > div { display: grid; gap: 4px; min-height: 88px; padding: 14px 16px; border: 1px solid rgba(66,223,245,.26); border-radius: 16px; background: color-mix(in srgb, var(--surface-panel, #0c212a) 94%, transparent); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.security-overview span,.security-card-title span { color: #35e7ff; font-size: 10px; font-weight: 900; letter-spacing: .18em; }
+.security-overview b { font-size: 18px; color: var(--text-primary, #f4fdff); }
+.security-overview small,.security-card-title small { color: var(--muted-text, #9bb3bb); line-height: 1.35; }
+.security-console-layout { display: grid; grid-template-columns: minmax(330px, .86fr) minmax(520px, 1.42fr); gap: 12px; align-items: start; }
+.security-console .security-card { margin: 0; padding: 16px; border-radius: 18px; background: linear-gradient(145deg, color-mix(in srgb, var(--surface-panel, #102b36) 92%, transparent), color-mix(in srgb, var(--surface-page, #071119) 96%, transparent)); }
+.security-card-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.security-card-title h2 { margin: 4px 0 0; font-size: 20px; color: var(--text-primary, #f4fdff); }
+.security-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.access-preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 2px 0; }
+.access-preset { min-height: 74px; display: grid; justify-items: start; gap: 4px; padding: 11px 12px !important; text-align: left; border-color: rgba(108,231,255,.22) !important; background: rgba(255,255,255,.03) !important; }
+.access-preset.active { border-color: #42dff5 !important; background: rgba(50,224,244,.16) !important; box-shadow: inset 0 0 0 1px rgba(66,223,245,.35); }
+.access-preset small { color: var(--muted-text, #9bb3bb); font-weight: 600; line-height: 1.25; }
+.security-permission-editor { padding: 10px; border: 1px solid rgba(66,223,245,.18); border-radius: 14px; background: rgba(0,0,0,.12); }
+.security-permission-editor.permission,.security-permission-editor .permission { font-size: 12px; }
+.security-table { display: grid; gap: 0; overflow: hidden; border: 1px solid rgba(66,223,245,.18); border-radius: 14px; }
+.security-row { display: grid; grid-template-columns: 1.2fr 1.25fr .9fr 1.2fr; gap: 10px; align-items: center; min-height: 62px; padding: 10px 12px; border-top: 1px solid rgba(66,223,245,.12); background: rgba(5,22,29,.32); }
+.security-row:first-child { border-top: 0; }
+.security-row-head { min-height: 40px; color: #68ecff; font-size: 10px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; background: rgba(43,222,255,.08); }
+.security-row b { color: var(--text-primary, #f4fdff); }
+.security-row small { display: block; margin-top: 3px; color: var(--muted-text, #9bb3bb); }
+.security-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.security-row-actions button,.security-card-title button { padding: 8px 10px; }
+.security-advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(66,223,245,.16); }
+.security-advanced-grid article { display: grid; gap: 10px; align-content: start; padding: 12px; border: 1px solid rgba(66,223,245,.16); border-radius: 14px; background: rgba(0,0,0,.12); }
+.security-advanced-grid h3 { margin: 0; color: #63ecff; }
+.security-session-card { margin-top: 12px !important; }
+.security-session-table .security-row { grid-template-columns: 1fr 1.1fr 1.1fr .7fr; }
+.security-edit-dialog { display: grid; gap: 12px; width: min(620px, 100%); }
+.security-edit-dialog label { display: grid; gap: 7px; }
+.security-confirm-dialog input,.security-confirm-dialog select { min-height: 38px; padding: 8px 10px; color: #effcff; background: #07131a; border: 1px solid #255868; border-radius: 7px; }
+html[data-theme="light"] .security-console .security-card,
+html[data-theme="light"] .security-console-heading,
+html[data-theme="light"] .security-overview > div,
+:root[data-theme="light"] .security-console .security-card,
+:root[data-theme="light"] .security-console-heading,
+:root[data-theme="light"] .security-overview > div,
+.light .security-console .security-card,
+.light .security-console-heading,
+.light .security-overview > div { background: #ffffff; color: #061721; box-shadow: 0 16px 40px rgba(15,45,61,.08); }
+html[data-theme="light"] .security-row,
+:root[data-theme="light"] .security-row,
+.light .security-row { background: #f7fbfd; }
+html[data-theme="light"] .access-preset,
+:root[data-theme="light"] .access-preset,
+.light .access-preset { background: #f9fcfe !important; color: #061721 !important; }
+@media (max-width: 980px) { .security-overview,.security-console-layout,.security-advanced-grid { grid-template-columns: 1fr; } .security-row,.security-session-table .security-row { grid-template-columns: 1fr; align-items: start; } .security-row-actions { justify-content: flex-start; } }
+@media (max-width: 560px) { .security-console { padding: 12px; } .security-form-grid,.access-preset-grid { grid-template-columns: 1fr; } .security-console-heading { flex-direction: column; } }
