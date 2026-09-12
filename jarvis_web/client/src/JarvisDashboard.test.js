@@ -9,15 +9,15 @@ const styles = readFileSync(new URL("./App.css", import.meta.url), "utf8");
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
 test("dashboard renders a coded technical pipeline board", () => {
-  assert.match(dashboard, /className="technical-pipeline-board"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="technical-isk-core"/); assert.match(dashboard, /<span>ISK<\/span>/);
-  for (const label of ["INPUT", "ASYNC EVENT", "MODEL", "PRIVACY", "TOOLS", "MEMORY SERVICES", "RESPONSE", "COMMAND PIPELINE"]) assert.match(dashboard, new RegExp(label));
-  for (const label of ["Web App", "Mobile App", "API / SDK", "Enterprise Systems", "Advanced Reasoning", "PII Detection", "Access Control"]) assert.match(dashboard, new RegExp(label));
-  assert.match(styles, /\.technical-pipeline-board/); assert.match(styles, /\.data-cylinder/); assert.match(styles, /\.technical-pipeline-grid/); assert.match(styles, /corex-stream-rise/);
+  assert.match(dashboard, /className="technical-pipeline-board compact-technical-board"/); assert.match(dashboard, /<h1>COREX CORE<\/h1>/); assert.match(dashboard, /className="technical-isk-core"/); assert.match(dashboard, /<span>ISK<\/span>/);
+  for (const label of ["INPUT", "TOOLS", "MEMORY SERVICES", "RESPONSE", "COMMAND PIPELINE"]) assert.match(dashboard, new RegExp(label));
+  for (const label of ["Web App", "Mobile App", "API / SDK", "Enterprise Systems", "Search", "Code Executor", "Data Analyzer", "Integrations"]) assert.match(dashboard, new RegExp(label));
+  assert.match(styles, /\.technical-pipeline-board/); assert.match(styles, /\.compact-pipeline-grid/); assert.match(styles, /\.compact-flow-arrow/); assert.match(styles, /\.data-cylinder/);
 });
 
 test("saved workflows and real execution inputs feed the technical dashboard", () => {
   assert.match(dashboard, /listWorkflows\(fetch, apiBaseUrl\)/); assert.match(dashboard, /savedWorkflows\.filter/); assert.match(dashboard, /dashboardFacts\(\{ graph, googleCredentials: healthContext\.googleCredentials, facebookCredentials: healthContext\.facebookCredentials, executions/);
-  assert.match(dashboard, /workflowItems = workflows\.slice\(0, 5\)/); assert.match(dashboard, /onOpenWorkflow\?\.\(workflow\.id\)/); assert.match(dashboard, /facts\.workflowCount\} workflows \/ \{facts\.nodeCount\} active nodes \/ \{facts\.connectionCount\} connections/);
+  assert.match(dashboard, /workflowItems = workflows\.slice\(0, 4\)/); assert.match(dashboard, /onOpenWorkflow\?\.\(workflow\.id\)/); assert.match(dashboard, /facts\.workflowCount\} workflows \/ \{facts\.nodeCount\} active nodes \/ \{facts\.connectionCount\} connections/);
   assert.match(app, /apiBaseUrl=\{API_BASE_URL\}/); assert.match(app, /activeWorkflowId=\{editorWorkflowSource/); assert.match(app, /requestOpenServerWorkflow\(workflowId\)/);
 });
 
@@ -33,10 +33,10 @@ test("conversation routes tasks to agents and reports unavailable connectors hon
 
 test("technical dashboard keeps the office below coded pipeline modules", () => {
   assert.match(dashboard, /<OfficeSimulation/); assert.match(office, /jarvis-ai-office\.webp/);
-  assert.match(dashboard, /technical-plane-labels/); assert.match(dashboard, /INTERFACES/); assert.match(dashboard, /CONTROL PLANE/); assert.match(dashboard, /DATA PLANE/);
-  assert.match(dashboard, /privacy-shield/); assert.match(dashboard, /technical-flow-lines/); assert.match(dashboard, /technical-workflow-strip/);
+  assert.match(dashboard, /compact-plane-labels/); assert.match(dashboard, /INTERFACES/); assert.match(dashboard, /CONTROL PLANE/); assert.match(dashboard, /DATA PLANE/);
+  assert.doesNotMatch(dashboard, /privacy-shield/); assert.doesNotMatch(dashboard, /technical-flow-lines/); assert.match(dashboard, /compact-flow-arrow/); assert.match(dashboard, /technical-workflow-strip/);
   assert.match(dashboard, /facts\.facebookCredentials\.length \? "Facebook connected" : "Limited"/); assert.match(dashboard, /Amazon is not connected/);
-  assert.match(styles, /\.privacy-shield/); assert.match(styles, /\.technical-flow-lines/); assert.match(styles, /\.technical-workflow-strip/); assert.match(styles, /@media \(max-width: 1080px\)[\s\S]*technical-pipeline-grid/);
+  assert.match(styles, /\.compact-pipeline-grid/); assert.match(styles, /\.compact-flow-arrow/); assert.match(styles, /\.technical-workflow-strip/); assert.match(styles, /@media \(max-width: 1080px\)[\s\S]*compact-pipeline-grid/);
 });
 test("responsive and reduced-motion safeguards cover the headquarters", () => {
   assert.match(styles, /@media \(max-width: 1450px\)[\s\S]*pipeline-live-stage/); assert.match(styles, /@media \(max-width: 1080px\)/); assert.match(styles, /@media \(max-width: 760px\)[\s\S]*workflow-wire-layer/);

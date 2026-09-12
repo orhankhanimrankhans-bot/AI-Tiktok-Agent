@@ -27,8 +27,7 @@ function ConversationPanel({ inputRef, messages, draft, onDraft, onSend }) {
 
 
 function TechnicalPipelineBoard({ facts, workflows, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation }) {
-  const modelState = workflowError ? "Fail-safe" : workflowActive ? "Active routing" : "Ready routing";
-  const workflowItems = workflows.slice(0, 5);
+  const workflowItems = workflows.slice(0, 4);
   const inputChannels = [
     ["web", "Web App", "Dashboard"],
     ["mobile", "Mobile App", "Responsive"],
@@ -47,21 +46,17 @@ function TechnicalPipelineBoard({ facts, workflows, state, workflowActive, workf
     ["Knowledge Base", "Project data"],
     ["User Preferences", "Saved theme"],
   ];
-  const privacyItems = ["PII Detection", "Policy Check", "Data Minimization", "Access Control"];
-  return <section className="technical-pipeline-board" aria-label="Corex technical pipeline dashboard">
+  return <section className="technical-pipeline-board compact-technical-board" aria-label="Corex technical pipeline dashboard">
     <div className="pipeline-frame-corner top-left" /><div className="pipeline-frame-corner top-right" /><div className="pipeline-frame-corner bottom-left" /><div className="pipeline-frame-corner bottom-right" />
     <header className="technical-pipeline-header"><div><span>AI CONTROL SYSTEM</span><h1>COREX CORE</h1><p>Live command headquarters</p></div><button type="button" className="technical-isk-core" onClick={onFocusConversation} aria-label="ISK - focus Corex conversation"><span>ISK</span></button><strong><i />{state.toUpperCase()}</strong></header>
-    <div className="technical-pipeline-grid">
-      <aside className="technical-plane-labels" aria-hidden="true"><div><b>INTERFACES</b></div><div><b>CONTROL PLANE</b></div><div><b>DATA PLANE</b></div></aside>
+    <div className="compact-pipeline-grid">
+      <aside className="compact-plane-labels" aria-hidden="true"><div><b>INTERFACES</b></div><div><b>CONTROL PLANE</b></div><div><b>DATA PLANE</b></div></aside>
       <section className="technical-column input-channel-column"><h2>INPUT<br />CHANNELS</h2><div className="technical-stack">{inputChannels.map(([id, label, meta]) => <button type="button" key={id} onClick={() => onControl(id === "enterprise" ? "workflow" : id === "api" ? "workflow" : "upload")}><i>{id === "web" ? "◎" : id === "mobile" ? "▯" : id === "api" ? "&lt;/&gt;" : "▥"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
-      <section className="technical-column event-stream-column"><h2>ASYNC EVENT<br />STREAM</h2><div className="data-cylinder" aria-label="Live async event stream"><span /><span /><span /><span /><i /></div><div className="signal-scope" /></section>
-      <section className="technical-column model-routing-column"><h2>MODEL<br />ROUTING</h2><div className="model-router-card"><button type="button" onClick={() => onControl("workflow")}><i>✣</i><span>Advanced Reasoning</span></button><button type="button" onClick={() => onControl("workflow")}><i>✺</i><span>General Purpose</span></button><button type="button" onClick={() => onControl("workflow")}><i>ϟ</i><span>{modelState}</span></button></div><div className="wave-scope purple" /></section>
-      <section className="technical-column privacy-column"><h2>PRIVACY<br />GUARD</h2><div className="privacy-shield"><i>✓</i></div><ul>{privacyItems.map((item) => <li key={item}>✓ {item}</li>)}</ul><div className="wave-scope gold" /></section>
-      <section className="technical-column tools-column"><h2>TOOLS</h2><div className="technical-stack compact">{toolItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Integrations" ? "facebook" : label === "Data Analyzer" ? "workflow" : "storage")}><i>{label === "Search" ? "⌕" : label === "Code Executor" ? "▣" : label === "Data Analyzer" ? "▥" : "✚"}</i><span>{label}</span><small>{meta}</small></button>)}</div><h2 className="memory-title">MEMORY SERVICES</h2><div className="technical-stack compact memory-stack">{memoryItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Conversation Memory" ? "whatsapp" : "storage")}><i>{label === "Conversation Memory" ? "☰" : label === "Vector Store" ? "✤" : label === "Knowledge Base" ? "▤" : "●"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
-      <section className="technical-column response-column"><h2>RESPONSE<br />STREAM</h2><div className="data-cylinder response" aria-label="Response stream"><span /><span /><span /><span /><i /></div><div className="signal-scope" /></section>
+      <div className="compact-flow-arrow" aria-hidden="true"><span /><i /></div>
+      <section className="technical-column tools-column compact-tools-column"><h2>TOOLS</h2><div className="technical-stack compact">{toolItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Integrations" ? "facebook" : label === "Data Analyzer" ? "workflow" : "storage")}><i>{label === "Search" ? "⌕" : label === "Code Executor" ? "▣" : label === "Data Analyzer" ? "▥" : "✚"}</i><span>{label}</span><small>{meta}</small></button>)}</div><h2 className="memory-title">MEMORY SERVICES</h2><div className="technical-stack compact memory-stack">{memoryItems.map(([label, meta]) => <button type="button" key={label} onClick={() => onControl(label === "Conversation Memory" ? "whatsapp" : "storage")}><i>{label === "Conversation Memory" ? "☰" : label === "Vector Store" ? "✤" : label === "Knowledge Base" ? "▤" : "●"}</i><span>{label}</span><small>{meta}</small></button>)}</div></section>
+      <section className="technical-column response-column compact-response-column"><h2>RESPONSE<br />STREAM</h2><div className="data-cylinder response" aria-label="Response stream"><span /><span /><span /><span /><i /></div></section>
     </div>
-    <div className="technical-flow-lines" aria-hidden="true"><span className="flow-a" /><span className="flow-b" /><span className="flow-c" /><span className="flow-d" /></div>
-    <footer className="technical-workflow-strip"><div><span>LIVE WORKFLOWS</span><strong>COMMAND PIPELINE</strong></div><div className="technical-workflow-list">{workflowItems.map((workflow) => <button type="button" key={workflow.id} onClick={() => onOpenWorkflow?.(workflow.id)}><i /> <span>{workflow.name}</span><small>{workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleDateString() : "READY"}</small></button>)}</div><button type="button" className="technical-add-workflow" onClick={() => onControl("workflow")}>+ ADD WORKFLOW</button><p>{facts.workflowCount} workflows / {facts.nodeCount} active nodes / {facts.connectionCount} connections</p></footer>
+    <footer className="technical-workflow-strip compact-workflow-strip"><div><span>LIVE WORKFLOWS</span><strong>COMMAND PIPELINE</strong></div><div className="technical-workflow-list">{workflowItems.map((workflow) => <button type="button" key={workflow.id} onClick={() => onOpenWorkflow?.(workflow.id)}><i /> <span>{workflow.name}</span><small>{workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleDateString() : "READY"}</small></button>)}</div><button type="button" className="technical-add-workflow" onClick={() => onControl("workflow")}>+ ADD WORKFLOW</button><p>{facts.workflowCount} workflows / {facts.nodeCount} active nodes / {facts.connectionCount} connections</p></footer>
   </section>;
 }
 export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive = false, workflowError = false, healthContext = {}, executions = [], lastExecutionAt = null, activeWorkflowId = "local-workflow", onOpenWorkflow }) {
