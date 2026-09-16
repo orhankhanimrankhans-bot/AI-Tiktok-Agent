@@ -19,6 +19,8 @@ function requiredPermissions(req) {
   }
   if (req.path.startsWith("/api/workflows")) return req.method === "GET" ? "view_workflow" : req.method === "DELETE" ? "delete_workflow" : "edit_workflow";
   if (req.path.startsWith("/api/executions")) return req.method === "GET" ? "view_workflow" : "run_workflow";
+  if (req.path.startsWith("/api/facebook/meta-config")) return "publish_facebook";
+  if (req.path.startsWith("/api/facebook/control") || req.path.startsWith("/api/facebook/performance") || req.path.startsWith("/api/facebook/pages") || req.path.startsWith("/api/facebook/team-members") || req.path.startsWith("/api/facebook/sync") || req.path.startsWith("/api/facebook/diagnose")) return req.method === "GET" ? "view_facebook" : "publish_facebook";
   if (req.path.startsWith("/api/facebook/reels/publish")) return "publish_facebook";
   if (req.path.startsWith("/api/facebook/graph/")) return "view_facebook";
   if (req.path.startsWith("/api/facebook/auth/")) return "publish_facebook";

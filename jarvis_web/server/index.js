@@ -4,6 +4,9 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const session = require("express-session");
 const crypto = require("crypto");
+const { MetaAppConfigStore, requireWorkspace } = require("./metaAppConfigStore");
+const { validateMetaTokenApp, exchangeMetaCode } = require("./metaTokenValidation");
+const { createBuildDiagnostics, metaConfigDiagnostics } = require("./buildDiagnostics");
 const { google } = require("googleapis");
 const { CredentialStore, GOOGLE_DRIVE_PROVIDER, YOUTUBE_PROVIDER } = require("./credentialStore");
 const { AccessControlStore, sessionIdentity, workflowWorkspace } = require("./accessControl");
@@ -21,7 +24,6 @@ const { FacebookGraphError, FacebookGraphService } = require("./facebookGraph");
 const { logReelFailure, publishPageReel } = require("./facebookReels");
 const { FacebookPublicationStore } = require("./facebookPublicationStore");
 const { createFacebookVerificationWorker } = require("./facebookVerificationWorker");
-const { createFacebookOAuthState, verifyFacebookOAuthState } = require("./facebookOAuthState");
 const { makeFacebookPageSelectorHtml, makeFacebookPopupHtml } = require("./facebookPopup");
 const { makePopupResultHtml: renderPopupResultHtml } = require("./oauthPopup");
 const { DEFAULT_OPENAI_MODEL, PrepareContentError, prepareContent } = require("./openaiPrepareContent");
@@ -89,6 +91,9 @@ if (IS_PRODUCTION && !process.env.JARVIS_DB_PATH) {
 }
 
 const app = express();
+const CLIENT_DIST = path.join(__dirname, "..", "client", "dist");
+const getBuildDiagnostics = createBuildDiagnostics(CLIENT_DIST, process.env.NODE_ENV);
+app.get("/api/system/build", (req,res) => res.set("Cache-Control", "no-cache, no-store, must-revalidate").json(getBuildDiagnostics()));
 configureSessionProxy(app, IS_PRODUCTION);
 
 const PORT = Number(process.env.PORT || 3001);
@@ -98,11 +103,9 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GOOGLE_REDIRECT_URI =
   process.env.GOOGLE_REDIRECT_URI ||
   `http://localhost:${PORT}/api/google/auth/callback`;
-const META_APP_ID = process.env.META_APP_ID || "";
-const META_APP_SECRET = process.env.META_APP_SECRET || "";
-const META_REDIRECT_URI = process.env.META_REDIRECT_URI || `http://localhost:${PORT}/api/facebook/auth/callback`;
-const META_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v26.0";
-const META_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(META_GRAPH_VERSION_VALUE) ? META_GRAPH_VERSION_VALUE : "";
+// Preserve the production API version setting for existing token-only Graph calls.
+const LEGACY_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v26.0";
+const LEGACY_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(LEGACY_GRAPH_VERSION_VALUE) ? LEGACY_GRAPH_VERSION_VALUE : "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -122,7 +125,7 @@ const LEGACY_CREDENTIAL_ENCRYPTION_SECRETS = [process.env.SESSION_SECRET ||
 const googleOAuthConfigured = Boolean(
   GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI
 );
-const facebookOAuthConfigured = Boolean(META_APP_ID && META_APP_SECRET && META_REDIRECT_URI && META_GRAPH_VERSION);
+
 const openAIConfigured = Boolean(OPENAI_API_KEY);
 const geminiConfigured = Boolean(GEMINI_API_KEY);
 const SESSION_MAX_AGE_DAYS = Math.min(3650, Math.max(1, Number(process.env.SESSION_MAX_AGE_DAYS) || 365));
@@ -265,6 +268,7 @@ const credentialStore = new CredentialStore({
 });
 let executionStore;
 let facebookCredentialStore;
+let metaAppConfigStore;
 let accessControlStore;
 let executionServices;
 let facebookExecutionContext;
@@ -289,7 +293,7 @@ app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
     googleOAuthConfigured,
-    facebookOAuthConfigured,
+    facebookOAuthConfigured: Boolean(metaWorkspace(req) && metaAppConfigStore?.public(metaWorkspace(req)).configured),
     openAIConfigured,
     geminiConfigured,
   });
@@ -305,7 +309,41 @@ app.post("/api/ai/prepare-content", async (req, res) => {
   }
 });
 
-function facebookGraphService() { return new FacebookGraphService({ version: META_GRAPH_VERSION }); }
+function metaWorkspace(req) {
+  return sessionIdentity(req, Date.now(), accessControlStore) ? workflowWorkspace(req, accessControlStore) : null;
+}
+function workspaceActive(owner) {
+  requireWorkspace(owner);
+  if (owner.ownerType === "admin") return accessControlStore?.securityState() === "enabled";
+  if (owner.ownerType === "child") return Boolean(accessControlStore?.childAccount()?.enabled);
+  const profile = accessControlStore?.getChild(owner.ownerId);
+  return Boolean(profile?.enabled && (!profile.accessExpiresAt || Date.now() < profile.accessExpiresAt));
+}
+function facebookGraphService(owner, credential) {
+  requireWorkspace(owner);
+  if (!workspaceActive(owner)) throw new FacebookGraphError(403, "workspace_inactive", "Workspace access is disabled or expired.");
+  // Graph calls use only this workspace's stored tokens. Legacy credentials need no App Secret.
+  if (credential && !facebookCredentialStore.get(credential.id, { owner })) throw new FacebookGraphError(404, "credential_disconnected", "Facebook credential was not found.");
+  const config = credential ? metaAppConfigStore.public(owner) : metaAppConfigStore.require(owner);
+  return new FacebookGraphService({ version: config.graphVersion || LEGACY_GRAPH_VERSION });
+}
+app.get("/api/facebook/meta-config", (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  try { return res.json(metaAppConfigStore.public(metaWorkspace(req))); } catch (error) { return publicFacebookError(res, error); }
+});
+app.get("/api/facebook/meta-config/diagnostics", (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  try {
+    const owner = requireWorkspace(metaWorkspace(req));
+    return res.json(metaConfigDiagnostics(metaAppConfigStore.public(owner), facebookCredentialStore.list(owner)));
+  } catch (error) { return publicFacebookError(res, error); }
+});
+app.put("/api/facebook/meta-config", (req, res) => {
+  try { return res.json(metaAppConfigStore.save(req.body, metaWorkspace(req))); } catch (error) { return publicFacebookError(res, error); }
+});
+app.delete("/api/facebook/meta-config", (req, res) => {
+  try { return res.json(metaAppConfigStore.remove(metaWorkspace(req))); } catch (error) { return publicFacebookError(res, error); }
+});
 function publicFacebookError(res, error) {
   if (error instanceof FacebookGraphError) {
     if (error.publicBody) return res.status(error.statusCode).json(error.publicBody);
@@ -318,14 +356,22 @@ function publicFacebookError(res, error) {
 }
 
 app.get("/api/facebook/credentials", (req, res) => {
-  try { const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." }); return res.json({ credentials: facebookCredentialStore.list(owner) }); } catch (error) { return publicFacebookError(res, error); }
+  try { const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." }); return res.json({ credentials: facebookCredentialStore.list(owner) }); } catch (error) { return publicFacebookError(res, error); }
 });
 app.get("/api/facebook/credentials/:credentialId", (req, res) => {
   if (!FacebookCredentialStore.isValidId(req.params.credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
-  const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+  const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
   const credential = facebookCredentialStore.get(req.params.credentialId, { owner });
   return credential ? res.json(credential) : res.status(404).json({ error: "Facebook credential not found." });
 });
+
+async function inspectWorkspacePageToken(token, owner) {
+  const config = metaAppConfigStore.require(owner);
+  await validateMetaTokenApp(token, config);
+  const tested = await new FacebookGraphService({ version: config.graphVersion }).inspectPageToken(token);
+  if (metaAppConfigStore.require(owner).revision !== config.revision) throw new FacebookGraphError(409, "META_CONFIG_CHANGED", "Meta configuration changed. Test the token again.");
+  return { ...tested, appId: config.appId };
+}
 
 function manualAccessToken(value) {
   const token = typeof value === "string" ? value.trim() : "";
@@ -343,25 +389,26 @@ function manualCredentialName(value) {
 
 app.post("/api/facebook/credentials/manual/test", async (req, res) => {
   try {
-    const result = await facebookGraphService().inspectPageToken(manualAccessToken(req.body?.accessToken));
+    const owner = metaWorkspace(req); requireWorkspace(owner);
+    const result = await inspectWorkspacePageToken(manualAccessToken(req.body?.accessToken), owner);
     return res.json(result);
   } catch (error) { return publicFacebookError(res, error); }
 });
 
 app.post("/api/facebook/credentials/manual", async (req, res) => {
   try {
-    const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
     const name = manualCredentialName(req.body?.name); const accessToken = manualAccessToken(req.body?.accessToken);
-    const tested = await facebookGraphService().inspectPageToken(accessToken);
+    const tested = await inspectWorkspacePageToken(accessToken, owner);
     const saved = facebookCredentialStore.saveManual({ id: FacebookCredentialStore.generateId(), name, accessToken,
-      pageId: tested.pageId, pageName: tested.pageName, lastTestedAt: new Date().toISOString() }, owner);
+      appId: tested.appId, pageId: tested.pageId, pageName: tested.pageName, lastTestedAt: new Date().toISOString() }, owner);
     return res.status(201).json(saved);
   } catch (error) { return publicFacebookError(res, error); }
 });
 
 app.patch("/api/facebook/credentials/:credentialId/manual", async (req, res) => {
   try {
-    const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
     if (!FacebookCredentialStore.isValidId(req.params.credentialId)) throw new FacebookGraphError(400, "invalid_credential_id", "Invalid Facebook credential ID.");
     const existing = facebookCredentialStore.get(req.params.credentialId, { owner });
     if (!existing) return res.status(404).json({ status: "error", code: "credential_not_found", error: "Facebook credential not found." });
@@ -369,17 +416,17 @@ app.patch("/api/facebook/credentials/:credentialId/manual", async (req, res) => 
     const name = req.body?.name === undefined ? existing.name : manualCredentialName(req.body.name);
     let tested = null; let accessToken;
     if (req.body?.accessToken !== undefined && req.body.accessToken !== "") {
-      accessToken = manualAccessToken(req.body.accessToken); tested = await facebookGraphService().inspectPageToken(accessToken);
+      accessToken = manualAccessToken(req.body.accessToken); tested = await inspectWorkspacePageToken(accessToken, owner);
     }
     const saved = facebookCredentialStore.updateManual({ id: existing.id, name, accessToken,
-      pageId: tested?.pageId, pageName: tested?.pageName, lastTestedAt: tested ? new Date().toISOString() : undefined }, owner);
+      appId: tested?.appId, pageId: tested?.pageId, pageName: tested?.pageName, lastTestedAt: tested ? new Date().toISOString() : undefined }, owner);
     return res.json(saved);
   } catch (error) { return publicFacebookError(res, error); }
 });
 
 app.delete("/api/facebook/credentials/:credentialId/manual", (req, res) => {
   try {
-    const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
     if (!FacebookCredentialStore.isValidId(req.params.credentialId)) throw new FacebookGraphError(400, "invalid_credential_id", "Invalid Facebook credential ID.");
     const existing = facebookCredentialStore.get(req.params.credentialId, { owner });
     if (!existing) return res.status(404).json({ status: "error", code: "credential_not_found", error: "Facebook credential not found." });
@@ -389,15 +436,14 @@ app.delete("/api/facebook/credentials/:credentialId/manual", (req, res) => {
 });
 
 app.get("/api/facebook/auth/start", (req, res) => {
-  const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
-  if (!facebookOAuthConfigured) return res.status(503).json({ status: "not_configured", error: "Meta OAuth is not configured." });
+  const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+  let config; try { config = metaAppConfigStore.require(owner); } catch (error) { return publicFacebookError(res, error); }
   const credentialId = req.query.credentialId || null; const intent = credentialId ? "reconnect" : "create";
   if (credentialId && !FacebookCredentialStore.isValidId(credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
   if (credentialId && !facebookCredentialStore.get(credentialId, { owner })) return res.status(404).json({ error: "Facebook credential not found." });
-  const state = createFacebookOAuthState({ secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me",
-    mode: req.query.mode === "popup" ? "popup" : "redirect", intent, credentialId, ownerType: owner.ownerType, ownerId: owner.ownerId });
-  const url = new URL(`https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`);
-  url.searchParams.set("client_id", META_APP_ID); url.searchParams.set("redirect_uri", META_REDIRECT_URI);
+  const { state } = metaAppConfigStore.begin(owner, req.sessionID, { mode: req.query.mode === "popup" ? "popup" : "redirect", credentialId });
+  const url = new URL(`https://www.facebook.com/${config.graphVersion}/dialog/oauth`);
+  url.searchParams.set("client_id", config.appId); url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state); url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts");
   return res.redirect(url.toString());
@@ -405,34 +451,35 @@ app.get("/api/facebook/auth/start", (req, res) => {
 
 app.post("/api/facebook/auth/page-selection", (req, res) => {
   try {
-    const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
     const keys = Object.keys(req.body || {});
     if (keys.some((key) => !["selectionId", "pageId"].includes(key))) return res.status(400).json({ error: "Only safe Page selection fields are accepted." });
-    const selected = facebookCredentialStore.consumePageSelection({ selectionId: req.body?.selectionId, pageId: req.body?.pageId }, owner);
+    const selected = facebookCredentialStore.consumePageSelection({ selectionId: req.body?.selectionId, pageId: req.body?.pageId, sessionId: req.sessionID }, owner);
     if (!selected) return res.status(400).json({ error: "Facebook Page selection is invalid or expired." });
+    if (metaAppConfigStore.require(owner).revision !== selected.tokens.metaConfigRevision) return res.status(409).json({ error: "Meta configuration changed; restart sign-in." });
     const pageToken = selected.tokens?.pageAccessTokens?.[selected.page.id];
     if (!pageToken) return res.status(400).json({ error: "The selected Facebook Page is no longer available." });
     const existing = facebookCredentialStore.findByPage({ accountId: selected.accountId, pageId: selected.page.id }, { owner });
     const saved = facebookCredentialStore.save({ id: selected.credentialId || existing?.id || FacebookCredentialStore.generateId(), accountId: selected.accountId,
       accountName: selected.accountName, pageId: selected.page.id, pageName: selected.page.name, name: existing?.name,
-      tokens: { ...selected.tokens, pageAccessTokens: { [selected.page.id]: pageToken } } }, owner);
+      appId: selected.tokens.metaAppId, tokens: { ...selected.tokens, pageAccessTokens: { [selected.page.id]: pageToken } } }, owner);
     return res.json(saved);
   } catch { return res.status(500).json({ error: "Facebook Page selection could not be completed." }); }
 });
 
 app.get("/api/facebook/auth/callback", async (req, res) => {
   let mode = "redirect"; let state = null;
-  if (req.query.state) state = verifyFacebookOAuthState(req.query.state, { secret: process.env.SESSION_SECRET || "jarvis-dev-session-secret-change-me", validateCredentialId: FacebookCredentialStore.isValidId });
+  try { state = metaAppConfigStore.consume(req.query.state, metaWorkspace(req), req.sessionID); } catch { /* Fail closed without exposing configuration. */ }
   if (state?.mode) mode = state.mode;
   const failure = (message) => mode === "popup" ? res.status(400).send(makeFacebookPopupHtml({ status: "error", message, clientUrl: CLIENT_URL })) : res.redirect(`${CLIENT_URL}?facebook_oauth=error`);
   if (!state) return failure("Meta OAuth state validation failed.");
-  if (req.query.error) return failure(req.query.error_description || "Meta sign-in was cancelled.");
+  if (req.query.error) return failure("Meta sign-in was cancelled.");
   if (!req.query.code) return failure("Meta did not return an authorization code.");
   try {
-    const tokenResponse = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: META_APP_ID, client_secret: META_APP_SECRET, redirect_uri: META_REDIRECT_URI, code: req.query.code }) });
-    const tokenData = await tokenResponse.json();
-    if (!tokenResponse.ok || !tokenData.access_token) throw new Error("Meta token exchange failed.");
-    const service = facebookGraphService();
+    const config = state.config;
+    const tokenData = await exchangeMetaCode(req.query.code, config);
+    await validateMetaTokenApp(tokenData.access_token, config);
+    const service = facebookGraphService(state);
     const profile = await service.me(tokenData.access_token);
     const previous = state.intent === "reconnect" ? facebookCredentialStore.get(state.credentialId, { includeTokens: true, owner: state }) : null;
     if (state.intent === "reconnect" && previous?.accountId !== String(profile.id)) return failure("Reconnect must use the same Meta account. Create a new credential for another account.");
@@ -442,29 +489,32 @@ app.get("/api/facebook/auth/callback", async (req, res) => {
     if (!pages.length) return failure("No Facebook Pages were available for this Meta account.");
     const authorizedAt = new Date().toISOString();
     const expiresIn = Number.isFinite(Number(tokenData.expires_in)) ? Number(tokenData.expires_in) : null;
-    const commonTokens = { userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn,
+    const commonTokens = { metaAppId: config.appId, metaConfigRevision: config.revision, userAccessToken: tokenData.access_token, tokenType: tokenData.token_type || "bearer", expiresIn,
       authorizedAt, expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
       grantedPermissions: permissionState.grantedPermissions };
+    if (!metaWorkspace(req) || metaWorkspace(req).ownerType !== state.ownerType || metaWorkspace(req).ownerId !== state.ownerId
+      || metaAppConfigStore.require(state).revision !== config.revision) return failure("Workspace authorization changed; restart Meta sign-in.");
     let saved;
+    if (previous && !facebookCredentialStore.get(previous.id, { owner: state })) return failure("This credential was disconnected during authorization. Create a new credential.");
     if (state.intent === "reconnect") {
       const selected = previous?.pageId ? pages.find((page) => String(page.id) === previous.pageId) : pages.length === 1 ? pages[0] : null;
-      if (!selected && !previous?.pageId) {
-        const selection = facebookCredentialStore.createPageSelection({ accountId: profile.id, accountName: profile.name || "Meta account", pages,
-          credentialId: previous.id, tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } }, state);
+      if (!selected && previous?.pageId) return failure("The Page linked to this credential was not available. Create a new Page credential instead.");
+      if (!selected) {
+        const selection = facebookCredentialStore.createPageSelection({ sessionId: req.sessionID, accountId: profile.id, accountName: profile.name || "Meta account", pages,
+          credentialId: previous.id, appId: config.appId, tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } }, state);
         return res.send(makeFacebookPageSelectorHtml({ selectionId: selection.id, pages: selection.pages, clientUrl: CLIENT_URL }));
       }
-      if (!selected) return failure("The Page linked to this credential was not available. Create a new Page credential instead.");
       saved = facebookCredentialStore.save({ id: previous.id, accountId: profile.id, accountName: profile.name || "Meta account",
-        pageId: selected.id, pageName: selected.name || "Facebook Page", name: previous.name,
-        tokens: { ...commonTokens, pageAccessTokens: { [selected.id]: available.pageTokens[selected.id] } } }, state);
+        pageId: selected.id, pageName: selected.name || "Facebook Page", name: selected.id === previous.pageId ? previous.name : undefined,
+        appId: config.appId, tokens: { ...commonTokens, pageAccessTokens: { [selected.id]: available.pageTokens[selected.id] } } }, state);
     } else if (pages.length === 1) {
       const selected = pages[0]; const existing = facebookCredentialStore.findByPage({ accountId: profile.id, pageId: selected.id }, { owner: state });
       saved = facebookCredentialStore.save({ id: existing?.id || FacebookCredentialStore.generateId(), accountId: profile.id,
         accountName: profile.name || "Meta account", pageId: selected.id, pageName: selected.name || "Facebook Page", name: existing?.name,
-        tokens: { ...commonTokens, pageAccessTokens: { [selected.id]: available.pageTokens[selected.id] } } }, state);
+        appId: config.appId, tokens: { ...commonTokens, pageAccessTokens: { [selected.id]: available.pageTokens[selected.id] } } }, state);
     } else {
-      const selection = facebookCredentialStore.createPageSelection({ accountId: profile.id, accountName: profile.name || "Meta account", pages,
-        tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } }, state);
+      const selection = facebookCredentialStore.createPageSelection({ sessionId: req.sessionID, accountId: profile.id, accountName: profile.name || "Meta account", pages,
+        appId: config.appId, tokens: { ...commonTokens, pageAccessTokens: available.pageTokens } }, state);
       return res.send(makeFacebookPageSelectorHtml({ selectionId: selection.id, pages: selection.pages, clientUrl: CLIENT_URL }));
     }
     const message = `${saved.pageName} is connected to Corex.`;
@@ -475,7 +525,7 @@ app.get("/api/facebook/auth/callback", async (req, res) => {
 
 function deleteFacebookCredential(req, res) {
   if (!FacebookCredentialStore.isValidId(req.params.credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
-  const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+  const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
   if (!facebookCredentialStore.delete(req.params.credentialId, owner)) return res.status(404).json({ error: "Facebook credential not found." });
   return res.json({ ok: true, id: req.params.credentialId, connected: false, status: "not_connected" });
 }
@@ -484,7 +534,7 @@ app.delete("/api/facebook/credentials/:credentialId", deleteFacebookCredential);
 
 async function withFacebookGraphRequest(req, res, endpoint) {
   try {
-    const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." });
+    const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });
     return res.json(await executionServices.facebook.graphRequest({ credentialId: req.body?.credentialId,
       method: req.method, endpoint, body: req.body, query: req.query }, owner));
   } catch (error) { return publicFacebookError(res, error); }
@@ -493,7 +543,7 @@ app.post("/api/facebook/graph/me", (req, res) => withFacebookGraphRequest(req, r
 app.post("/api/facebook/graph/pages", (req, res) => withFacebookGraphRequest(req, res, "pages"));
 app.post("/api/facebook/graph/page", (req, res) => withFacebookGraphRequest(req, res, "page"));
 async function publishFacebookReel(req, res) {
-  try { const owner = workflowWorkspace(req, accessControlStore); if (!owner) return res.status(401).json({ error: "Authentication is required." }); return res.json(toLegacyReelResponse(await executionServices.facebook.publishReel(req.body, owner))); } catch (error) { return publicFacebookError(res, error); }
+  try { const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." }); return res.json(toLegacyReelResponse(await executionServices.facebook.publishReel(req.body, owner))); } catch (error) { return publicFacebookError(res, error); }
 }
 app.post("/api/facebook/reels/publish", publishFacebookReel);
 
@@ -895,13 +945,12 @@ app.delete("/api/youtube/credentials/:credentialId", (req, res) => deleteGoogleC
 
 
 // Serve the production React/Vite frontend.
-const CLIENT_DIST = path.join(__dirname, "..", "client", "dist");
 
-app.use(express.static(CLIENT_DIST));
+app.use(express.static(CLIENT_DIST, { setHeaders(res,file) { if (["index.html","build.json"].includes(path.basename(file))) res.setHeader("Cache-Control","no-cache, no-store, must-revalidate"); } }));
 
 app.use((req, res, next) => {
   if (req.method === "GET" && !req.path.startsWith("/api/")) {
-    return res.sendFile(path.join(CLIENT_DIST, "index.html"));
+    return res.sendFile(path.join(CLIENT_DIST, "index.html"), { headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } });
   }
 
   return next();
@@ -922,13 +971,15 @@ async function startServer() {
   executionStore.open();
   accessControlStore = new AccessControlStore({ db: credentialStore.db });
   accessControlStore.open();
+  metaAppConfigStore = new MetaAppConfigStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET, isActive: workspaceActive });
+  metaAppConfigStore.open();
   facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
     legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();
   const facebookPublicationStore = new FacebookPublicationStore(credentialStore.db); facebookPublicationStore.open();
   const facebookControlStore = createFacebookControlStore({ db: credentialStore.db });
   const facebookPublicMetricsService = createFacebookPublicMetricsService({ logger: console });
-  registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore), facebookCredentialStore, graphServiceFactory: facebookGraphService, publicMetricsService: facebookPublicMetricsService, logger: console });
+  registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: metaWorkspace, facebookCredentialStore, graphServiceFactory: facebookGraphService, publicMetricsService: facebookPublicMetricsService, logger: console });
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   executionServices = createExecutionServices({ credentialStore, createOAuthClient,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),

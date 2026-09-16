@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const { decryptTokensWithFallback, encryptionKeys, encryptTokens } = require("./credentialStore");
-const { requireWorkspace: normalizeCredentialOwner } = require("./metaAppConfigStore");
+const { normalizeCredentialOwner } = require("./credentialOwnership");
 
 const ID_PATTERN = /^fcred_[A-Za-z0-9_-]{22}$/;
 const SELECTION_ID_PATTERN = /^fsel_[A-Za-z0-9_-]{22}$/;
@@ -62,10 +62,13 @@ class FacebookCredentialStore {
     const value = normalizeCredentialOwner(owner);
     const row = this.db.prepare("SELECT * FROM facebook_credentials WHERE id = ? AND owner_type = ? AND owner_id = ?").get(id, value.ownerType, value.ownerId);
     if (!row) return null;
-    const result = publicCredential(row);
-    // Metadata reads do not decrypt; token reads never migrate or rewrite ciphertext.
-    if (includeTokens) result.tokens = decryptTokensWithFallback(row, this.key, this.legacyKeys).tokens;
-    return result;
+    const result = publicCredential(row); const decrypted = decryptTokensWithFallback(row, this.key, this.legacyKeys);
+    if (decrypted.migrated) {
+      const encrypted = encryptTokens(decrypted.tokens, this.key);
+      this.db.prepare("UPDATE facebook_credentials SET token_ciphertext = ?, token_iv = ?, token_tag = ? WHERE id = ?")
+        .run(encrypted.ciphertext, encrypted.iv, encrypted.tag, row.id);
+    }
+    if (includeTokens) result.tokens = decrypted.tokens; return result;
   }
   findByAccountId(accountId, options = {}) {
     const value = normalizeCredentialOwner(options.owner);
@@ -82,20 +85,18 @@ class FacebookCredentialStore {
         .get(value.ownerType, value.ownerId, String(accountId || ""), normalizedPageId, AUTH_MODE_OAUTH);
     return row ? this.get(row.id, options) : null;
   }
-  createPageSelection({ accountId, accountName = "", pages, tokens, credentialId = null, ttlMs = 10 * 60 * 1000, sessionId }, owner) {
+  createPageSelection({ accountId, accountName = "", pages, tokens, credentialId = null, ttlMs = 10 * 60 * 1000 }, owner) {
     const value = normalizeCredentialOwner(owner);
     const safePages = (Array.isArray(pages) ? pages : []).map((page) => ({ id: String(page.id), name: String(page.name || "Facebook Page") }));
     if (!safePages.length || !tokens || typeof tokens !== "object") throw new Error("Facebook Page selection data is required.");
-    if (typeof sessionId !== "string" || !sessionId) throw new Error("OAuth session is required.");
-    if (credentialId && !this.get(credentialId, { owner: value })) throw new Error("Facebook credential was not found.");
-    const id = FacebookCredentialStore.generateSelectionId(); const encrypted = encryptTokens({ ...tokens, selectionSessionHash: crypto.createHash("sha256").update(sessionId).digest("hex") }, this.key);
+    const id = FacebookCredentialStore.generateSelectionId(); const encrypted = encryptTokens(tokens, this.key);
     this.db.prepare(`INSERT INTO facebook_oauth_page_selections
       (id,account_id,account_name,pages_json,token_ciphertext,token_iv,token_tag,expires_at,credential_id,owner_type,owner_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
       .run(id, String(accountId), String(accountName), JSON.stringify(safePages), encrypted.ciphertext, encrypted.iv, encrypted.tag,
         Date.now() + ttlMs, FacebookCredentialStore.isValidId(credentialId) ? credentialId : null, value.ownerType, value.ownerId);
     return { id, pages: safePages };
   }
-  consumePageSelection({ selectionId, pageId, sessionId }, owner) {
+  consumePageSelection({ selectionId, pageId }, owner) {
     const value = normalizeCredentialOwner(owner);
     if (typeof selectionId !== "string" || !SELECTION_ID_PATTERN.test(selectionId)) return null;
     const row = this.db.prepare("SELECT * FROM facebook_oauth_page_selections WHERE id = ? AND expires_at > ? AND owner_type = ? AND owner_id = ?").get(selectionId, Date.now(), value.ownerType, value.ownerId);
@@ -103,30 +104,17 @@ class FacebookCredentialStore {
     const pages = JSON.parse(row.pages_json); const page = pages.find((item) => item.id === String(pageId));
     if (!page) return null;
     const tokens = decryptTokensWithFallback(row, this.key, this.legacyKeys).tokens;
-    if (!sessionId || tokens.selectionSessionHash !== crypto.createHash("sha256").update(sessionId).digest("hex")) return null;
-    if (row.credential_id && !this.get(row.credential_id, { owner: value })) return null;
-    if (!this.db.prepare("DELETE FROM facebook_oauth_page_selections WHERE id = ? AND owner_type=? AND owner_id=? RETURNING id").get(selectionId, value.ownerType, value.ownerId)) return null;
-    delete tokens.selectionSessionHash;
+    this.db.prepare("DELETE FROM facebook_oauth_page_selections WHERE id = ?").run(selectionId);
     return { accountId: row.account_id, accountName: row.account_name, page, tokens, credentialId: row.credential_id || null };
   }
-  save({ id, accountId, accountName = "", pageId = "", pageName = "", name = "", tokens, appId = "" }, owner) {
+  save({ id, accountId, accountName = "", pageId = "", pageName = "", name = "", tokens }, owner) {
     const value = normalizeCredentialOwner(owner);
     if (!FacebookCredentialStore.isValidId(id)) throw new Error("Invalid Facebook credential ID.");
     if (!String(accountId || "").trim()) throw new Error("Facebook account ID is required.");
     if (!tokens || typeof tokens !== "object") throw new Error("Facebook OAuth tokens are required.");
-    const target = this.db.prepare("SELECT owner_type,owner_id FROM facebook_credentials WHERE id=?").get(id);
-    if (target && (target.owner_type !== value.ownerType || target.owner_id !== value.ownerId)) throw new Error("Credential ID belongs to another workspace.");
     const existingPage = pageId ? this.findByPage({ accountId, pageId, authMode: AUTH_MODE_OAUTH }, { owner: value }) : null;
     return this.#write({ id: existingPage?.id || id, name: name || pageName || accountName, authMode: AUTH_MODE_OAUTH, accountId, accountName,
-      pageId: String(pageId || ""), pageName: String(pageName || ""), appId, tokens, status: "connected" }, value);
-  }
-  refreshPageTokens(snapshot, pageTokens, owner) {
-    const value = normalizeCredentialOwner(owner);
-    const current = this.get(snapshot.id, { includeTokens: true, owner: value });
-    if (!current || current.authMode !== AUTH_MODE_OAUTH || current.accountId !== snapshot.accountId || current.appId !== snapshot.appId
-      || current.tokens.userAccessToken !== snapshot.tokens.userAccessToken) throw new Error("Facebook authorization changed; retry the operation.");
-    const selected = current.pageId ? { [current.pageId]: pageTokens?.[current.pageId] || current.tokens.pageAccessTokens?.[current.pageId] } : pageTokens;
-    return this.save({ ...current, tokens: { ...current.tokens, pageAccessTokens: selected } }, value);
+      pageId: String(pageId || ""), pageName: String(pageName || ""), tokens, status: "connected" }, value);
   }
   saveManual({ id, name, pageId, pageName = "", appId = "", accessToken, lastTestedAt = new Date().toISOString() }, owner) {
     const value = normalizeCredentialOwner(owner);
@@ -134,8 +122,6 @@ class FacebookCredentialStore {
     if (!String(name || "").trim()) throw new Error("Credential name is required.");
     if (!/^\d{3,30}$/.test(String(pageId || ""))) throw new Error("A valid Facebook Page ID is required.");
     if (!String(accessToken || "")) throw new Error("Facebook Page access token is required.");
-    const target = this.db.prepare("SELECT owner_type,owner_id FROM facebook_credentials WHERE id=?").get(id);
-    if (target && (target.owner_type !== value.ownerType || target.owner_id !== value.ownerId)) throw new Error("Credential ID belongs to another workspace.");
     const existingPage = this.findByPage({ pageId, authMode: AUTH_MODE_MANUAL }, { owner: value });
     return this.#write({ id: existingPage?.id || id, name: String(name).trim(), authMode: AUTH_MODE_MANUAL, accountId: String(pageId), accountName: pageName,
       pageId: String(pageId), pageName, appId, tokens: { pageAccessToken: String(accessToken) }, status: "connected", lastTestedAt }, value);

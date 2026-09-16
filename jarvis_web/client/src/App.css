@@ -6969,3 +6969,19 @@ input, select, textarea { font-size: 16px; }
   .pipeline-running .pipeline-core-axis,
   .pipeline-running .engine-ring { animation-duration: 0s !important; animation: none !important; }
 }
+
+.meta-app-setup { margin-bottom: 22px; padding: 20px; border: 1px solid #dce3ed; border-radius: 12px; background: #f7f9fc; color: #25344b; }
+.meta-app-heading, .meta-app-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.meta-app-heading h3 { margin: 0; }
+.meta-app-heading span { font-size: 12px; font-weight: 600; }
+.meta-app-ready { color: #18734b; }
+.meta-app-setup label { display: grid; gap: 7px; margin: 14px 0; font-size: 13px; font-weight: 600; }
+.meta-app-setup input { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #bdc9db; border-radius: 7px; background: white; color: #17263c; }
+.meta-app-setup p, .meta-app-setup dl { font-size: 13px; line-height: 1.5; }
+.meta-app-setup dt { color: #56677e; margin-top: 10px; }
+.meta-app-setup dd { margin: 3px 0; overflow-wrap: anywhere; }
+.meta-app-setup summary { cursor: pointer; font-size: 13px; }
+.meta-app-actions { justify-content: flex-start; margin-top: 16px; }
+.meta-app-actions button { padding: 9px 13px; border: 1px solid #bdc9db; border-radius: 7px; cursor: pointer; }
+.meta-app-actions button[type="submit"] { background: #2464d7; color: white; border-color: #2464d7; }
+.meta-app-actions button:disabled { opacity: .6; cursor: wait; }

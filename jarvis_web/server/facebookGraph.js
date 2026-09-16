@@ -1,3 +1,4 @@
+const { publicMetaData } = require("./metaPublicData");
 class FacebookGraphError extends Error {
   constructor(statusCode, code, message, permission = "", diagnostic = null) {
     super(message); this.statusCode = statusCode; this.code = code; this.permission = permission; this.diagnostic = diagnostic;
@@ -29,7 +30,7 @@ function safeMetaDiagnostic(meta, responseStatus, { stage = "graph", requiredPer
   const reason = meta?.error_user_msg || meta?.message;
   if (typeof reason === "string" && reason.trim()) diagnostic.reason = sanitizeMetaMessage(reason, secrets).slice(0, 600);
   if (requiredPermission) diagnostic.requiredPermission = requiredPermission;
-  return diagnostic;
+  return publicMetaData(diagnostic, secrets);
 }
 function validateGraphVersion(version) { if (!/^v\d{1,2}\.\d{1,2}$/.test(version)) throw new FacebookGraphError(500, "invalid_graph_version", "Meta Graph API version is not configured safely."); return version; }
 function validatePageId(pageId) { const value = String(pageId || "").trim(); if (!/^\d{3,30}$/.test(value)) throw new FacebookGraphError(400, "invalid_page_id", "Enter a valid numeric Facebook Page ID."); return value; }
@@ -50,14 +51,14 @@ class FacebookGraphService {
     catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
     let data = {}; try { data = await response.json(); } catch { /* safe generic error below */ }
     if (!response.ok || data.error) {
-      const meta = data.error || {}; const code = String(meta.code || response.status || "unknown");
+      const meta = data.error || {}; const code = sanitizeMetaMessage(String(meta.code || response.status || "unknown"), [token]);
       const required = ["10", "200", "299"].includes(code) ? permission : "";
       const prefix = required ? `Permission required: ${required}. ` : "";
       throw new FacebookGraphError(metaErrorStatus(response.status, code),
         `meta_${code}`, `${prefix}${sanitizeMetaMessage(meta.message, [token])}`, required,
         safeMetaDiagnostic(meta, response.status, { stage, requiredPermission: required, secrets: [token] }));
     }
-    return data;
+    return path === "me/accounts" ? data : publicMetaData(data, [token]);
   }
   me(token) { return this.request("me", token, { fields: "id,name" }); }
   pageIdentity(token) { return this.request("me", token, { fields: "id,name" }); }
@@ -70,7 +71,7 @@ class FacebookGraphService {
   }
   async pages(token) {
     const data = await this.request("me/accounts", token, { fields: "id,name,category,tasks,access_token", limit: "100" }, PERMISSIONS.pages);
-    const pageTokens = {}; const pages = (data.data || []).map((page) => { if (page.id && page.access_token) pageTokens[page.id] = page.access_token; const { access_token, ...safe } = page; return safe; });
+    const pageTokens = {}; const pages = (data.data || []).map((page) => { if (page.id && page.access_token) pageTokens[page.id] = page.access_token; const { access_token, ...safe } = page; return publicMetaData(safe, [token, ...Object.values(pageTokens)]); });
     return { pages, pageTokens };
   }
   async permissions(token) {
@@ -108,7 +109,7 @@ class FacebookGraphService {
     catch { throw new FacebookGraphError(502, "meta_network_error", "Could not reach Meta Graph API."); }
     let data = {}; try { data = await response.json(); } catch { /* safe generic error below */ }
     if (!response.ok || data.error) {
-      const meta = data.error || {}; const code = String(meta.code || response.status || "unknown");
+      const meta = data.error || {}; const code = sanitizeMetaMessage(String(meta.code || response.status || "unknown"), [token]);
       throw new FacebookGraphError(metaErrorStatus(response.status, code), `meta_${code}`, sanitizeMetaMessage(meta.message, [token]), "",
         safeMetaDiagnostic(meta, response.status, { stage, secrets: [token] }));
     }

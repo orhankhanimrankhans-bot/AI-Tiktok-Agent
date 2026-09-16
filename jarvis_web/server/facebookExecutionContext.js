@@ -1,8 +1,10 @@
 "use strict";
 const { containsForbiddenSecretFields, credentialPageToken, executeCredentialMe, executeCredentialPages, FacebookGraphError, validatePageId } = require("./facebookGraph");
 
+const { publicMetaData, secretValues } = require("./metaPublicData");
 function required(name, value) { if (!value) throw new Error(`Facebook execution dependency is required: ${name}`); return value; }
-function tokenOptions(owner) { return owner ? { includeTokens: true, owner } : { includeTokens: true }; }
+const { requireWorkspace } = require("./metaAppConfigStore");
+function tokenOptions(owner) { return { includeTokens: true, owner: requireWorkspace(owner) }; }
 
 function graphRequestError(statusCode, code, message, responseBody = null) {
   const error = new FacebookGraphError(statusCode, code, message);
@@ -58,15 +60,14 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
     if (!credential?.tokens?.userAccessToken && !credential?.tokens?.pageAccessToken) {
       throw graphRequestError(404, "credential_disconnected", "Facebook credential was not found or is disconnected.", { error: "Facebook credential was not found or is disconnected." });
     }
-    const service = graphServiceFactory();
-    if (input.endpoint === "me") return executeCredentialMe(service, credential);
+    const service = graphServiceFactory(owner, credential);
+    if (input.endpoint === "me") return publicMetaData(await executeCredentialMe(service, credential), secretValues(credential.tokens));
     if (input.endpoint === "pages") {
       const result = await executeCredentialPages(service, credential);
-      credentialStore.save({ id: credential.id, accountId: credential.accountId, accountName: credential.accountName,
-        tokens: { ...credential.tokens, pageAccessTokens: result.pageTokens } }, owner);
-      return { pages: result.pages };
+      credentialStore.refreshPageTokens(credential, result.pageTokens, owner);
+      return { pages: publicMetaData(result.pages, [...secretValues(credential.tokens), ...Object.values(result.pageTokens || {})]) };
     }
-    return service.pageMetadata(validatePageId(input.body?.pageId), credentialPageToken(credential, input.body?.pageId));
+    return publicMetaData(await service.pageMetadata(validatePageId(input.body?.pageId), credentialPageToken(credential, input.body?.pageId)), secretValues(credential.tokens));
   }
   async function publishReel(request, owner) {
     const input = request || {};
@@ -89,7 +90,7 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
     if (!binary || binary.referenceId !== input.binary?.referenceId) {
       throw graphRequestError(400, "missing_binary_reference", "Binary property data does not contain a valid downloaded file reference.");
     }
-    const result = await publishPageReel({ request: input, service: graphServiceFactory(), credential,
+    const result = await publishPageReel({ request: input, service: graphServiceFactory(owner, credential), credential,
       binaryDir: binary.binaryDirectory || binaryDirectory });
     if (result?.success === true && publicationStore) publicationStore.create({ ...result, ...source, owner,
       executionId: input.executionId, workflowId: input.workflowId, workflowName: input.workflowName, triggerMode: input.triggerMode,
@@ -101,7 +102,7 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
   }
   return Object.freeze({
     resolveCredential(credentialId, owner) { return credentialStore.get(credentialId, tokenOptions(owner)); },
-    createGraphService() { return graphServiceFactory(); },
+    createGraphService(owner, credential) { requireWorkspace(owner); return graphServiceFactory(owner, credential); },
     graphRequest,
     publishReel,
     publishPageReel,

@@ -2,7 +2,7 @@
 const { FacebookControlError } = require("./facebookControlStore");
 const { credentialPageToken, FacebookGraphError } = require("./facebookGraph");
 const MIN_PUBLIC_RESCAN_MS = 10 * 60 * 1000;
-function safe(res, error, logger) { if (error instanceof FacebookControlError) return res.status(400).json({ error: error.message, code: error.code }); logger?.error?.("Facebook Control operation failed safely.", { code: error?.code || "UNEXPECTED_FACEBOOK_CONTROL_ERROR", message: error?.message || String(error), stack: error?.stack }); return res.status(500).json({ error: "Facebook Control operation could not be completed." }); }
+function safe(res, error, logger) { if (error instanceof FacebookControlError) return res.status(400).json({ error: error.message, code: error.code }); logger?.error?.("Facebook Control operation failed safely."); return res.status(500).json({ error: "Facebook Control operation could not be completed." }); }
 function publicSyncError(error) {
   if (error instanceof FacebookGraphError) {
     if (error.statusCode === 401 || error.code === "meta_190") return { status: "token_expired", message: "Facebook token expired." };
@@ -38,7 +38,7 @@ async function syncGraphPage({ page, owner, store, facebookCredentialStore, grap
   if (!credential) return store.markPageSyncIssue(page.id, "credential_not_found", "Selected Facebook credential was not found.", owner);
   const pageId = workingPage.pageId || credential.pageId;
   if (!pageId) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
-  const service = graphServiceFactory(); const token = credentialPageToken(credential, pageId);
+  const service = graphServiceFactory(owner, credential); const token = credentialPageToken(credential, pageId);
   if (!token) return store.markPageSyncIssue(page.id, "page_access_required", "Page access required.", owner);
   try {
     const metadata = await service.pageMetadata(pageId, token);
@@ -90,7 +90,7 @@ async function syncFacebookControl({ owner, store, facebookCredentialStore, grap
   const synced = after.pages.filter((page) => page.syncStatus === "synced" || page.syncStatus === "partial").length; const failed = after.pages.length - synced;
   return { ...after, sync, status: failed ? "partial" : "synced", message: after.pages.length ? `${synced} page${synced === 1 ? "" : "s"} scanned${failed ? `, ${failed} need attention` : ""}.` : "No Facebook Pages added yet.", results };
 }
-function registerFacebookControlRoutes(app, { store, workspaceForRequest = () => ({ ownerType: "admin", ownerId: "primary" }), facebookCredentialStore = null, graphServiceFactory = null, publicMetricsService = null, logger = console } = {}) {
+function registerFacebookControlRoutes(app, { store, workspaceForRequest = () => null, facebookCredentialStore = null, graphServiceFactory = null, publicMetricsService = null, logger = console } = {}) {
   if (!store) throw new Error("store is required");
   const workspace = (req, res) => { const owner = workspaceForRequest(req); if (!owner) { res.status(401).json({ error: "Authentication is required." }); return null; } return owner; };
   app.get("/api/facebook/control", (req, res) => { const owner = workspace(req, res); if (!owner) return; try { return res.json(store.list(owner)); } catch (error) { return safe(res, error, logger); } });

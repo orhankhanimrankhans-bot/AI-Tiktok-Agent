@@ -53,8 +53,9 @@ test("manual token is ephemeral and is not written to workflow or localStorage",
 });
 
 test("existing Meta OAuth controls remain available", () => {
-  assert.match(appSource, /Managed Meta OAuth2/);
-  assert.match(appSource, /Connect Meta Account/);
+  assert.match(appSource, /Use my own Meta App/);
+  const metaSource = fs.readFileSync(new URL("./MetaAppSettings.jsx", import.meta.url), "utf8");
+  assert.match(metaSource, /Connect Meta Account/);
   assert.match(appSource, /Reconnect/);
   assert.match(appSource, /onDisconnect/);
 });

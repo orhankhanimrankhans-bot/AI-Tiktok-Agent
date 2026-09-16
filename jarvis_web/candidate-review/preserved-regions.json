@@ -1,0 +1,44 @@
+[
+  {
+    "file": "client/src/App.jsx",
+    "start": "function GoogleCredentialModal(",
+    "end": "function FacebookCredentialModal(",
+    "candidateEnd": "function FacebookCredentialModal(",
+    "sha256": "3d037f72db3add8f405ab040928bbb1b68feeb4e44cbecd01e158fd409183e08"
+  },
+  {
+    "file": "client/src/App.jsx",
+    "start": "function PrepareContentEditor(",
+    "end": "function YouTubeEditor(",
+    "candidateEnd": "function YouTubeEditor(",
+    "sha256": "79c6ae916cd7db6efb1e365dfecb0d5c61c8ed7d73bb0347eeb806e327e0e3f6"
+  },
+  {
+    "file": "client/src/App.jsx",
+    "start": "      if (node.name === \"Prepare Content\") {",
+    "end": "      if (node.name === \"Facebook Graph API\") {",
+    "candidateEnd": "      if (node.name === \"Facebook Graph API\") {",
+    "sha256": "a42dfcb260a3d8888895a0f78e8129268d7ad62adc5cf7569676669c04fa8b3c"
+  },
+  {
+    "file": "server/index.js",
+    "start": "app.post(\"/api/ai/prepare-content\"",
+    "end": "function facebookGraphService()",
+    "candidateEnd": "function metaWorkspace(req)",
+    "sha256": "e88a3108fa2f94ef997bb24bcf8af00a4a7c0c71fcfd97b2480eee7465ed85e8"
+  },
+  {
+    "file": "server/index.js",
+    "start": "app.get(\"/api/google/credentials\"",
+    "end": "// Serve the production React/Vite frontend.",
+    "candidateEnd": "// Serve the production React/Vite frontend.",
+    "sha256": "2e2f40cec88b6d8b7dd5e91d14423475a7e1368aaeaafbc1588818a49ad64fb2"
+  },
+  {
+    "file": "server/index.js",
+    "start": "  executionServices = createExecutionServices(",
+    "end": "  workflowStore = createWorkflowStore(",
+    "candidateEnd": "  workflowStore = createWorkflowStore(",
+    "sha256": "d5a835bdb7d4b923e18560980674bd4ba17e7121c0937ad7d679742a610f2b4b"
+  }
+]

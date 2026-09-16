@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import MetaAppSettings from "./MetaAppSettings.jsx";
 import WorkflowManager from "./WorkflowManager.jsx";
 import SecurityAccess from "./SecurityAccess.jsx";
 import { useJarvisAuth } from "./JarvisAuth.jsx";
@@ -1308,7 +1309,7 @@ function GoogleCredentialModal({
   );
 }
 
-function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconnect, onTestAccessToken, onSaveAccessToken, onDeleteAccessToken }) {
+function FacebookCredentialModal({ canManageMeta, onClose, credential, onStartOAuth, onDisconnect, onTestAccessToken, onSaveAccessToken, onDeleteAccessToken }) {
   const [credentialName, setCredentialName] = useState(credential?.name ?? (credential ? facebookCredentialLabel(credential) : "Facebook Graph account"));
   const [authMode, setAuthMode] = useState(credential?.authMode === "manual_access_token" ? "manual_access_token" : "managed_oauth2");
   const [accessToken, setAccessToken] = useState("");
@@ -1371,8 +1372,9 @@ function FacebookCredentialModal({ onClose, credential, onStartOAuth, onDisconne
         <div className="credential-modal-body">
           <aside className="credential-tabs"><button type="button" className="credential-tab-active">Connection</button><button type="button">Sharing</button><button type="button">Details</button></aside>
           <section className="credential-content">
-            <div className="credential-content-top"><h3>Setup credential</h3><select aria-label="Authentication type" value={authMode} onChange={(event) => { setAuthMode(event.target.value); setAccessToken(""); setConnectionState("not_tested"); setConnectionMessage(""); }} disabled={Boolean(credential)}><option value="managed_oauth2">Managed Meta OAuth2</option><option value="manual_access_token">Access Token</option></select></div>
-            {!isManual && <>{credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button type="button" onClick={() => onStartOAuth(credential.id)}>Reconnect</button><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong><button type="button" onClick={() => onStartOAuth(null)}>Connect Meta Account</button></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Corex backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
+            <MetaAppSettings apiBaseUrl={API_BASE_URL} credential={credential} onStartOAuth={onStartOAuth} canManage={canManageMeta} showConnect={!isManual} />
+            <div className="credential-content-top"><h3>Setup credential</h3><select aria-label="Authentication type" value={authMode} onChange={(event) => { setAuthMode(event.target.value); setAccessToken(""); setConnectionState("not_tested"); setConnectionMessage(""); }} disabled={Boolean(credential)}><option value="managed_oauth2">Use my own Meta App</option><option value="manual_access_token">Access Token</option></select></div>
+            {!isManual && <>{credential ? <div className="credential-connected"><span>✓</span><strong>Account connected · {credential.accountName || credential.accountId}</strong><div><button type="button" className="disconnect-button" onClick={disconnect}>Disconnect</button></div></div> : <div className="meta-connection-state"><span className="meta-status-dot" /> <strong>Not connected</strong></div>}<p>Meta OAuth tokens and Page tokens are encrypted and stored only by the Corex backend.</p>{connectionMessage && <div className="credential-backend-status" role="status">{connectionMessage}</div>}</>}
             {isManual && <div className="facebook-token-credential">
               <label htmlFor="facebook-access-token">Access Token</label>
               <div className="secret-input-row"><input id="facebook-access-token" type={showToken ? "text" : "password"} autoComplete="off" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); setConnectionState("not_tested"); setConnectionMessage(""); }} placeholder={isExistingManual ? "Enter a new token to replace the saved token" : "Enter a Facebook Graph API access token"} /><button type="button" onClick={() => setShowToken((visible) => !visible)} aria-label={showToken ? "Hide access token" : "Show access token"}>{showToken ? "Hide" : "Show"}</button></div>
@@ -2421,7 +2423,8 @@ function App() {
     setFacebookCredentials(credentials); return credentials.find((item) => item.id === credentialId) || null;
   };
 
-  const startFacebookOAuth = (credentialId = null) => {
+  const startFacebookOAuth = (credentialId = null, preparedPopup = null) => {
+    if (preparedPopup) { preparedPopup.location.replace(`${API_BASE_URL}/api/facebook/auth/start?mode=popup${credentialId ? `&credentialId=${encodeURIComponent(credentialId)}` : ""}`); preparedPopup.focus(); return; }
     const popup = window.open(`${API_BASE_URL}/api/facebook/auth/start?mode=popup${credentialId ? `&credentialId=${encodeURIComponent(credentialId)}` : ""}`,
       "jarvis_facebook_oauth", "popup=yes,width=600,height=760,resizable=yes,scrollbars=yes");
     if (!popup) setCredentialToast("Popup was blocked. Allow popups and try again."); else popup.focus();
@@ -4028,6 +4031,7 @@ function App() {
 
       {showFacebookCredential && (
         <FacebookCredentialModal
+          canManageMeta={Boolean(session?.permissions?.publish_facebook)}
           onClose={() => { setShowFacebookCredential(false); setEditingFacebookCredentialId(null); }}
           credential={facebookCredentials.find((item) => item.id === editingFacebookCredentialId)}
           onStartOAuth={startFacebookOAuth}

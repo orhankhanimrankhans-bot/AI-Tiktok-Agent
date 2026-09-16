@@ -13,7 +13,7 @@ function createFacebookVerificationWorker({ store, credentialStore, graphService
         if (!credential) throw new FacebookGraphError(404, "credential_disconnected", "Facebook credential was not found or is disconnected.");
         const token = credential.authMode === "manual_access_token" ? credential.tokens.pageAccessToken : credential.tokens.pageAccessTokens?.[publication.expectedPageId];
         if (!token) throw new FacebookGraphError(404, "credential_disconnected", "Facebook Page authorization is unavailable.");
-        const response = await graphServiceFactory().reelStatus(token, publication.videoId, "facebook_delayed_verify");
+        const response = await graphServiceFactory(owner, credential).reelStatus(token, publication.videoId, "facebook_delayed_verify");
         store.completeCheck(publication.videoId, job.checkpoint_minutes, verificationFromStatus(response));
       } catch (error) {
         const unavailable = error instanceof FacebookGraphError && [400, 404].includes(error.statusCode) && ["meta_100", "meta_803", "meta_404"].includes(error.code);
