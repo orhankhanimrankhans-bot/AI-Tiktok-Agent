@@ -65,7 +65,7 @@ test("logs only sanitized upload, processing, and generateContent diagnostics", 
   assert.equal(upload.diagnosticCode, "GEMINI_UPLOAD_401"); assert.equal(processing.diagnosticCode, "GEMINI_PROCESSING_503"); assert.equal(generation.diagnosticCode, "GEMINI_GENERATE_400");
   assert.deepEqual([...new Set(logs.map((entry) => entry.details.stage))], ["upload", "processing", "generateContent"]);
   assert.deepEqual([...new Set(logs.map(entry => entry.details.status))], [401, 503, 400]);
-  assert.ok(logs.every(entry => Object.keys(entry.details).every(key => ["stage", "status", "diagnosticCode"].includes(key))));
+  assert.ok(logs.every(entry => Object.keys(entry.details).every(key => ["stage", "status", "diagnosticCode", "attempt", "code"].includes(key))));
   const serialized = JSON.stringify(logs);
   assert.doesNotMatch(serialized, new RegExp(apiKey)); assert.doesNotMatch(serialized, /Authorization|Bearer|actual-mp4-bytes|bin_1234567890123456|C:\\\\private/i);
 });
@@ -209,4 +209,40 @@ test("concurrent executions never share uploaded files or cleanup targets", asyn
   assert.deepEqual(outputs, [facts, facts]);
   assert.equal(files.length, 4);
   assert.deepEqual(deleted.sort(), ["files/user-0", "files/user-1"]);
+});
+test("wrapped SDK network upload failure retries with fresh file reads then preserves inference retries",async t=>{
+ const input=fixture(t),delays=[],contents=[];let uploads=0,inferences=0;
+ const client=mockClient(async()=>{if(++inferences===1)throw Object.assign(new Error("temporary"),{status:503});return {text:JSON.stringify(facts)};});
+ client.files.upload=async request=>{
+  assert.equal(typeof request.file,"string");contents.push(fs.readFileSync(request.file,"utf8"));
+  if(++uploads===1)throw new Error("SDK wrapper",{cause:new TypeError("fetch failed",{cause:Object.assign(new Error("socket"),{code:"ECONNRESET"})})});
+  return {name:"files/ready",uri:"uri",state:"ACTIVE"};
+ };
+ assert.deepEqual(await analyzeVideo({...input,apiKey:"key",createClient:()=>client,logger:{},sleep:async ms=>delays.push(ms)}),facts);
+ assert.equal(uploads,2);assert.equal(inferences,2);assert.equal(contents[0],contents[1]);assert.ok(contents[0].length);assert.deepEqual(delays,[1000,3000]);assert.ok(fs.existsSync(path.join(input.binaryDir,input.binary.referenceId)));
+});
+test("upload permanent errors stop immediately and network exhaustion is classified",async t=>{
+ for(const code of [400,401,403,413,415,"EACCES","ECONNRESET"]){
+  let attempts=0;const delays=[],client=mockClient(()=>assert.fail("no inference"));
+  client.files.upload=async()=>{attempts++;throw typeof code==="number"?Object.assign(new Error("private"),{status:code}):new Error("wrapper",{cause:new Error("fetch",{cause:Object.assign(new Error("private"),{code})})});};
+  await assert.rejects(analyzeVideo({...fixture(t),apiKey:"key",createClient:()=>client,logger:{},sleep:async ms=>delays.push(ms)}),e=>{assert.ok(!e.message.includes("private"));if(code==="ECONNRESET")assert.equal(e.code,"gemini_upload_network_failed");return true;});
+  assert.equal(attempts,code==="ECONNRESET"?3:1);assert.equal(delays.length,code==="ECONNRESET"?2:0);
+ }
+});
+test("uncertain upload timeout does not overlap replacements; late confirmed file is cleaned",async t=>{
+ let resolve,uploads=0,deletes=0;const client=mockClient(()=>assert.fail("no inference"));
+ client.files.upload=()=>{uploads++;return new Promise(r=>resolve=r);};client.files.delete=async()=>{deletes++;};
+ await assert.rejects(analyzeVideo({...fixture(t),apiKey:"key",timeoutMs:10,createClient:()=>client,logger:{},sleep:async()=>{}}),{code:"gemini_upload_timeout"});
+ assert.equal(uploads,1);resolve({name:"files/late"});await new Promise(r=>setImmediate(r));assert.equal(deletes,1);
+});
+test("concurrent upload retries keep binary paths and provider resources separate",async t=>{
+ const inputs=[fixture(t),fixture(t)],seen=[];
+ await Promise.all(inputs.map(async(input,i)=>{let n=0;const client=mockClient(async()=>({text:JSON.stringify(facts)}));client.files.upload=async({file})=>{assert.equal(file,path.join(input.binaryDir,input.binary.referenceId));if(++n===1)throw Object.assign(new Error("temporary"),{status:503});return {name:"files/"+i,uri:"uri"+i,state:"ACTIVE"};};client.files.delete=async({name})=>seen.push(name);await analyzeVideo({...input,apiKey:"key",createClient:()=>client,logger:{},sleep:async()=>{}});}));
+ assert.deepEqual(seen.sort(),["files/0","files/1"]);
+});
+test("temporary processing failures cannot exceed the total three-upload budget",async t=>{
+ let uploads=0;const client=mockClient(()=>assert.fail("no inference"));
+ client.files.upload=async()=>({name:"files/failed-"+(++uploads),state:"FAILED",error:{code:13}});
+ await assert.rejects(analyzeVideo({...fixture(t),apiKey:"key",createClient:()=>client,logger:{},sleep:async()=>{}}),{code:"gemini_upload_retry_exhausted"});
+ assert.equal(uploads,3);
 });

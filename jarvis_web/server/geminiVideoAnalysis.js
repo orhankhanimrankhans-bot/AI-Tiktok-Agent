@@ -151,7 +151,7 @@ function geminiHttpStatus(error) {
   if (/timeout$/.test(error.code)) return 504;
   return ({ gemini_file_not_ready: 503, gemini_rate_limited: 429, gemini_temporarily_unavailable: 503,
     gemini_authentication_failed: 502, gemini_permission_denied: 502, gemini_upload_failed: 502,
-    gemini_analysis_failed: 502, gemini_invalid_analysis: 502, visual_analysis_video_too_large: 413 })[error.code] || 422;
+    gemini_upload_retry_exhausted: 503, gemini_upload_network_failed: 503, gemini_upload_local_read_failed: 422, gemini_upload_invalid_file: 422, gemini_upload_unconfirmed: 502, gemini_analysis_failed: 502, gemini_invalid_analysis: 502, visual_analysis_video_too_large: 413 })[error.code] || 422;
 }
 async function parseAnalysisResponse(response) {
   const finish = response?.candidates?.[0]?.finishReason;
@@ -165,6 +165,50 @@ async function parseAnalysisResponse(response) {
   catch { throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned incomplete or invalid video analysis JSON.", "", true); }
   return normalizeFacts(parsed);
 }
+
+const UPLOAD_RETRY_DELAYS_MS = Object.freeze([1000, 3000]);
+const NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "UND_ERR_SOCKET"]);
+function classifyUpload(error) {
+  const chain = []; const seen = new Set();
+  for (let e = error; e && typeof e === "object" && chain.length < 8 && !seen.has(e); e = e.cause) { chain.push(e); seen.add(e); }
+  const statusError = chain.find(e => providerStatus(e));
+  if ([400, 415].includes(providerStatus(statusError))) return new GeminiVideoError("gemini_upload_rejected", "Gemini rejected the uploaded video or its media type.", diagnosticCode("upload", statusError));
+  if (statusError) return classifyFailure(statusError, "upload");
+  const local = chain.find(e => ["ENOENT", "EACCES", "EPERM", "EISDIR", "EIO"].includes(e.code));
+  if (local) return new GeminiVideoError("gemini_upload_local_read_failed", "The downloaded video could not be read for upload.", "GEMINI_UPLOAD_LOCAL_READ");
+  if (chain.some(e => NETWORK_CODES.has(e.code) || ["AbortError", "TimeoutError"].includes(e.name)))
+    return new GeminiVideoError("gemini_upload_network_failed", "The connection to Gemini failed while uploading the video. Try again shortly.", "GEMINI_UPLOAD_NETWORK", true);
+  return classifyFailure(error, "upload");
+}
+async function uploadVideo({ session, client, filePath, mimeType, timeoutMs, sleep, logger }) {
+  for (;;) {
+    if ((session.uploadAttempts || 0) >= UPLOAD_RETRY_DELAYS_MS.length + 1)
+      throw new GeminiVideoError("gemini_upload_retry_exhausted", "Gemini could not prepare a usable video after three uploads. Try again later.");
+    session.uploadAttempts = (session.uploadAttempts || 0) + 1;
+    let pending, timedOut = false;
+    try {
+      const stat = fs.statSync(filePath); fs.accessSync(filePath, fs.constants.R_OK);
+      if (!stat.isFile() || !stat.size) throw new GeminiVideoError("gemini_upload_invalid_file", "The downloaded video is empty or is not a readable file.");
+      // Pass a path on every attempt: the SDK opens and closes a fresh file handle.
+      pending = client.files.upload({ file: filePath, config: { mimeType, httpOptions: { retryOptions: { attempts: 1 }, timeout: timeoutMs } } });
+      let file;
+      try { file = await withTimeout(pending, timeoutMs, "gemini_upload_timeout", "Gemini upload timed out; completion could not be confirmed. Try again later."); }
+      catch (error) { timedOut = error.code === "gemini_upload_timeout"; throw error; }
+      if (!file?.name) throw new GeminiVideoError("gemini_upload_unconfirmed", "Gemini did not confirm the uploaded file. Try again later.");
+      return file;
+    } catch (error) {
+      const failure = classifyUpload(error);
+      logger?.error?.("[GeminiVideoAnalysis] upload", { stage: "upload", attempt: session.uploadAttempts, diagnosticCode: failure.diagnosticCode || diagnosticCode("upload", error), code: failure.code, ...(providerStatus(error) ? { status: providerStatus(error) } : {}) });
+      // SDK uploads can outlive a caller timeout. Never start a concurrent replacement.
+      if (timedOut) {
+        pending.then(file => file?.name && cleanupDeveloperFile({ client, remoteFile: file }, { logger })).catch(() => {});
+      }
+      if (timedOut || !failure.retryable || session.uploadAttempts > UPLOAD_RETRY_DELAYS_MS.length) { failure.retryable = false; throw failure; }
+      await sleep(UPLOAD_RETRY_DELAYS_MS[session.uploadAttempts - 1]);
+    }
+  }
+}
+
 async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = 120000,
   pollIntervalMs = 2000, createClient = (key) => new GoogleGenAI({ apiKey: key }), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), logger = console }) {
   if (!apiKey) throw new GeminiVideoError("gemini_not_configured", "Gemini video analysis is not configured on the Corex server.");
@@ -172,19 +216,11 @@ async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, mo
   const fileSize = fs.statSync(filePath).size;
   const startedAt = Date.now();
   const client = session.client || (session.client = createClient(apiKey));
-  let remoteFile = session.remoteFile;
+  let remoteFile = session.remoteFile || await uploadVideo({ session, client, filePath, mimeType, timeoutMs, sleep, logger });
   const deadline = Date.now() + timeoutMs;
   const controller = new AbortController();
   const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    try {
-      if (!remoteFile) remoteFile = await withTimeout(client.files.upload({ file: filePath, config: { abortSignal: controller.signal, mimeType, httpOptions: { retryOptions: { attempts: 1 }, timeout: timeoutMs } } }), timeoutMs, "gemini_upload_timeout", "Gemini video upload timed out.");
-    } catch (error) {
-      const diagnostic = logFailure({ logger, stage: "upload", model, error, apiKey, mimeType, fileSize, startedAt });
-      if (error instanceof GeminiVideoError) { error.diagnosticCode = diagnostic; throw error; }
-      throw classifyFailure(error, "upload");
-    }
-    if (!remoteFile?.name) { const error = new Error("Gemini upload returned no file resource name."); const diagnostic = logFailure({ logger, stage: "upload", model, error, apiKey, mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_upload_failed", "Gemini could not receive the downloaded video.", diagnostic, true); }
     while (fileState(remoteFile) !== "ACTIVE") {
       if (fileState(remoteFile) === "FAILED") { const providerError = Object.assign(new Error(remoteFile?.error?.message || "Gemini file processing failed."), { code: remoteFile?.error?.code }); const diagnostic = logFailure({ logger, stage: "processing", model, error: providerError, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini could not process the downloaded video.", diagnostic, [4, 8, 10, 13, 14].includes(Number(remoteFile?.error?.code))); }
       if (Date.now() >= deadline) { const error = new GeminiVideoError("gemini_processing_timeout", "Gemini video processing timed out.", "", true); error.diagnosticCode = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw error; }
@@ -251,4 +287,4 @@ async function analyzeVideo(options) {
   } finally { await cleanupDeveloperFile(session, options); }
 }
 
-module.exports = { RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
+module.exports = { UPLOAD_RETRY_DELAYS_MS, classifyUpload, RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
