@@ -181,6 +181,23 @@ function classifyUpload(error) {
     return new GeminiVideoError("gemini_upload_network_failed", "The connection to Gemini failed while uploading the video. Try again shortly.", "GEMINI_UPLOAD_NETWORK", true);
   return classifyFailure(error, "upload");
 }
+
+function developerUploadConfig(filePath, mimeType, fileSize, timeoutMs) {
+  // SDK 2.20.0 replaces initialization defaults when per-call httpOptions exist.
+  // Its upload path already includes v1beta; retain the SDK's resumable headers.
+  return { mimeType, httpOptions: {
+    apiVersion: "", retryOptions: { attempts: 1 }, timeout: timeoutMs,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(fileSize),
+      "X-Goog-Upload-Header-Content-Type": mimeType,
+      "X-Goog-Upload-File-Name": path.basename(filePath),
+    },
+  } };
+}
+
 async function uploadVideo({ session, client, filePath, mimeType, timeoutMs, sleep, logger }) {
   for (;;) {
     if ((session.uploadAttempts || 0) >= UPLOAD_RETRY_DELAYS_MS.length + 1)
@@ -197,7 +214,7 @@ async function uploadVideo({ session, client, filePath, mimeType, timeoutMs, sle
       uploadSubstage = "sdk_upload_initialization";
       diagnostic("before_sdk_upload");
       uploadSubstage = "sdk_upload_unknown";
-      pending = client.files.upload({ file: filePath, config: { mimeType, httpOptions: { retryOptions: { attempts: 1 }, timeout: timeoutMs } } });
+      pending = client.files.upload({ file: filePath, config: developerUploadConfig(filePath, mimeType, stat.size, timeoutMs) });
       let file;
       try { file = await withTimeout(pending, timeoutMs, "gemini_upload_timeout", "Gemini upload timed out; completion could not be confirmed. Try again later."); }
       catch (error) { timedOut = error.code === "gemini_upload_timeout"; throw error; }
@@ -297,4 +314,4 @@ async function analyzeVideo(options) {
   } finally { await cleanupDeveloperFile(session, options); }
 }
 
-module.exports = { UPLOAD_RETRY_DELAYS_MS, classifyUpload, RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
+module.exports = { developerUploadConfig, UPLOAD_RETRY_DELAYS_MS, classifyUpload, RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
