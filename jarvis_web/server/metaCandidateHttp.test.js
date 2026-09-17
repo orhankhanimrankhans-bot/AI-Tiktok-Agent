@@ -39,6 +39,17 @@ test('real HTTP: config CRUD, OAuth callback, Graph use, legacy compatibility an
  assert.equal((await request(b.cookie,'GET',`/api/facebook/auth/callback?state=${stateB}&code=fixture`)).status,200);
  const ca=(await request(a.cookie,'GET','/api/facebook/credentials')).data.credentials,cb=(await request(b.cookie,'GET','/api/facebook/credentials')).data.credentials;assert.equal(ca.length,1);assert.equal(cb.length,1);assert.equal(ca[0].appId,'111111');assert.equal(cb[0].appId,'222222');assert.notEqual(ca[0].id,cb[0].id);
  assert.equal((await request(a.cookie,'GET',`/api/facebook/credentials/${cb[0].id}`)).status,404);
+
+ for (const method of ['GET','POST']) {
+  const route='/api/facebook/credentials/'+cb[0].id+'/pages';
+  assert.equal((await request(null,method,route,method==='POST'?{pageId:'700002'}:undefined)).status,401);
+  assert.equal((await request(a.cookie,method,route,method==='POST'?{pageId:'700002'}:undefined)).status,404);
+ }
+ const pageList=await request(a.cookie,'GET','/api/facebook/credentials/'+ca[0].id+'/pages');
+ assert.equal(pageList.status,200);assert.equal(pageList.cache,'private, no-store');
+ assert.ok(pageList.data.pages.some(p=>p.connected));
+ const duplicate=await request(a.cookie,'POST','/api/facebook/credentials/'+ca[0].id+'/pages',{pageId:ca[0].pageId});
+ assert.equal(duplicate.status,200);assert.equal(duplicate.data.created,false);
  assert.equal((await request(a.cookie,'DELETE',`/api/facebook/credentials/${cb[0].id}`)).status,404);
  assert.equal((await request(a.cookie,'PATCH',`/api/facebook/credentials/${cb[0].id}/manual`,{name:'wrong user'})).status,404);
  assert.equal((await request(a.cookie,'GET',`/api/facebook/auth/start?credentialId=${cb[0].id}`)).status,404);

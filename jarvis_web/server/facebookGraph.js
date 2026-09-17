@@ -70,9 +70,29 @@ class FacebookGraphService {
     return { ok: true, pageId: String(page.id), pageName: String(page.name), status: "connected", permissionsVerified: false };
   }
   async pages(token) {
-    const data = await this.request("me/accounts", token, { fields: "id,name,category,tasks,access_token", limit: "100" }, PERMISSIONS.pages);
-    const pageTokens = {}; const pages = (data.data || []).map((page) => { if (page.id && page.access_token) pageTokens[page.id] = page.access_token; const { access_token, ...safe } = page; return publicMetaData(safe, [token, ...Object.values(pageTokens)]); });
-    return { pages, pageTokens };
+    const pageTokens = {}, pages = [], seen = new Set(), cursors = new Set();
+    let after;
+    for (let batch = 0; batch < 100; batch++) {
+      // Follow opaque cursors on our fixed Graph endpoint, never paging.next URLs.
+      const data = await this.request("me/accounts", token, { fields: "id,name,category,tasks,access_token", limit: "100", ...(after ? { after } : {}) }, PERMISSIONS.pages);
+      if (!Array.isArray(data.data)) throw new FacebookGraphError(502, "facebook_pages_invalid", "Meta returned an invalid Page list. Refresh Pages to try again.");
+      for (const page of data.data) {
+        if (!/^\d{3,30}$/.test(String(page?.id || ""))) continue;
+        const id = String(page.id);
+        if (typeof page.access_token === "string" && page.access_token) pageTokens[id] = page.access_token;
+        if (!seen.has(id)) {
+          seen.add(id);
+          pages.push({ id, name: String(page.name || "Facebook Page"),
+            ...(typeof page.category === "string" ? { category: page.category } : {}),
+            ...(Array.isArray(page.tasks) ? { tasks: page.tasks.filter(task => typeof task === "string") } : {}) });
+        }
+      }
+      if (!data.paging?.next) return { pages, pageTokens };
+      after = data.paging?.cursors?.after;
+      if (typeof after !== "string" || !after || after.length > 4096 || cursors.has(after)) break;
+      cursors.add(after);
+    }
+    throw new FacebookGraphError(502, "facebook_pages_incomplete", "The authorized Page list could not be completed. Refresh Pages to try again.");
   }
   async permissions(token) {
     const data = await this.request("me/permissions", token, {}, REEL_PUBLISH_PERMISSION, "authorization");

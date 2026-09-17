@@ -1,3 +1,4 @@
+const { registerFacebookPageCredentialRoutes } = require("./facebookPageCredentials");
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
@@ -358,6 +359,8 @@ function publicFacebookError(res, error) {
 app.get("/api/facebook/credentials", (req, res) => {
   try { const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." }); return res.json({ credentials: facebookCredentialStore.list(owner) }); } catch (error) { return publicFacebookError(res, error); }
 });
+registerFacebookPageCredentialRoutes(app, { getStore: () => facebookCredentialStore, getMetaConfigStore: () => metaAppConfigStore,
+  graphServiceFactory: facebookGraphService, workspaceForRequest: metaWorkspace });
 app.get("/api/facebook/credentials/:credentialId", (req, res) => {
   if (!FacebookCredentialStore.isValidId(req.params.credentialId)) return res.status(400).json({ error: "Invalid Facebook credential ID." });
   const owner = metaWorkspace(req); if (!owner) return res.status(401).json({ error: "Authentication is required." });

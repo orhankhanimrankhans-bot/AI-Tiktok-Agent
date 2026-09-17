@@ -1,3 +1,4 @@
+import FacebookPages from "./FacebookPages.jsx";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import MetaAppSettings from "./MetaAppSettings.jsx";
@@ -1309,7 +1310,7 @@ function GoogleCredentialModal({
   );
 }
 
-function FacebookCredentialModal({ canManageMeta, onClose, credential, onStartOAuth, onDisconnect, onTestAccessToken, onSaveAccessToken, onDeleteAccessToken }) {
+function FacebookCredentialModal({ canManageMeta, onClose, credential, onStartOAuth, onDisconnect, onTestAccessToken, onSaveAccessToken, onDeleteAccessToken, onCredentialsChanged }) {
   const [credentialName, setCredentialName] = useState(credential?.name ?? (credential ? facebookCredentialLabel(credential) : "Facebook Graph account"));
   const [authMode, setAuthMode] = useState(credential?.authMode === "manual_access_token" ? "manual_access_token" : "managed_oauth2");
   const [accessToken, setAccessToken] = useState("");
@@ -1384,6 +1385,7 @@ function FacebookCredentialModal({ canManageMeta, onClose, credential, onStartOA
               <p className="credential-note">The token remains only in this modal until it is submitted securely to the Corex backend.</p>
             </div>}
             </section>
+            {!isManual && credential && canManageMeta && <FacebookPages key={`${credential.id}:${credential.updatedAt}:${credential.appId}`} apiBaseUrl={API_BASE_URL} credential={credential} onCredentialsChanged={onCredentialsChanged} onStartOAuth={onStartOAuth} />}
           </section>
         </div>
         {showDeleteConfirmation && <div className="credential-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-facebook-credential-title"><div className="credential-confirm-modal"><h3 id="delete-facebook-credential-title">Delete credential?</h3><p>Delete "{credentialName.trim() || "Facebook Graph account"}"?</p><div><button type="button" onClick={() => setShowDeleteConfirmation(false)}>Cancel</button><button type="button" className="confirm-delete" onClick={deleteAccessToken}>Delete</button></div></div></div>}
@@ -4052,6 +4054,7 @@ function App() {
             window.setTimeout(() => setCredentialToast(""), 3000);
             return saved;
           }}
+          onCredentialsChanged={() => syncFacebookCredentials()}
           onDeleteAccessToken={async (credentialId) => {
             await deleteManualFacebookCredential(fetch, API_BASE_URL, credentialId);
             setFacebookCredentials((items) => items.filter((item) => item.id !== credentialId));

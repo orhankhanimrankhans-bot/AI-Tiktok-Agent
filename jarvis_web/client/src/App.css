@@ -7057,3 +7057,16 @@ input, select, textarea { font-size: 16px; }
   .facebook-account-modal .credential-modal-header { padding: 16px; }
   .facebook-account-modal .credential-modal-actions { gap: 6px; }
 }
+
+.facebook-pages { margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155; }
+.facebook-pages-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.facebook-pages-heading h3 { margin: 5px 0; }
+.facebook-pages p { font-size: 13px; line-height: 1.5; color: #a8b5c8; }
+.facebook-pages ul { list-style: none; padding: 0; margin: 16px 0; }
+.facebook-pages li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid #334155; }
+.facebook-pages li > div { min-width: 0; flex: 1 1 160px; overflow-wrap: anywhere; }
+.facebook-pages li small { display: block; margin-top: 4px; color: #a8b5c8; }
+.facebook-page-connected { color: #86efac; background: #173e2d; padding: 5px 10px; border-radius: 6px; font-size: 12px; }
+.facebook-page-unavailable { color: #fda4af; font-size: 12px; }
+.facebook-pages button { flex-shrink: 0; white-space: normal; }
+.facebook-pages-reconnect { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

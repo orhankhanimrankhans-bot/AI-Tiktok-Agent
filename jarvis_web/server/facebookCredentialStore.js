@@ -1,3 +1,4 @@
+const { FacebookGraphError } = require("./facebookGraph");
 const crypto = require("crypto");
 const { decryptTokensWithFallback, encryptionKeys, encryptTokens } = require("./credentialStore");
 const { requireWorkspace: normalizeCredentialOwner } = require("./metaAppConfigStore");
@@ -127,6 +128,33 @@ class FacebookCredentialStore {
       || current.tokens.userAccessToken !== snapshot.tokens.userAccessToken) throw new Error("Facebook authorization changed; retry the operation.");
     const selected = current.pageId ? { [current.pageId]: pageTokens?.[current.pageId] || current.tokens.pageAccessTokens?.[current.pageId] } : pageTokens;
     return this.save({ ...current, tokens: { ...current.tokens, pageAccessTokens: selected } }, value);
+  }
+  addPageCredential(snapshot, page, pageToken, owner) {
+    const value = normalizeCredentialOwner(owner);
+    if (!/^\d{3,30}$/.test(String(page?.id || "")) || typeof pageToken !== "string" || !pageToken) {
+      throw new FacebookGraphError(400, "facebook_page_unavailable", "This Page is not authorized. Refresh Pages or reconnect Facebook.");
+    }
+    // Serialize the duplicate check and insert across concurrent requests/processes.
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const current = this.get(snapshot.id, { includeTokens: true, owner: value });
+      if (!current || current.authMode !== AUTH_MODE_OAUTH || current.accountId !== snapshot.accountId
+        || current.appId !== snapshot.appId || current.updatedAt !== snapshot.updatedAt
+        || !current.tokens.userAccessToken || current.tokens.userAccessToken !== snapshot.tokens.userAccessToken) {
+        throw new FacebookGraphError(409, "facebook_authorization_changed", "Facebook authorization changed. Refresh Pages before adding a credential.");
+      }
+      const existing = this.list(value).find(item => item.pageId === String(page.id));
+      let credential = existing;
+      if (!credential) {
+        const id = FacebookCredentialStore.generateId();
+        credential = this.save({ id, accountId: current.accountId, accountName: current.accountName, appId: current.appId,
+          pageId: String(page.id), pageName: String(page.name || "Facebook Page"),
+          name: `Facebook - ${String(page.name || "Facebook Page").slice(0, 80)} - OAuth - ${id.slice(-4).toUpperCase()}`,
+          tokens: { ...current.tokens, pageAccessTokens: { [page.id]: pageToken } } }, value);
+      }
+      this.db.exec("COMMIT");
+      return { credential, created: !existing };
+    } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
   saveManual({ id, name, pageId, pageName = "", appId = "", accessToken, lastTestedAt = new Date().toISOString() }, owner) {
     const value = normalizeCredentialOwner(owner);
