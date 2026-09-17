@@ -1,3 +1,4 @@
+import { workflowDraftKey, canStartNewDraft } from "./workflowDraftIdentity.js";
 import FacebookPages from "./FacebookPages.jsx";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
@@ -39,7 +40,7 @@ import { CANVAS_APPEARANCE_KEY, appearanceCssVariables, canvasBackground,
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 import { buildYouTubeUploadRequest, YOUTUBE_OPERATION_UPLOAD, YOUTUBE_PRIVACY_STATUSES, youtubeCredentialLabel, youtubeNodeDefaults } from "./youtubeConfig.js";
 
-const WORKFLOW_STORAGE_KEY = "jarvis_workflow_v2";
+
 const LOCAL_WORKFLOW_MANAGER_ID = "local-workflow";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
 
@@ -47,17 +48,6 @@ function loadCanvasAppearance() {
   try { return safeAppearance(JSON.parse(localStorage.getItem(CANVAS_APPEARANCE_KEY) || "{}")); } catch { return safeAppearance(); }
 }
 
-function loadStoredLocalWorkflow() {
-  const saved = localStorage.getItem(WORKFLOW_STORAGE_KEY);
-  if (!saved) return null;
-  const parsedWorkflow = JSON.parse(saved);
-  const workflow = normalizeSavedWorkflow(parsedWorkflow);
-  const safeWorkflow = workflowForStorage(parsedWorkflow);
-  if (JSON.stringify(safeWorkflow) !== JSON.stringify(parsedWorkflow)) {
-    localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(safeWorkflow));
-  }
-  return workflow;
-}
 
 
 function GoogleDriveIcon({ className = "" }) {
@@ -83,9 +73,7 @@ function FacebookIcon({ className = "" }) {
   );
 }
 
-function storeWorkflowLinkage(workflow) {
-  localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(workflowForStorage(workflow)));
-}
+
 
 function YouTubeIcon({ className = "" }) {
   return <span className={`youtube-mark ${className}`} aria-hidden="true"><svg viewBox="0 0 32 24" focusable="false"><rect x="1" y="1" width="30" height="22" rx="7" fill="#ff0033" /><path d="m13 7 8 5-8 5z" fill="#fff" /></svg></span>;
@@ -2272,8 +2260,24 @@ function ExecutionHistory({ executions, selected, onSelect }) {
   </div>;
 }
 
-function App() {
+function WorkspaceApp() {
   const { session, can } = useJarvisAuth();
+  const WORKFLOW_STORAGE_KEY = workflowDraftKey(session);
+function loadStoredLocalWorkflow() {
+  const saved = localStorage.getItem(WORKFLOW_STORAGE_KEY);
+  if (!saved) return null;
+  const parsedWorkflow = JSON.parse(saved);
+  const workflow = normalizeSavedWorkflow(parsedWorkflow);
+  const safeWorkflow = workflowForStorage(parsedWorkflow);
+  if (JSON.stringify(safeWorkflow) !== JSON.stringify(parsedWorkflow)) {
+    localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(safeWorkflow));
+  }
+  return workflow;
+}
+
+function storeWorkflowLinkage(workflow) {
+  localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(workflowForStorage(workflow)));
+}
   const credentialWorkspaceKey = session
     ? `${session.role}:${session.profileId || "primary"}`
     : "unauthenticated";
@@ -3018,6 +3022,10 @@ function App() {
   };
 
   const startNewWorkflow = async () => {
+    if (!canStartNewDraft(editorWorkflowSource, canvasNodesRef.current, hasUnsavedEditorChanges())) {
+      setWorkflowNotice({ status: "error", message: "One unpublished draft is supported per workspace. Publish this draft, or save changes to the open workflow, before starting another." });
+      return null;
+    }
     canvasNodesRef.current = []; connectionsRef.current = [];
     setCanvasNodes([]); setConnections([]); setEditingNode(null); setSelectedConnectionId(null);
     setEditorWorkflowSource("local"); setActiveServerWorkflow(null); setSelectedManagedWorkflowId(null);
@@ -3135,10 +3143,9 @@ function App() {
     setIsPublishing(true); setWorkflowNotice({ status: "running", message: "Publishing workflow..." });
     try {
       const publishDefinition = buildLocalPublishPayload({ name: editorWorkflowSource === "server" ? activeServerWorkflow?.name : loadStoredLocalWorkflow()?.name || "My Workflow", nodes: canvasNodesRef.current, connections: connectionsRef.current });
-      const stored = await publishLocalWorkflow(fetch, API_BASE_URL, { ...publishDefinition, serverWorkflowId: editorWorkflowSource === "server" ? activeServerWorkflow?.id : loadStoredLocalWorkflow()?.serverWorkflowId });
+      const stored = await publishLocalWorkflow(fetch, API_BASE_URL, { ...publishDefinition, serverWorkflowId: editorWorkflowSource === "server" ? activeServerWorkflow?.id : null });
       const workflow = validateStoredWorkflow(stored);
       setEditorWorkflowSource("server"); setActiveServerWorkflow({ id: workflow.id, name: workflow.name, status: workflow.status, version: workflow.version, updatedAt: workflow.updatedAt });
-      storeWorkflowLinkage({ version: 2, name: workflow.name, nodes: definition.nodes, connections: definition.connections, savedAt: new Date().toISOString(), serverWorkflowId: workflow.id });
       setSelectedManagedWorkflowId(workflow.id); setWorkflowManagerRefreshKey((value) => value + 1);
       editorDefinitionBaselineRef.current = definitionFingerprint(workflow.nodes, workflow.connections); setWorkflowDirty(false);
       storeWorkflowLinkage({ version: 2, name: workflow.name, nodes: workflow.nodes, connections: workflow.connections, savedAt: new Date().toISOString(), serverWorkflowId: workflow.id });
@@ -4067,6 +4074,12 @@ function App() {
 
     </div>
   );
+}
+
+function App() {
+  const { session } = useJarvisAuth();
+  const key = workflowDraftKey(session);
+  return key ? <WorkspaceApp key={key} /> : null;
 }
 
 export default App;
