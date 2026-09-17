@@ -97,11 +97,20 @@ test("real Download output survives browser and server Prepare Content and resol
     createOAuthClient: () => Object.assign(new EventEmitter(), { setCredentials() {} }),
     createDriveClient: () => ({ files: { get: async (request) => ({ data: request.alt === "media" ? bytes : { name: "clip.mp4", mimeType: "video/mp4", size: String(bytes.length) } }) } }) });
   assert.equal(downloaded.title, undefined);
+  let uploads = 0, generations = 0, cleanups = 0;
   const config = prepareContentDefaults();
   const generate = (body) => prepareContent(options({ body, binaryDir, analyzeVideoImpl: async ({ binary }) => {
     assert.equal(binary.referenceId, downloaded.binary.referenceId);
     assert.deepEqual(fs.readFileSync(path.join(binaryDir, binary.referenceId)), bytes);
-    return visual;
+    let attempts = 0;
+    return require("./geminiVideoAnalysis").analyzeVideo({ binaryDir, binary, mimeType: "video/mp4", apiKey: GEMINI_KEY,
+      sleep: async () => {}, logger: {}, createClient: () => ({ files: {
+        upload: async () => { uploads++; return { name: "files/handoff", uri: "uri", state: "ACTIVE" }; },
+        delete: async () => { cleanups++; }
+      }, models: { generateContent: async () => {
+        generations++; if (++attempts === 1) throw Object.assign(new Error("busy"), { status: 503 });
+        return { text: JSON.stringify(visual) };
+      } } }) });
   }, fetchImpl: async () => response(success) }));
   const browser = mergePreparedContent(downloaded, await generate(buildPrepareContentRequest(config, downloaded)));
   const nodes = [{ id: "t", name: "Schedule Trigger", config: {} }, { id: "d", name: "Download File", config: { credentialId: "test", fileId: "source-video" } }, { id: "p", name: "Prepare Content", config }, { id: "f", name: "Facebook Graph API", config: { operation: "Publish Reel", credentialId: "test-facebook", title: "{{ $json.title }}", description: "{{ $json.socialCaptionWithHashtags }}" } }];
@@ -113,6 +122,7 @@ test("real Download output survives browser and server Prepare Content and resol
   assert.equal(publishedRequest.description, server.socialCaptionWithHashtags);
   assert.deepEqual(publishedRequest.binary, downloaded.binary);
   assert.deepEqual(browser, server);
+  assert.equal(uploads, 2); assert.equal(generations, 4); assert.equal(cleanups, 2);
   for (const item of [browser, server]) {
     assert.deepEqual(item.binary, downloaded.binary);
     assert.equal(item.fileId, downloaded.fileId);
@@ -129,4 +139,9 @@ test("real Download output survives browser and server Prepare Content and resol
       assert.deepEqual(fs.readFileSync(resolved.filePath), bytes);
     }
   }
+});
+
+test("terminal readiness maps to a useful HTTP error without OpenAI generation", async () => {
+ const { GeminiVideoError } = require("./geminiVideoAnalysis");
+ await assert.rejects(prepareContent(options({ analyzeVideoImpl: async () => { throw new GeminiVideoError("gemini_file_not_ready", "Uploaded video is not ready.", "GEMINI_GENERATE_400"); }, fetchImpl: () => assert.fail("OpenAI must not run") })), { code: "gemini_file_not_ready", statusCode: 503, diagnosticCode: "GEMINI_GENERATE_400" });
 });

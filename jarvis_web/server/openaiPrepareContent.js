@@ -1,7 +1,7 @@
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 const TONES = new Set(["Natural", "Fun", "Professional", "Informative", "Inspirational"]);
-const { GeminiVideoError, analyzeVideo } = require("./geminiVideoAnalysis");
+const { GeminiVideoError, geminiHttpStatus, analyzeVideo } = require("./geminiVideoAnalysis");
 
 class PrepareContentError extends Error {
   constructor(statusCode, code, message, diagnosticCode = "") {
@@ -99,7 +99,7 @@ async function prepareContent({ body, apiKey, model = DEFAULT_OPENAI_MODEL, gemi
   let visual;
   try { visual = await analyzeVideoImpl({ binaryDir, binary: input.binary, mimeType: input.mimeType, apiKey: geminiApiKey, model: geminiModel, logger }); }
   catch (error) {
-    if (error instanceof GeminiVideoError) throw new PrepareContentError(422, error.code, error.message, error.diagnosticCode);
+    if (error instanceof GeminiVideoError) throw new PrepareContentError(geminiHttpStatus(error), error.code, error.message, error.diagnosticCode);
     if (/^(gemini_|visual_analysis_)/.test(String(error?.code || ""))) throw new PrepareContentError(422, error.code, "COREX could not analyze the downloaded video.", error.diagnosticCode);
     throw new PrepareContentError(422, "visual_analysis_failed", "COREX could not analyze the downloaded video.");
   }

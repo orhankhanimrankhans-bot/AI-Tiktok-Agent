@@ -22,7 +22,7 @@ const FACT_SCHEMA = Object.freeze({
 });
 
 class GeminiVideoError extends Error {
-  constructor(code, message, diagnosticCode = "") { super(message); this.name = "GeminiVideoError"; this.code = code; this.diagnosticCode = diagnosticCode; }
+  constructor(code, message, diagnosticCode = "", retryable = false) { super(message); this.retryable = retryable; this.name = "GeminiVideoError"; this.code = code; this.diagnosticCode = diagnosticCode; }
 }
 
 function providerStatus(error) {
@@ -51,20 +51,12 @@ function safeProviderMessage(error, apiKey) {
 
 function diagnosticCode(stage, error) {
   const label = { upload: "UPLOAD", processing: "PROCESSING", generateContent: "GENERATE", structuredParse: "STRUCTURED_PARSE", cleanup: "CLEANUP" }[stage] || "UNKNOWN";
-  const status = providerStatus(error);
-  if (status) return `GEMINI_${label}_${status}`;
-  const providerCode = String(error?.code || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
-  return `GEMINI_${label}_${providerCode || "FAILED"}`;
+  return `GEMINI_${label}_${providerStatus(error) || "FAILED"}`;
 }
-
-function logFailure({ logger, stage, model, error, apiKey, state, mimeType, fileSize, startedAt }) {
+function logFailure({ logger, stage, error }) {
   const diagnostic = diagnosticCode(stage, error);
-  logger?.error?.("[GeminiVideoAnalysis]", {
-    stage, model, ...(providerStatus(error) ? { status: providerStatus(error) } : {}), ...(providerCode(error) ? { providerCode: providerCode(error) } : {}),
-    errorName: String(error?.name || "Error").replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 80) || "Error",
-    message: safeProviderMessage(error, apiKey), ...(state ? { fileState: String(state).slice(0, 40) } : {}),
-    mimeType: String(mimeType || "").slice(0, 100), fileSize, elapsedMs: Math.max(0, Date.now() - startedAt), diagnosticCode: diagnostic,
-  });
+  logger?.error?.("[GeminiVideoAnalysis]", { stage, diagnosticCode: diagnostic,
+    ...(providerStatus(error) ? { status: providerStatus(error) } : {}) });
   return diagnostic;
 }
 
@@ -87,7 +79,7 @@ function boundedFact(value, maximum, required = false) {
 }
 
 function normalizeFacts(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned invalid video analysis.");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned invalid video analysis.", "", true);
   const primaryObject = boundedFact(value.primaryObject, 200, true);
   const secondaryObject = boundedFact(value.secondaryObject, 200);
   const action = boundedFact(value.action, 300, true);
@@ -95,7 +87,7 @@ function normalizeFacts(value) {
   const visibleDetails = Array.isArray(value.visibleDetails) ? value.visibleDetails.map((item) => boundedFact(item, 200)).filter(Boolean).slice(0, 20) : null;
   const confidence = Number(value.confidence);
   if (!primaryObject || secondaryObject === null || !action || scene === null || !visibleDetails || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
-    throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned invalid video analysis.");
+    throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned invalid video analysis.", "", true);
   }
   if (confidence < MINIMUM_CONFIDENCE) throw new GeminiVideoError("gemini_low_confidence", "Gemini could not identify the video's object and action confidently enough.");
   return { primaryObject, secondaryObject, action, scene, visibleDetails, confidence };
@@ -110,36 +102,97 @@ function fileState(file) { return String(file?.state?.name || file?.state || "")
 async function withTimeout(operation, timeoutMs, code, message) {
   let timer;
   try {
-    return await Promise.race([operation, new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new GeminiVideoError(code, message)), timeoutMs); })]);
+    return await Promise.race([operation, new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new GeminiVideoError(code, message, "", true)), timeoutMs); })]);
   } finally { clearTimeout(timer); }
 }
 
-async function analyzeVideo({ binaryDir, binary, mimeType, apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = 120000,
+function providerPayload(error) {
+  let payload = error?.response?.data?.error || error?.error;
+  // SDK 2.20.0 keeps the JSON error body in ApiError.message. Inspect only for
+  // classification; neither this body nor its message is ever logged/returned.
+  if (!payload && error?.name === "ApiError" && typeof error.message === "string" && error.message.length < 65536) {
+    try { payload = JSON.parse(error.message)?.error; } catch { /* Not a JSON provider response. */ }
+  }
+  return payload;
+}
+
+function fileNotReady(error) {
+  // Narrowly recognize readiness failures, never arbitrary INVALID_ARGUMENT errors.
+  if (![400, 409, 412].includes(providerStatus(error))) return false;
+  const message = String(providerPayload(error)?.message || error?.message || "").slice(0, 65536);
+  return /(?:file|video|media)\b[^\n]{0,500}(?:not\b[^\n]{0,40}\b(?:active|ready)|still\s+(?:being\s+)?process|processing\s+(?:state|not\s+complete)|currently\b[^\n]{0,40}\bprocessing)/i.test(message);
+}
+
+const RETRY_DELAYS_MS = Object.freeze([3000, 8000, 15000]);
+function isRetryable(error) {
+  if (error instanceof GeminiVideoError) return error.retryable;
+  if (fileNotReady(error)) return true;
+  const status = providerStatus(error);
+  if (status) return [408, 429, 500, 502, 503, 504].includes(status);
+  return ["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"].includes(error?.code || error?.cause?.code)
+    || ["AbortError", "TimeoutError"].includes(error?.name);
+}
+function classifyFailure(error, stage) {
+  if (error instanceof GeminiVideoError) { error.diagnosticCode ||= diagnosticCode(stage, error); return error; }
+  const status = providerStatus(error);
+  let code = "gemini_analysis_failed", message = "The Gemini service request failed.";
+  if (fileNotReady(error)) { code = "gemini_file_not_ready"; message = "The uploaded video is not ready for analysis yet. Try again shortly."; }
+  else if (status === 429) { code = "gemini_rate_limited"; message = "Gemini quota or rate limit reached. Try again later."; }
+  else if ([500, 502, 503].includes(status)) { code = "gemini_temporarily_unavailable"; message = "Gemini is temporarily unavailable. Try again later."; }
+  else if (status === 401) { code = "gemini_authentication_failed"; message = "Gemini credentials could not be authenticated."; }
+  else if (status === 403) { code = "gemini_permission_denied"; message = "Gemini denied access to this resource."; }
+  else if (status === 413) { code = "visual_analysis_video_too_large"; message = "The video exceeds the provider size limit."; }
+  else if ([408, 504].includes(status) || ["AbortError", "TimeoutError"].includes(error?.name)) { code = "gemini_analysis_timeout"; message = "The Gemini request timed out."; }
+  else if (status === 400) { code = "gemini_processing_failed"; message = "Gemini rejected the video or analysis request."; }
+  else if (stage === "upload") { code = "gemini_upload_failed"; message = "The Gemini video upload failed."; }
+  return new GeminiVideoError(code, message, diagnosticCode(stage, error), isRetryable(error));
+}
+function geminiHttpStatus(error) {
+  if (/timeout$/.test(error.code)) return 504;
+  return ({ gemini_file_not_ready: 503, gemini_rate_limited: 429, gemini_temporarily_unavailable: 503,
+    gemini_authentication_failed: 502, gemini_permission_denied: 502, gemini_upload_failed: 502,
+    gemini_analysis_failed: 502, gemini_invalid_analysis: 502, visual_analysis_video_too_large: 413 })[error.code] || 422;
+}
+async function parseAnalysisResponse(response) {
+  const finish = response?.candidates?.[0]?.finishReason;
+  if (response?.promptFeedback?.blockReason || (finish && !["STOP", "MAX_TOKENS"].includes(finish)))
+    throw new GeminiVideoError("gemini_analysis_blocked", "Gemini declined this video analysis request.");
+  if (finish === "MAX_TOKENS") throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned truncated video analysis.", "", true);
+  const text = await responseText(response);
+  if (!text.trim()) throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned an empty video analysis response.", "", true);
+  let parsed;
+  try { parsed = JSON.parse(text.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, "$1")); }
+  catch { throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned incomplete or invalid video analysis JSON.", "", true); }
+  return normalizeFacts(parsed);
+}
+async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = 120000,
   pollIntervalMs = 2000, createClient = (key) => new GoogleGenAI({ apiKey: key }), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), logger = console }) {
   if (!apiKey) throw new GeminiVideoError("gemini_not_configured", "Gemini video analysis is not configured on the Corex server.");
   const filePath = privateVideoPath(binaryDir, binary, mimeType);
   const fileSize = fs.statSync(filePath).size;
   const startedAt = Date.now();
-  const client = createClient(apiKey);
-  let remoteFile;
+  const client = session.client || (session.client = createClient(apiKey));
+  let remoteFile = session.remoteFile;
   const deadline = Date.now() + timeoutMs;
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     try {
-      remoteFile = await withTimeout(client.files.upload({ file: filePath, config: { mimeType } }), timeoutMs, "gemini_upload_timeout", "Gemini video upload timed out.");
+      if (!remoteFile) remoteFile = await withTimeout(client.files.upload({ file: filePath, config: { abortSignal: controller.signal, mimeType, httpOptions: { retryOptions: { attempts: 1 }, timeout: timeoutMs } } }), timeoutMs, "gemini_upload_timeout", "Gemini video upload timed out.");
     } catch (error) {
       const diagnostic = logFailure({ logger, stage: "upload", model, error, apiKey, mimeType, fileSize, startedAt });
       if (error instanceof GeminiVideoError) { error.diagnosticCode = diagnostic; throw error; }
-      throw new GeminiVideoError("gemini_upload_failed", "Gemini could not receive the downloaded video.", diagnostic);
+      throw classifyFailure(error, "upload");
     }
-    if (!remoteFile?.name) { const error = new Error("Gemini upload returned no file resource name."); const diagnostic = logFailure({ logger, stage: "upload", model, error, apiKey, mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_upload_failed", "Gemini could not receive the downloaded video.", diagnostic); }
+    if (!remoteFile?.name) { const error = new Error("Gemini upload returned no file resource name."); const diagnostic = logFailure({ logger, stage: "upload", model, error, apiKey, mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_upload_failed", "Gemini could not receive the downloaded video.", diagnostic, true); }
     while (fileState(remoteFile) !== "ACTIVE") {
-      if (fileState(remoteFile) === "FAILED") { const providerError = Object.assign(new Error(remoteFile?.error?.message || "Gemini file processing failed."), { code: remoteFile?.error?.code }); const diagnostic = logFailure({ logger, stage: "processing", model, error: providerError, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini could not process the downloaded video.", diagnostic); }
-      if (Date.now() >= deadline) { const error = new GeminiVideoError("gemini_processing_timeout", "Gemini video processing timed out."); error.diagnosticCode = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw error; }
+      if (fileState(remoteFile) === "FAILED") { const providerError = Object.assign(new Error(remoteFile?.error?.message || "Gemini file processing failed."), { code: remoteFile?.error?.code }); const diagnostic = logFailure({ logger, stage: "processing", model, error: providerError, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini could not process the downloaded video.", diagnostic, [4, 8, 10, 13, 14].includes(Number(remoteFile?.error?.code))); }
+      if (Date.now() >= deadline) { const error = new GeminiVideoError("gemini_processing_timeout", "Gemini video processing timed out.", "", true); error.diagnosticCode = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw error; }
       await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
-      try { remoteFile = await client.files.get({ name: remoteFile.name }); }
-      catch (error) { const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini could not process the downloaded video.", diagnostic); }
+      try { remoteFile = await withTimeout(client.files.get({ name: remoteFile.name, config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: Math.max(1, deadline - Date.now()) } } }), Math.max(1, deadline - Date.now()), "gemini_processing_timeout", "Gemini video processing timed out."); }
+      catch (error) { const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw classifyFailure(error, "processing"); }
     }
-    if (!remoteFile.uri) { const error = new Error("Processed Gemini file has no usable URI."); const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini did not provide a processed video reference.", diagnostic); }
+    if (!remoteFile.uri) { remoteFile = { ...remoteFile, state: "PROCESSING" }; const error = new Error("Processed Gemini file has no usable URI."); const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini did not provide a processed video reference.", diagnostic, true); }
     let response;
     try {
       response = await withTimeout(client.models.generateContent({
@@ -148,21 +201,54 @@ async function analyzeVideo({ binaryDir, binary, mimeType, apiKey, model = DEFAU
           { fileData: { fileUri: remoteFile.uri, mimeType: remoteFile.mimeType || mimeType } },
           { text: "Inspect the entire short video and return factual visual analysis only. Identify the real primary object, any important secondary object, the actual action, the scene, and concrete visible details. Ignore the filename completely. Do not create a title, caption, hashtags, or marketing copy. Do not guess; use broader terminology when uncertain and lower confidence." },
         ],
-        config: { temperature: 0, maxOutputTokens: 700, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA },
+        config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: Math.max(1, deadline - Date.now()) }, temperature: 0, maxOutputTokens: 700, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA },
       }), Math.max(1, deadline - Date.now()), "gemini_analysis_timeout", "Gemini video understanding timed out.");
     } catch (error) {
       const diagnostic = logFailure({ logger, stage: "generateContent", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt });
       if (error instanceof GeminiVideoError) { error.diagnosticCode = diagnostic; throw error; }
-      throw new GeminiVideoError("gemini_analysis_failed", "Gemini could not understand the downloaded video.", diagnostic);
+      const failure = classifyFailure(error, "generateContent");
+      // ACTIVE can be stale at inference time. Re-poll this same resource on retry.
+      if (failure.code === "gemini_file_not_ready") remoteFile = { ...remoteFile, state: "PROCESSING" };
+      throw failure;
     }
-    try { return normalizeFacts(JSON.parse(responseText(response))); }
-    catch (error) { const diagnostic = logFailure({ logger, stage: "structuredParse", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError(error?.code === "gemini_low_confidence" ? error.code : "gemini_invalid_analysis", error?.code === "gemini_low_confidence" ? error.message : "Gemini returned invalid video analysis.", diagnostic); }
+    try { return await parseAnalysisResponse(response); }
+    catch (error) { const diagnostic = logFailure({ logger, stage: "structuredParse", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); if (error instanceof GeminiVideoError) { error.diagnosticCode = diagnostic; throw error; } throw new GeminiVideoError("gemini_invalid_analysis", "Gemini returned invalid video analysis.", diagnostic, error.retryable); }
   } finally {
-    if (remoteFile?.name) {
-      try { await client.files.delete({ name: remoteFile.name }); }
-      catch (error) { logFailure({ logger, stage: "cleanup", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); }
-    }
+    clearTimeout(abortTimer);
+    controller.abort();
+    session.remoteFile = remoteFile;
   }
 }
 
-module.exports = { BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
+async function cleanupDeveloperFile(session, options) {
+  const remoteFile = session.remoteFile;
+  session.remoteFile = undefined;
+  if (!remoteFile?.name) return;
+  try { await withTimeout(session.client.files.delete({ name: remoteFile.name, config: { abortSignal: AbortSignal.timeout(10000), httpOptions: { retryOptions: { attempts: 1 }, timeout: 10000 } } }), 10000, "gemini_cleanup_timeout", "Gemini cleanup timed out."); }
+  catch (error) { logFailure({ logger: options.logger || console, stage: "cleanup", model: options.model || DEFAULT_GEMINI_MODEL, error, mimeType: options.mimeType, startedAt: Date.now() }); }
+}
+
+async function analyzeVideo(options) {
+  const { sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = options;
+  if (!options.apiKey) throw new GeminiVideoError("gemini_not_configured", "Gemini video analysis is not configured on the Corex server.");
+  if ((options.timeoutMs != null && (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 120000))
+    || (options.pollIntervalMs != null && (!Number.isFinite(options.pollIntervalMs) || options.pollIntervalMs <= 0)))
+    throw new GeminiVideoError("gemini_invalid_configuration", "Gemini timeout configuration is invalid.");
+  privateVideoPath(options.binaryDir, options.binary, options.mimeType);
+  const session = {};
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try { return await analyzeAttempt({ ...options, sleep, session }); }
+      catch (error) {
+        if (!isRetryable(error) || attempt >= RETRY_DELAYS_MS.length) throw error;
+        if (fileState(session.remoteFile) === "FAILED") await cleanupDeveloperFile(session, options);
+        if (!session.remoteFile?.name) session.remoteFile = undefined;
+        (options.logger || console).warn?.("[GeminiVideoAnalysis] retry", { attempt: attempt + 1, nextAttempt: attempt + 2,
+          delayMs: RETRY_DELAYS_MS[attempt], diagnosticCode: error.diagnosticCode });
+        await sleep(RETRY_DELAYS_MS[attempt]);
+      }
+    }
+  } finally { await cleanupDeveloperFile(session, options); }
+}
+
+module.exports = { RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
