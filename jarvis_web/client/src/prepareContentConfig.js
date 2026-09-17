@@ -25,6 +25,8 @@ export function buildPrepareContentRequest(config, item) {
 export function mergePreparedContent(item, generated, preserveInput = true) {
   const fields = { detectedObject: generated.detectedObject, detectedAction: generated.detectedAction,
     title: generated.title, description: generated.description, caption: generated.caption,
-    hashtags: generated.hashtags, socialCaption: generated.socialCaption };
+    hashtags: generated.hashtags, socialCaption: generated.socialCaption,
+    socialCaptionWithHashtags: generated.socialCaptionWithHashtags ?? generated.socialCaption,
+    ...(generated.visualAnalysis !== undefined ? { visualAnalysis: generated.visualAnalysis } : {}) };
   return preserveInput ? { ...item, ...fields } : fields;
 }

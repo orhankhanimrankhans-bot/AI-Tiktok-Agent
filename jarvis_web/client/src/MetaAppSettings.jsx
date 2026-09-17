@@ -43,15 +43,15 @@ export default function MetaAppSettings({ apiBaseUrl = "", credential, onStartOA
       if (!lifecycle.current.signal.aborted) setMessage(error.message.startsWith("Meta ") || error.message.startsWith("Sign in") || error.message.startsWith("You do not") ? error.message : "Could not save Meta App configuration. Try again.");
     } finally { payload = null; if (!lifecycle.current.signal.aborted) setSaving(false); }
   };
-  if (!canManage) return <p role="status">Permission to manage Facebook credentials is required.</p>;
+  if (!canManage) return <p className="meta-app-permission" role="status">Permission to manage Facebook credentials is required.</p>;
   const view = metaSetupView(config, { loading, editing });
   const configured = view.state === "ready";
   const differentApp = configured && credential && credential.appId !== config.appId;
   const showForm = view.showForm;
-  return <section className="meta-app-setup" aria-label="Meta App connection">
-    <div className="meta-app-heading"><h3>Meta App connection</h3><span className={configured ? "meta-app-ready" : ""}>{loading ? "Loading..." : configured ? "Ready" : view.state === "required" ? "Not configured" : "Configuration unavailable"}</span></div>
+  return <section className={`meta-app-setup ${loading ? "is-pending" : configured ? "is-connected" : "is-disconnected"}`} aria-label="Meta App connection">
+    <div className="meta-app-heading"><div><span className="connection-eyebrow">01 / APP CONFIGURATION</span><h3>Meta App connection</h3></div><span role="status" className={`connection-badge ${loading ? "is-pending" : configured ? "is-connected" : "is-disconnected"}`}><span className="connection-status-dot" aria-hidden="true" />{loading ? "Loading..." : configured ? "Meta App Connected" : view.state === "required" ? "Meta App Not Configured" : "Configuration unavailable"}</span></div>
     {!loading && config && !configured && <p role="status">Meta App configuration required. Configure your Meta App before connecting Facebook.</p>}
-    {view.showConnect && <><dl><dt>App ID / Client ID</dt><dd>{config.appId}</dd><dt>App Secret</dt><dd aria-label="App Secret configured">{"\u2022".repeat(16)} Configured</dd></dl>
+    {view.showConnect && <><dl className="meta-app-details"><div><dt>App ID / Client ID</dt><dd>{config.appId}</dd></div><div><dt>App Secret</dt><dd aria-label="App Secret configured"><span className="meta-secret-configured">Configured</span><small>Stored securely on the server</small></dd></div></dl>
       <div className="meta-app-actions"><button type="button" onClick={() => { setEditing(true); setMessage(""); }}>Edit Meta App</button>
         {showConnect && <button type="button" onClick={() => onStartOAuth?.(credential?.id || null)}>{credential ? "Reconnect Meta Account" : "Connect Meta Account"}</button>}</div></>}
     {differentApp && <p role="status">Existing authorization is retained. Reconnecting will use this Meta App.</p>}

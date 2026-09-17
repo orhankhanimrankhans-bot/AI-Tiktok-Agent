@@ -19,7 +19,7 @@ test("Gemini facts alone reach OpenAI structured metadata generation", async () 
   assert.equal(seen.body.text.format.type, "json_schema"); assert.equal(seen.body.text.format.strict, true);
   const handoff = JSON.parse(seen.body.input); assert.deepEqual(handoff.factualVideoAnalysis, visual);
   assert.doesNotMatch(JSON.stringify(seen.body), /misleading-filename|referenceId|test-gemini-key|access.?token/i);
-  assert.deepEqual(result, { detectedObject: "electric scooter", detectedAction: "industrial shredder crushing an electric scooter", visualAnalysis: visual, title: "Industrial Shredder Crushes an Electric Scooter", description: "An electric scooter is pulled into an industrial shredder and crushed.", caption: "An electric scooter is pulled into an industrial shredder and crushed.", hashtags: ["#IndustrialShredder", "#ScooterCrush", "#Crushing", "#Recycling", "#Satisfying"], socialCaption: "An electric scooter is pulled into an industrial shredder and crushed.\n\n#IndustrialShredder #ScooterCrush #Crushing #Recycling #Satisfying" });
+  assert.deepEqual(result, { detectedObject: "electric scooter", detectedAction: "industrial shredder crushing an electric scooter", visualAnalysis: visual, title: "Industrial Shredder Crushes an Electric Scooter", description: "An electric scooter is pulled into an industrial shredder and crushed.", caption: "An electric scooter is pulled into an industrial shredder and crushed.", hashtags: ["#IndustrialShredder", "#ScooterCrush", "#Crushing", "#Recycling", "#Satisfying"], socialCaption: "An electric scooter is pulled into an industrial shredder and crushed.\n\n#IndustrialShredder #ScooterCrush #Crushing #Recycling #Satisfying", socialCaptionWithHashtags: "An electric scooter is pulled into an industrial shredder and crushed.\n\n#IndustrialShredder #ScooterCrush #Crushing #Recycling #Satisfying" });
 });
 
 test("downloaded binary reaches Gemini before OpenAI and filename is never visual evidence", async () => {
@@ -63,4 +63,70 @@ test("dedicated route accepts no browser keys and reports server configuration b
   assert.doesNotMatch(route, /req\.body\.(apiKey|token|authorization)/i);
   assert.match(source, /openAIConfigured/); assert.match(source, /geminiConfigured/);
   assert.match(route, /diagnosticCode/);
+});
+
+test("publishing copy has normalized unique hashtags and a backwards-compatible combined caption", async () => {
+  const copy = { title: "Electric scooter meets the shredder", description: "  An electric scooter is crushed.  ",
+    hashtags: [" ##Scooter ", "#Recycling", "#Metal_Recycling", "#إعادة_التدوير", "#Shredder"] };
+  const result = await prepareContent(options({ fetchImpl: async () => response({ output_text: JSON.stringify(copy) }) }));
+  assert.equal(result.caption, "An electric scooter is crushed.");
+  assert.deepEqual(result.hashtags, ["#Scooter", "#Recycling", "#Metal_Recycling", "#إعادة_التدوير", "#Shredder"]);
+  assert.equal(result.socialCaptionWithHashtags, `${result.caption}\n\n${result.hashtags.join(" ")}`);
+  assert.equal(result.socialCaptionWithHashtags, result.socialCaption);
+  assert.deepEqual(result.visualAnalysis, visual);
+  for (const tags of [["scooter", "#SCOOTER", "metal", "recycling", "shredder"], ["scooter", {}, "metal", "recycling", "shredder"]]) {
+    await assert.rejects(prepareContent(options({ fetchImpl: async () => response({ output_text: JSON.stringify({ ...copy, hashtags: tags }) }) })),
+      { code: "openai_malformed_response" });
+  }
+});
+
+test("real Download output survives browser and server Prepare Content and resolves both Reel caption expressions", async (t) => {
+  const path = require("node:path"), os = require("node:os"), { EventEmitter } = require("node:events");
+  const { executeDriveDownload } = require("./driveFiles");
+  const { resolveExpression: serverResolve, createWorkflowExecutor } = require("./workflowExecutor");
+  const { resolveBinaryReference } = require("./facebookReels");
+  const { buildPrepareContentRequest, mergePreparedContent, prepareContentDefaults } = await import("../client/src/prepareContentConfig.js");
+  const { buildFacebookReelRequest, facebookNodeDefaults } = await import("../client/src/facebookReelConfig.js");
+  const binaryDir = fs.mkdtempSync(path.join(os.tmpdir(), "corex-copy-handoff-"));
+  t.after(() => fs.rmSync(binaryDir, { recursive: true, force: true }));
+  const owner = { ownerType: "additional", ownerId: "test-profile" };
+  const bytes = Buffer.from("synthetic video bytes; provider calls are mocked");
+  const downloaded = await executeDriveDownload({ binaryDir, owner,
+    request: { credentialId: "gcred_1234567890123456789012", fileId: "source-video", binaryProperty: "data" },
+    credentialStore: { get: async (_id, scope) => { assert.equal(scope.owner, owner); return { tokens: {} }; } },
+    createOAuthClient: () => Object.assign(new EventEmitter(), { setCredentials() {} }),
+    createDriveClient: () => ({ files: { get: async (request) => ({ data: request.alt === "media" ? bytes : { name: "clip.mp4", mimeType: "video/mp4", size: String(bytes.length) } }) } }) });
+  assert.equal(downloaded.title, undefined);
+  const config = prepareContentDefaults();
+  const generate = (body) => prepareContent(options({ body, binaryDir, analyzeVideoImpl: async ({ binary }) => {
+    assert.equal(binary.referenceId, downloaded.binary.referenceId);
+    assert.deepEqual(fs.readFileSync(path.join(binaryDir, binary.referenceId)), bytes);
+    return visual;
+  }, fetchImpl: async () => response(success) }));
+  const browser = mergePreparedContent(downloaded, await generate(buildPrepareContentRequest(config, downloaded)));
+  const nodes = [{ id: "t", name: "Schedule Trigger", config: {} }, { id: "d", name: "Download File", config: { credentialId: "test", fileId: "source-video" } }, { id: "p", name: "Prepare Content", config }, { id: "f", name: "Facebook Graph API", config: { operation: "Publish Reel", credentialId: "test-facebook", title: "{{ $json.title }}", description: "{{ $json.socialCaptionWithHashtags }}" } }];
+  let publishedRequest;
+  const execution = await createWorkflowExecutor({ executionServices: { google: { downloadFile: async () => downloaded }, openAI: { prepare: ({ body }) => generate(body) }, facebook: { publishReel: async (request) => { publishedRequest = request; return { success: true, status: "published" }; } } } }).execute({ workflowId: "handoff-test", nodes, connections: nodes.slice(1).map((node, i) => ({ source: nodes[i].id, target: node.id })) });
+  assert.equal(execution.status, "success");
+  const server = execution.nodes.find(node => node.nodeId === "p").output;
+  assert.equal(publishedRequest.title, server.title);
+  assert.equal(publishedRequest.description, server.socialCaptionWithHashtags);
+  assert.deepEqual(publishedRequest.binary, downloaded.binary);
+  assert.deepEqual(browser, server);
+  for (const item of [browser, server]) {
+    assert.deepEqual(item.binary, downloaded.binary);
+    assert.equal(item.fileId, downloaded.fileId);
+    assert.deepEqual(item.visualAnalysis, visual);
+    assert.equal(item.hashtags.length, 5);
+    for (const field of ["socialCaption", "socialCaptionWithHashtags"]) {
+      const request = buildFacebookReelRequest({ ...facebookNodeDefaults(), credentialId: "test-facebook", description: `{{ $json.${field} }}` }, item);
+      assert.equal(request.title, item.title);
+      assert.equal(request.description, item.socialCaptionWithHashtags);
+      assert.equal(serverResolve(`{{ $json.${field} }}`, item), request.description);
+      assert.deepEqual(request.binary, downloaded.binary);
+      const resolved = resolveBinaryReference({ ...request, binaryDir });
+      assert.equal(resolved.size, bytes.length);
+      assert.deepEqual(fs.readFileSync(resolved.filePath), bytes);
+    }
+  }
 });

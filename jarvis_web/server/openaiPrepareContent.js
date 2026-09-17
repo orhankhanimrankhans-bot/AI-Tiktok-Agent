@@ -52,7 +52,7 @@ function makeOpenAIRequest(input, model, visual) {
   const prompt = { language: input.language, tone: input.tone, hashtagCount: input.hashtagCount,
     titleInstructions: input.titleInstructions, descriptionInstructions: input.captionInstructions,
     factualVideoAnalysis: visual,
-    requirement: "Create specific publishing copy using these facts exactly. The title must name the detected primary object when confidence permits. Never substitute a different object or action. Treat title and description instructions as style guidance only." };
+    requirement: "Create specific publishing copy using these facts exactly. Write a short Reel title, ideally 4 to 12 words, naming the detected primary object when confidence permits. Write a useful caption describing the visible action. Generate distinct hashtags grounded in the detected objects, action, or scene; avoid unrelated trending tags and generic engagement spam such as #fyp, #viral, or #followforfollow. Do not put hashtags in the description; they are combined separately. Never substitute a different object or action. Treat title and description instructions as style guidance only." };
   return {
     model, store: false, max_output_tokens: 900,
     instructions: "Generate exact title, description, and hashtags from the supplied factual Gemini video analysis. Preserve the detected object and action; do not perform new visual detection, invent details, use filenames, or create generic copy. Return only the required structured fields.",
@@ -78,11 +78,17 @@ function normalizePreparedContent(value, hashtagCount, visual) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new PrepareContentError(502, "openai_malformed_response", "OpenAI returned an invalid Prepare Content response.");
   const title = boundedString(value.title, "Generated title", 200, { required: true });
   const description = boundedString(value.description, "Generated description", 2200, { required: true });
-  const hashtags = Array.isArray(value.hashtags) ? value.hashtags.map(normalizeHashtag).filter(Boolean).slice(0, hashtagCount) : [];
+  const seen = new Set();
+  const hashtags = Array.isArray(value.hashtags) ? value.hashtags.filter(tag => typeof tag === "string").map(normalizeHashtag).filter(tag => {
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(0, hashtagCount) : [];
   if (hashtags.length !== hashtagCount) throw new PrepareContentError(502, "openai_malformed_response", "OpenAI returned an invalid Prepare Content response.");
   if (visual.confidence >= 0.7 && !title.toLocaleLowerCase().includes(visual.primaryObject.toLocaleLowerCase())) throw new PrepareContentError(502, "openai_factual_mismatch", "OpenAI did not preserve the detected video object in the title.");
+  const socialCaption = `${description}\n\n${hashtags.join(" ")}`;
   return { detectedObject: visual.primaryObject, detectedAction: visual.action, visualAnalysis: visual,
-    title, description, caption: description, hashtags, socialCaption: `${description}\n\n${hashtags.join(" ")}` };
+    title, description, caption: description, hashtags, socialCaption, socialCaptionWithHashtags: socialCaption };
 }
 
 async function prepareContent({ body, apiKey, model = DEFAULT_OPENAI_MODEL, geminiApiKey, geminiModel, binaryDir,

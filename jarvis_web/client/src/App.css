@@ -6985,3 +6985,75 @@ input, select, textarea { font-size: 16px; }
 .meta-app-actions button { padding: 9px 13px; border: 1px solid #bdc9db; border-radius: 7px; cursor: pointer; }
 .meta-app-actions button[type="submit"] { background: #2464d7; color: white; border-color: #2464d7; }
 .meta-app-actions button:disabled { opacity: .6; cursor: wait; }
+
+/* Facebook Graph connection panel: presentation-only, scoped to this modal. */
+.facebook-account-modal { width: min(960px, 94vw); height: min(780px, 88vh); color: #e7edf7; background: #111923; border: 1px solid #344151; border-radius: 18px; box-shadow: 0 28px 90px #0008; color-scheme: dark; }
+.facebook-account-modal .credential-modal-header { flex-shrink: 0; min-height: 84px; height: auto; padding: 20px 24px; background: #151f2b; border-color: #2c3949; gap: 16px; }
+.facebook-account-modal .credential-modal-title { min-width: 0; }
+.facebook-account-modal .credential-name-input { min-width: 0; width: 100%; color: #f1f5fa; font-size: 18px; }
+.facebook-account-modal .credential-subtitle { margin-top: 5px; color: #9baec4; }
+.facebook-account-modal .credential-modal-body { grid-template-columns: 138px minmax(0, 1fr); overflow: hidden; }
+.facebook-account-modal .credential-tabs { padding: 20px 12px; border-color: #2c3949; background: #121b26; }
+.facebook-account-modal .credential-tabs button { margin-bottom: 6px; border-radius: 8px; color: #aabbd0; }
+.facebook-account-modal .credential-tabs .credential-tab-active { color: #dceaff; background: #233650; font-weight: 600; }
+.facebook-account-modal .credential-content { min-width: 0; overflow-y: auto; padding: 20px; background: transparent; }
+.facebook-account-modal .meta-app-setup,
+.facebook-account-modal .facebook-account-connection { margin: 0 0 16px; padding: 18px; border: 1px solid #344151; border-radius: 12px; background: #182330; color: #e7edf7; }
+.facebook-account-modal .meta-app-setup.is-connected { background: #142c25; border-color: #2c7254; }
+.facebook-account-modal .meta-app-setup.is-disconnected { background: #302127; border-color: #82424c; }
+.facebook-account-modal .meta-app-setup.is-pending { background: #182330; border-color: #43556b; }
+.facebook-account-modal .facebook-account-connection { margin-bottom: 0; }
+.facebook-account-modal .meta-app-heading,
+.facebook-account-modal .credential-content-top { align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.facebook-account-modal .connection-eyebrow { display: block; color: #a9bbcf; font-size: 10px; font-weight: 700; letter-spacing: .1em; margin-bottom: 6px; }
+.facebook-account-modal .meta-app-heading h3,
+.facebook-account-modal .credential-content-top h3 { margin: 0; color: #edf3fb; font-size: 17px; font-weight: 650; }
+.facebook-account-modal .connection-badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid; border-radius: 8px; font-size: 11px; font-weight: 650; line-height: 1.4; }
+.facebook-account-modal .is-connected { color: #89e3b5; background: #12352b; border-color: #2c7254; }
+.facebook-account-modal .is-disconnected { color: #ffb2b5; background: #372329; border-color: #82424c; }
+.facebook-account-modal .is-pending { color: #b3c4dc; background: #243243; border-color: #43556b; }
+.facebook-account-modal .connection-status-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; }
+.facebook-account-modal .meta-app-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; padding: 12px 14px; margin: 14px 0; background: #121c28; border: 1px solid #2b3b4e; border-radius: 8px; }
+.facebook-account-modal .meta-app-details dt { margin: 0 0 7px; color: #a7b9d0; font-size: 12px; }
+.facebook-account-modal .meta-app-details dd { margin: 0; color: #e8f0fb; font-variant-numeric: tabular-nums; }
+.facebook-account-modal .meta-app-details small { display: block; margin-top: 5px; color: #9baec4; font-size: 11px; }
+.facebook-account-modal .meta-secret-configured { color: #89e3b5; font-weight: 600; }
+.facebook-account-modal .meta-app-setup p,
+.facebook-account-modal .connection-security-note,
+.facebook-account-modal .credential-note { color: #aebed1; font-size: 12px; line-height: 1.65; }
+.facebook-account-modal .meta-app-setup label { color: #c8d5e7; font-size: 12px; margin: 16px 0; }
+.facebook-account-modal .meta-app-setup input,
+.facebook-account-modal .credential-content-top select,
+.facebook-account-modal .secret-input-row input { min-height: 42px; padding: 10px 12px; color: #eaf1fb; background: #101b27; border: 1px solid #425570; border-radius: 8px; font-size: 13px; }
+.facebook-account-modal .meta-app-setup input::placeholder { color: #94a7bf; }
+.facebook-account-modal .meta-app-setup details { padding: 12px 0; border-top: 1px solid #304052; border-bottom: 1px solid #304052; color: #bacbe0; }
+.facebook-account-modal .meta-app-actions { justify-content: flex-start; gap: 8px; margin-top: 14px; }
+.facebook-account-modal button { min-height: 38px; padding: 9px 13px; border-radius: 8px; border: 1px solid #435671; background: #223247; color: #e4edfb; font-size: 12px; font-weight: 600; cursor: pointer; }
+.facebook-account-modal button:hover:not(:disabled) { border-color: #7796c0; background: #2c4160; }
+.facebook-account-modal .meta-app-actions button[type="submit"] { background: #2965c9; border-color: #6796e7; color: white; }
+.facebook-account-modal button:disabled { opacity: .55; cursor: not-allowed; }
+.facebook-account-modal :is(button, input, select, summary):focus-visible { outline: 2px solid #8eb9ff; outline-offset: 3px; }
+.facebook-account-modal .facebook-account-status { display: flex; align-items: center; gap: 12px; padding: 14px; margin: 16px 0 10px; border: 1px solid; border-radius: 10px; }
+.facebook-account-modal .facebook-account-status.is-connected { border-color: #2c7254; }
+.facebook-account-modal .facebook-account-status.is-disconnected { border-color: #82424c; }
+.facebook-account-modal .connection-state-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border: 1px solid currentColor; border-radius: 50%; font-size: 15px; font-weight: 700; }
+.facebook-account-modal .connection-status-copy { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.facebook-account-modal .connection-status-copy strong { font-size: 14px; }
+.facebook-account-modal .connection-status-copy span { color: #c0d1dd; font-size: 12px; overflow-wrap: anywhere; }
+.facebook-account-modal .disconnect-button { background: transparent; color: #d7e7e0; border-color: #467e68; }
+.facebook-account-modal .facebook-test-status { margin: 16px 0; padding: 14px; border-radius: 10px; border: 1px solid #44556a; color: #bfcee0; background: #202e3e; }
+.facebook-account-modal .facebook-test-status.status-success { color: #89e3b5; background: #12352b; border-color: #2c7254; }
+.facebook-account-modal .facebook-test-status.status-failed { color: #ffb2b5; background: #372329; border-color: #82424c; }
+.facebook-account-modal .meta-app-permission { padding: 14px 16px; color: #ffb2b5; background: #372329; border: 1px solid #82424c; border-radius: 10px; font-size: 13px; }
+@media (max-width: 700px) {
+  .facebook-account-modal .credential-modal-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .facebook-account-modal .credential-tabs { display: flex; gap: 6px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid #2c3949; }
+  .facebook-account-modal .credential-tabs button { width: auto; margin: 0; }
+  .facebook-account-modal .credential-content { padding: 14px; }
+  .facebook-account-modal .meta-app-setup, .facebook-account-modal .facebook-account-connection { padding: 16px; }
+  .facebook-account-modal .meta-app-details { grid-template-columns: minmax(0, 1fr); }
+  .facebook-account-modal .facebook-account-status { flex-wrap: wrap; }
+  .facebook-account-modal .meta-app-actions button { flex: 1 1 160px; }
+  .facebook-account-modal .credential-modal-header { padding: 16px; }
+  .facebook-account-modal .credential-modal-actions { gap: 6px; }
+}

@@ -14,7 +14,7 @@ test("Prepare Content request carries only the private binary reference needed f
 
 test("merge preserves original metadata and binary reference for Facebook", () => {
   const item = { fileName: "clip.mp4", binary: { property: "data", referenceId: "bin_123" } };
-  const generated = { detectedObject: "Scooter", detectedAction: "Shredder crushing scooter", title: "Title", description: "Description", caption: "Description", hashtags: ["#one"], socialCaption: "Description\n\n#one" };
+  const generated = { detectedObject: "Scooter", detectedAction: "Shredder crushing scooter", title: "Title", description: "Description", caption: "Description", hashtags: ["#one"], socialCaption: "Description\n\n#one", socialCaptionWithHashtags: "Description\n\n#one", visualAnalysis: { primaryObject: "Scooter" } };
   assert.deepEqual(mergePreparedContent(item, generated, true), { ...item, ...generated });
   assert.deepEqual(mergePreparedContent(item, generated, false), generated);
 });
@@ -40,4 +40,12 @@ test("node picker, dispatcher, editor, and Facebook expression wiring are regist
   assert.match(source, /editingNode\?\.name === "Prepare Content"/);
   const reelSource = fs.readFileSync(new URL("./facebookReelConfig.js", import.meta.url), "utf8");
   assert.match(reelSource, /\{\{ \$json\.socialCaption \}\}/);
+});
+
+test("older Prepare Content responses retain their caption and expose the combined alias", () => {
+  const item = { fileName: "clip.mp4", mimeType: "video/mp4", binary: { property: "data", referenceId: "bin_existing" } };
+  const result = mergePreparedContent(item, { title: "Scooter", socialCaption: "A scooter moves.\n\n#Scooter", hashtags: ["#Scooter"] });
+  assert.equal(result.socialCaptionWithHashtags, result.socialCaption);
+  assert.equal(result.binary, item.binary);
+  assert.equal(mergePreparedContent(item, { title: "Scooter", socialCaption: "Caption" }, false).binary, undefined);
 });
