@@ -97,7 +97,7 @@ async function prepareContent({ body, apiKey, model = DEFAULT_OPENAI_MODEL, gemi
   if (!geminiApiKey) throw new PrepareContentError(503, "gemini_not_configured", "Gemini video analysis is not configured on the Corex server.");
   const input = validatePrepareContentInput(body);
   let visual;
-  try { visual = await analyzeVideoImpl({ binaryDir, binary: input.binary, mimeType: input.mimeType, apiKey: geminiApiKey, model: geminiModel, logger }); }
+  try { visual = await analyzeVideoImpl({ binaryDir, binary: input.binary, fileExtension: require("./geminiUploadDiagnostics").extension(input.fileName), mimeType: input.mimeType, apiKey: geminiApiKey, model: geminiModel, logger }); }
   catch (error) {
     if (error instanceof GeminiVideoError) throw new PrepareContentError(geminiHttpStatus(error), error.code, error.message, error.diagnosticCode);
     if (/^(gemini_|visual_analysis_)/.test(String(error?.code || ""))) throw new PrepareContentError(422, error.code, "COREX could not analyze the downloaded video.", error.diagnosticCode);

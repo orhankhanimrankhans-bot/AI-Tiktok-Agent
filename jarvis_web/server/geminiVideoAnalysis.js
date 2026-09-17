@@ -1,3 +1,4 @@
+const uploadDiagnostics = require("./geminiUploadDiagnostics");
 "use strict";
 
 const fs = require("node:fs");
@@ -186,18 +187,27 @@ async function uploadVideo({ session, client, filePath, mimeType, timeoutMs, sle
       throw new GeminiVideoError("gemini_upload_retry_exhausted", "Gemini could not prepare a usable video after three uploads. Try again later.");
     session.uploadAttempts = (session.uploadAttempts || 0) + 1;
     let pending, timedOut = false;
+    let uploadSubstage = "pre_upload_validation";
+    const diagnostic = (event, extra = {}) => uploadDiagnostics.emit(logger, { correlationId: session.correlationId, attempt: session.uploadAttempts, event, substage: uploadSubstage, ...uploadDiagnostics.metadata(filePath, mimeType, session.fileName), ...extra });
+    diagnostic("validation");
     try {
       const stat = fs.statSync(filePath); fs.accessSync(filePath, fs.constants.R_OK);
       if (!stat.isFile() || !stat.size) throw new GeminiVideoError("gemini_upload_invalid_file", "The downloaded video is empty or is not a readable file.");
       // Pass a path on every attempt: the SDK opens and closes a fresh file handle.
+      uploadSubstage = "sdk_upload_initialization";
+      diagnostic("before_sdk_upload");
+      uploadSubstage = "sdk_upload_unknown";
       pending = client.files.upload({ file: filePath, config: { mimeType, httpOptions: { retryOptions: { attempts: 1 }, timeout: timeoutMs } } });
       let file;
       try { file = await withTimeout(pending, timeoutMs, "gemini_upload_timeout", "Gemini upload timed out; completion could not be confirmed. Try again later."); }
       catch (error) { timedOut = error.code === "gemini_upload_timeout"; throw error; }
+      uploadSubstage = "provider_file_response_handling";
+      diagnostic("response", { confirmedFile: Boolean(file?.name) });
       if (!file?.name) throw new GeminiVideoError("gemini_upload_unconfirmed", "Gemini did not confirm the uploaded file. Try again later.");
       return file;
     } catch (error) {
       const failure = classifyUpload(error);
+      diagnostic("failure", { substage: uploadDiagnostics.substage(error, uploadSubstage), causes: uploadDiagnostics.causes(error), retryable: Boolean(failure.retryable), willRetry: !timedOut && failure.retryable && session.uploadAttempts <= UPLOAD_RETRY_DELAYS_MS.length, classificationReason: timedOut ? "unconfirmed_timeout" : !failure.retryable ? "non_retryable" : session.uploadAttempts > UPLOAD_RETRY_DELAYS_MS.length ? "budget_exhausted" : "known_transient", classificationCode: failure.code });
       logger?.error?.("[GeminiVideoAnalysis] upload", { stage: "upload", attempt: session.uploadAttempts, diagnosticCode: failure.diagnosticCode || diagnosticCode("upload", error), code: failure.code, ...(providerStatus(error) ? { status: providerStatus(error) } : {}) });
       // SDK uploads can outlive a caller timeout. Never start a concurrent replacement.
       if (timedOut) {
@@ -271,7 +281,7 @@ async function analyzeVideo(options) {
     || (options.pollIntervalMs != null && (!Number.isFinite(options.pollIntervalMs) || options.pollIntervalMs <= 0)))
     throw new GeminiVideoError("gemini_invalid_configuration", "Gemini timeout configuration is invalid.");
   privateVideoPath(options.binaryDir, options.binary, options.mimeType);
-  const session = {};
+  const session = { correlationId: uploadDiagnostics.newCorrelationId(), fileName: "video" + (options.fileExtension || "") };
   try {
     for (let attempt = 0; ; attempt++) {
       try { return await analyzeAttempt({ ...options, sleep, session }); }
