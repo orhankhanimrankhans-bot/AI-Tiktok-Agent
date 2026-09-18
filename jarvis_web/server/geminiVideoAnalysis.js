@@ -1,3 +1,4 @@
+const { guidance, sharedCooldown } = require("./geminiRetryDelay");
 const inferenceDiagnostics = require("./geminiInferenceDiagnostics");
 const uploadDiagnostics = require("./geminiUploadDiagnostics");
 "use strict";
@@ -238,16 +239,16 @@ async function uploadVideo({ session, client, filePath, mimeType, timeoutMs, sle
 }
 
 async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, model = DEFAULT_GEMINI_MODEL, timeoutMs = 120000,
-  pollIntervalMs = 2000, createClient = (key) => new GoogleGenAI({ apiKey: key }), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), logger = console }) {
+  pollIntervalMs = 2000, cooldown = sharedCooldown, createClient = (key) => new GoogleGenAI({ apiKey: key }), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), logger = console }) {
   if (!apiKey) throw new GeminiVideoError("gemini_not_configured", "Gemini video analysis is not configured on the Corex server.");
   const filePath = privateVideoPath(binaryDir, binary, mimeType);
   const fileSize = fs.statSync(filePath).size;
   const startedAt = Date.now();
   const client = session.client || (session.client = createClient(apiKey));
   let remoteFile = session.remoteFile || await uploadVideo({ session, client, filePath, mimeType, timeoutMs, sleep, logger });
-  const deadline = Date.now() + timeoutMs;
+  let deadline = Date.now() + timeoutMs;
   const controller = new AbortController();
-  const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
+  let abortTimer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     while (fileState(remoteFile) !== "ACTIVE") {
       if (fileState(remoteFile) === "FAILED") { const providerError = Object.assign(new Error(remoteFile?.error?.message || "Gemini file processing failed."), { code: remoteFile?.error?.code }); const diagnostic = logFailure({ logger, stage: "processing", model, error: providerError, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini could not process the downloaded video.", diagnostic, [4, 8, 10, 13, 14].includes(Number(remoteFile?.error?.code))); }
@@ -257,6 +258,13 @@ async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, mo
       catch (error) { const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw classifyFailure(error, "processing"); }
     }
     if (!remoteFile.uri) { remoteFile = { ...remoteFile, state: "PROCESSING" }; const error = new Error("Processed Gemini file has no usable URI."); const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini did not provide a processed video reference.", diagnostic, true); }
+    // Waiting for a shared cooldown must not consume the provider request timeout.
+    clearTimeout(abortTimer);
+    const cooldownStarted = Date.now();
+    try { await cooldown.wait(sleep); }
+    catch { throw new GeminiVideoError("gemini_cooldown_wait_timeout", "Gemini shared cooldown is still active. Try again later."); }
+    deadline += Date.now() - cooldownStarted;
+    abortTimer = setTimeout(() => controller.abort(), Math.max(1, deadline - Date.now()));
     let response;
     try {
       response = await inferenceDiagnostics.observe({ logger, correlationId: session.correlationId, attempt: session.inferenceAttempt, model,
@@ -272,6 +280,11 @@ async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, mo
       const diagnostic = logFailure({ logger, stage: "generateContent", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt });
       if (error instanceof GeminiVideoError) { error.diagnosticCode = diagnostic; throw error; }
       const failure = classifyFailure(error, "generateContent");
+      if (failure.retryable) {
+        const provider = guidance(error);
+        failure.providerRetryDelayMs = provider.delayMs;
+        if (provider.requestQuota && provider.delayMs > 0) cooldown.record(provider.delayMs);
+      }
       // ACTIVE can be stale at inference time. Re-poll this same resource on retry.
       if (failure.code === "gemini_file_not_ready") remoteFile = { ...remoteFile, state: "PROCESSING" };
       throw failure;
@@ -308,9 +321,10 @@ async function analyzeVideo(options) {
         if (!isRetryable(error) || attempt >= RETRY_DELAYS_MS.length) throw error;
         if (fileState(session.remoteFile) === "FAILED") await cleanupDeveloperFile(session, options);
         if (!session.remoteFile?.name) session.remoteFile = undefined;
+        const delayMs = Math.max(RETRY_DELAYS_MS[attempt], error.providerRetryDelayMs || 0);
         (options.logger || console).warn?.("[GeminiVideoAnalysis] retry", { attempt: attempt + 1, nextAttempt: attempt + 2,
-          delayMs: RETRY_DELAYS_MS[attempt], diagnosticCode: error.diagnosticCode });
-        await sleep(RETRY_DELAYS_MS[attempt]);
+          delayMs, diagnosticCode: error.diagnosticCode });
+        await sleep(delayMs);
       }
     }
   } finally { await cleanupDeveloperFile(session, options); }

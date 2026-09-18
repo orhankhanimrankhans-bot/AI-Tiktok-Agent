@@ -21,9 +21,9 @@ test("overlapping calls have balanced per-process counts and logger failure does
 });
 test("real analysis retries retain correlation, ACTIVE state, policy and sanitized failure metadata",async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gemini-inference-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const referenceId='bin_1234567890123456';fs.writeFileSync(path.join(dir,referenceId),'mock');
- const logs=[],delays=[];let uploads=0,calls=0;
- await assert.rejects(analyzeVideo({binaryDir:dir,binary:{referenceId},mimeType:'video/mp4',apiKey:'SECRET',sleep:async ms=>delays.push(ms),logger:{info:(label,e)=>logs.push({label,...e})},createClient:()=>({files:{upload:async()=>{uploads++;return{name:'files/SECRET',uri:'https://secret.invalid',state:'ACTIVE'};},delete:async()=>{}},models:{generateContent:async()=>{calls++;throw quotaError();}}})}),{code:'gemini_rate_limited'});
+ const logs=[],delays=[];let uploads=0,calls=0,now=0; const cooldown=require('./geminiRetryDelay').createCooldown(()=>now);
+ await assert.rejects(analyzeVideo({binaryDir:dir,binary:{referenceId},mimeType:'video/mp4',apiKey:'SECRET',cooldown,sleep:async ms=>{delays.push(ms);now+=ms;},logger:{info:(label,e)=>logs.push({label,...e})},createClient:()=>({files:{upload:async()=>{uploads++;return{name:'files/SECRET',uri:'https://secret.invalid',state:'ACTIVE'};},delete:async()=>{}},models:{generateContent:async()=>{calls++;throw quotaError();}}})}),{code:'gemini_rate_limited'});
  const inference=logs.filter(e=>e.label==='[GeminiInferenceDiagnostic]'),failures=inference.filter(e=>e.event==='failure');
- assert.equal(uploads,1);assert.equal(calls,4);assert.deepEqual(delays,[3000,8000,15000]);assert.deepEqual(failures.map(e=>e.attempt),[1,2,3,4]);assert.deepEqual(failures.map(e=>e.willRetry),[true,true,true,false]);assert.equal(failures[3].classificationReason,'budget_exhausted');
+ assert.equal(uploads,1);assert.equal(calls,4);assert.deepEqual(delays,[60000,60000,60000]);assert.deepEqual(failures.map(e=>e.attempt),[1,2,3,4]);assert.deepEqual(failures.map(e=>e.willRetry),[true,true,true,false]);assert.equal(failures[3].classificationReason,'budget_exhausted');
  assert.ok(inference.every(e=>e.fileActive&&e.model==='gemini-2.5-flash'&&e.correlationId===logs[0].correlationId));assert.match(inference[0].correlationId,/^[a-f0-9-]{36}$/);assert.equal(inference.at(-1).concurrentInferenceCalls,0);assert.doesNotMatch(JSON.stringify(logs),/SECRET|https:|authorization/i);
 });
