@@ -4037,7 +4037,7 @@ function storeWorkflowLinkage(workflow) {
 
       {showFacebookCredential && (
         <FacebookCredentialModal
-          canManageMeta={Boolean(session?.permissions?.publish_facebook)}
+          canManageMeta={can("publish_facebook")}
           onClose={() => { setShowFacebookCredential(false); setEditingFacebookCredentialId(null); }}
           credential={facebookCredentials.find((item) => item.id === editingFacebookCredentialId)}
           onStartOAuth={startFacebookOAuth}
