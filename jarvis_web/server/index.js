@@ -1,4 +1,5 @@
 const { PrepareContentJobs, registerPrepareContentJobs } = require("./prepareContentJobs");
+const { PrepareContentPolicy } = require("./prepareContentPolicy");
 const { trackPrepareContentHttp } = require("./prepareContentHttpDiagnostics");
 const { registerFacebookPageCredentialRoutes } = require("./facebookPageCredentials");
 const express = require("express");
@@ -111,6 +112,7 @@ const LEGACY_GRAPH_VERSION_VALUE = process.env.META_GRAPH_VERSION || "v26.0";
 const LEGACY_GRAPH_VERSION = /^v\d{1,2}\.\d{1,2}$/.test(LEGACY_GRAPH_VERSION_VALUE) ? LEGACY_GRAPH_VERSION_VALUE : "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+const geminiConfiguration = require("./geminiProvider").readConfiguration();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
 const JARVIS_DB_PATH = path.resolve(
@@ -130,7 +132,7 @@ const googleOAuthConfigured = Boolean(
 );
 
 const openAIConfigured = Boolean(OPENAI_API_KEY);
-const geminiConfigured = Boolean(GEMINI_API_KEY);
+const geminiConfigured = geminiConfiguration.configured;
 const SESSION_MAX_AGE_DAYS = Math.min(3650, Math.max(1, Number(process.env.SESSION_MAX_AGE_DAYS) || 365));
 const persistentSessionStore = new SqliteSessionStore();
 
@@ -305,7 +307,8 @@ app.get("/api/health", (req, res) => {
 app.post("/api/ai/prepare-content", async (req, res) => {
   trackPrepareContentHttp(req, res);
   try {
-    return res.json(await executionServices.openAI.prepare({ body: req.body, apiKey: executionServices.openAI.apiKey, model: executionServices.openAI.model }));
+    const owner = prepareContentOwner(req);
+    return res.json(await executionServices.openAI.prepare({ body: req.body, apiKey: executionServices.openAI.apiKey, model: executionServices.openAI.model }, owner));
   } catch (error) {
     if (error instanceof PrepareContentError) return res.status(error.statusCode).json({ status: "error", code: error.code, error: error.message, ...(error.diagnosticCode ? { diagnosticCode: error.diagnosticCode } : {}) });
     console.error("Prepare Content failed safely.");
@@ -313,20 +316,18 @@ app.post("/api/ai/prepare-content", async (req, res) => {
   }
 });
 
+function prepareContentOwner(req) {
+  const identity = sessionIdentity(req, Date.now(), accessControlStore);
+  const owner = identity && workflowWorkspace(req, accessControlStore);
+  if (!owner) throw new PrepareContentError(401, "authentication_required", "Sign in to use Prepare Content.");
+  if (!hasPermission(req, "run_workflow", accessControlStore)) throw new PrepareContentError(403, "permission_denied", "This session cannot run Prepare Content.");
+  accessControlStore.touchSession(identity.sessionId);
+  return owner;
+}
 let prepareContentJobs;
 registerPrepareContentJobs(app, {
   getStore: () => prepareContentJobs ||= new PrepareContentJobs(path.join(path.dirname(JARVIS_DB_PATH), "prepare-content-jobs.sqlite3")),
-  getOwner: req => {
-    const owner = workflowWorkspace(req, accessControlStore);
-    if (!owner) return null;
-    if (accessControlStore?.securityState() !== "disabled") {
-      if (!hasPermission(req, "run_workflow", accessControlStore)) throw new PrepareContentError(403, "permission_denied", "This session cannot run Prepare Content.");
-      const identity = sessionIdentity(req, Date.now(), accessControlStore);
-      if (!identity) return null;
-      accessControlStore.touchSession(identity.sessionId);
-    }
-    return owner;
-  },
+  getOwner: prepareContentOwner,
   getService: () => executionServices.openAI,
   binaryDir: BINARY_DATA_DIR,
 });
@@ -1005,11 +1006,12 @@ async function startServer() {
   const facebookPublicMetricsService = createFacebookPublicMetricsService({ logger: console });
   registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: metaWorkspace, facebookCredentialStore, graphServiceFactory: facebookGraphService, publicMetricsService: facebookPublicMetricsService, logger: console });
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
-  executionServices = createExecutionServices({ credentialStore, createOAuthClient,
+  const prepareContentPolicy = new PrepareContentPolicy(path.join(path.dirname(JARVIS_DB_PATH), "prepare-content-policy.sqlite3"));
+  executionServices = createExecutionServices({ credentialStore, createOAuthClient, prepareContentPolicy,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
     createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
     facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL,
-    geminiApiKey: GEMINI_API_KEY, geminiModel: GEMINI_MODEL, executionStore, logger: console });
+    geminiApiKey: GEMINI_API_KEY, geminiModel: GEMINI_MODEL, geminiProvider: geminiConfiguration.provider, geminiVertex: geminiConfiguration.vertex, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
   registerWorkflowRoutes(app, { workflowStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore),

@@ -52,3 +52,15 @@ for (const failedPublisher of ["facebook", "youtube"]) test(`${failedPublisher} 
   assert.equal(result.status, "error"); assert.equal(calls.some(([name]) => name === "move"), false);
   assert.equal(result.nodes.find((node) => node.nodeId === "m").status, "error");
 });
+
+test("Prepare Content receives the workspace in linear and joined scheduled workflows", async () => {
+  const owner = { ownerType: "additional", ownerId: "workspace-test" };
+  for (const [workflowNodes, connections] of [[itemPipelineNodes,itemPipelineLinks],[dualPublisherNodes,dualPublisherLinks]]) {
+    const svc = itemServices([]); let seen = 0;
+    svc.youtube.uploadVideo = async request => ({ success: true, videoId: "test", sourceFileId: request.sourceFileId });
+    svc.openAI.prepare = async (_request, actualOwner) => { assert.deepEqual(actualOwner, owner); seen++; return { title: "Title", socialCaption: "Caption" }; };
+    const result = await createWorkflowExecutor({ executionServices: svc, logger: { error() {} } }).execute({ workflowId: "owned", nodes: workflowNodes, connections, triggerMode: "schedule", owner });
+    assert.equal(seen, 1);
+    assert.equal(result.nodes.find(node => node.nodeId === "p").status, "success");
+  }
+});

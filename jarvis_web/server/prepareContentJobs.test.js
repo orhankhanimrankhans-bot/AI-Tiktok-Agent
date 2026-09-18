@@ -27,7 +27,7 @@ test('abandoned jobs expire without restarting provider work; capacity is bounde
 });
 test('HTTP submission returns 202 before a slow provider; polling returns only owner results',async t=>{
  const express=require('express');const {dir,store:makeStore}=setup(t),store=makeStore();const ref='bin_1234567890123456';fs.writeFileSync(path.join(dir,ref),'test');const app=express();app.use(express.json());let done,calls=0;
- registerPrepareContentJobs(app,{getStore:()=>store,getOwner:req=>req.get('x-test-owner')==='b'?b:req.get('x-test-owner')==='a'?a:null,binaryDir:dir,getService:()=>({apiKey:'secret',model:'unchanged',prepare:()=>{calls++;return new Promise(resolve=>done=resolve);}})});
+ registerPrepareContentJobs(app,{getStore:()=>store,getOwner:req=>req.get('x-test-owner')==='b'?b:req.get('x-test-owner')==='a'?a:null,binaryDir:dir,getService:()=>({apiKey:'secret',model:'unchanged',prepare:(_request,owner)=>{assert.deepEqual(owner,a);calls++;return new Promise(resolve=>done=resolve);}})});
  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>{server.closeAllConnections();server.close(resolve);}));const base=`http://127.0.0.1:${server.address().port}/api/ai/prepare-content/jobs`;
  const body={binary:{referenceId:ref},mimeType:'video/mp4',titleInstructions:'Title',captionInstructions:'Caption',language:'English',tone:'Natural',hashtagCount:1};
  const response=await fetch(base,{method:'POST',headers:{'Content-Type':'application/json','x-test-owner':'a','X-Corex-Job-Request':randomUUID()},body:JSON.stringify(body)});assert.equal(response.status,202);const job=await response.json();assert.equal(calls,1);

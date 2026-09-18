@@ -10,6 +10,7 @@ const { GoogleGenAI } = require("@google/genai");
 const BINARY_REFERENCE = /^bin_[A-Za-z0-9_-]{16,128}$/;
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const MINIMUM_CONFIDENCE = 0.65;
+const VISUAL_ANALYSIS_PROMPT = "Inspect the entire short video and return factual visual analysis only. Identify the real primary object, any important secondary object, the actual action, the scene, and concrete visible details. Ignore the filename completely. Do not create a title, caption, hashtags, or marketing copy. Do not guess; use broader terminology when uncertain and lower confidence.";
 const FACT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
@@ -272,7 +273,7 @@ async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, mo
         model,
         contents: [
           { fileData: { fileUri: remoteFile.uri, mimeType: remoteFile.mimeType || mimeType } },
-          { text: "Inspect the entire short video and return factual visual analysis only. Identify the real primary object, any important secondary object, the actual action, the scene, and concrete visible details. Ignore the filename completely. Do not create a title, caption, hashtags, or marketing copy. Do not guess; use broader terminology when uncertain and lower confidence." },
+          { text: VISUAL_ANALYSIS_PROMPT },
         ],
         config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: Math.max(1, deadline - Date.now()) }, temperature: 0, maxOutputTokens: 700, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA },
       }), Math.max(1, deadline - Date.now()), "gemini_analysis_timeout", "Gemini video understanding timed out."));
@@ -330,4 +331,4 @@ async function analyzeVideo(options) {
   } finally { await cleanupDeveloperFile(session, options); }
 }
 
-module.exports = { developerUploadConfig, UPLOAD_RETRY_DELAYS_MS, classifyUpload, RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };
+module.exports = { VISUAL_ANALYSIS_PROMPT, parseAnalysisResponse, withTimeout, developerUploadConfig, UPLOAD_RETRY_DELAYS_MS, classifyUpload, RETRY_DELAYS_MS, isRetryable, classifyFailure, geminiHttpStatus, BINARY_REFERENCE, DEFAULT_GEMINI_MODEL, FACT_SCHEMA, GeminiVideoError, MINIMUM_CONFIDENCE, analyzeVideo, diagnosticCode, normalizeFacts, privateVideoPath, safeProviderMessage };

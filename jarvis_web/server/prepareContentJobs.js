@@ -70,7 +70,7 @@ function registerPrepareContentJobs(app,{getStore,getOwner,getService,binaryDir}
       validatePrepareContentInput(req.body);
       privateVideoPath(binaryDir,req.body.binary,req.body.mimeType);
       const service=getService();
-      const job=getStore().start(owner,req.get('X-Corex-Job-Request'),req.body,body=>service.prepare({body,apiKey:service.apiKey,model:service.model}));
+      const job=getStore().start(owner,req.get('X-Corex-Job-Request'),req.body,body=>service.prepare({body,apiKey:service.apiKey,model:service.model},owner));
       return res.status(202).json(job);
     }catch(error){return fail(res,error);}
   });

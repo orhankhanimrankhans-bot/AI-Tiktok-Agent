@@ -3,6 +3,24 @@ const test = require("node:test");
 const { createExecutionServices } = require("./executionServices");
 
 function dependencies() { return { credentialStore: {}, createOAuthClient() {}, createDriveClient() {}, createYouTubeClient() {}, facebookExecutionContext: { graphRequest() {}, publishReel() {} }, binaryDirectory: "C:/safe/binary", prepareContent() {}, openAIApiKey: "test-key", openAIModel: "test-model", geminiApiKey: "gemini-test-key", geminiModel: "gemini-test-model", executionStore: {}, logger: { error() {} } }; }
+test("shared Prepare Content service registers downloads and checks ownership before calling providers", async () => {
+  const { PrepareContentPolicy } = require("./prepareContentPolicy");
+  const policy = new PrepareContentPolicy(":memory:", { env: {} });
+  try {
+    const owner = { ownerType: "additional", ownerId: "a" }, other = { ...owner, ownerId: "b" };
+    let calls = 0;
+    const services = createExecutionServices({ ...dependencies(), prepareContentPolicy: policy,
+      executeDriveDownload: async () => ({ binary: { referenceId: "owned-video" } }),
+      prepareContent: async () => { calls++; return { title: "Ready" }; } });
+    const downloaded = await services.google.downloadFile({}, owner);
+    const request = { body: downloaded };
+    await assert.rejects(services.openAI.prepare(request, other), { code: "binary_not_found" });
+    await assert.rejects(services.openAI.prepare(request), { code: "authentication_required" });
+    assert.equal(calls, 0);
+    assert.deepEqual(await services.openAI.prepare(request, owner), { title: "Ready" });
+    assert.equal(calls, 1);
+  } finally { policy.close(); }
+});
 test("execution services exposes provider capabilities without serializing secrets", () => { const services = createExecutionServices(dependencies()); assert.deepEqual(services.publicCapabilities, { google: true, facebook: true, youtube: true, binaryReferences: true, prepareContent: true, executionHistory: true }); assert.doesNotMatch(JSON.stringify(services.publicCapabilities), /test-key|test-model|C:\/safe/); });
 test("execution services rejects missing dependencies clearly", () => { const value = dependencies(); delete value.executionStore; assert.throws(() => createExecutionServices(value), /executionStore/); });
 test("execution services exposes only Facebook operations", async () => { const calls = []; const value = dependencies(); value.facebookExecutionContext = { graphRequest: async (request) => { calls.push(["graph", request]); return { id: "42" }; }, publishReel: async (request) => { calls.push(["reel", request]); return { success: true, status: "published" }; }, credentialStore: { tokens: "secret" } }; const services = createExecutionServices(value); const graph = await services.facebook.graphRequest({ credentialId: "fcred_123", method: "POST", endpoint: "me", body: {}, query: {} }); const reel = await services.facebook.publishReel({ credentialId: "fcred_123", binary: { referenceId: "bin_123" } }); assert.deepEqual(graph, { id: "42" }); assert.deepEqual(reel, { success: true, status: "published" }); assert.equal(calls.length, 2); assert.equal("credentialStore" in services.facebook, false); assert.equal("createGraphService" in services.facebook, false); });

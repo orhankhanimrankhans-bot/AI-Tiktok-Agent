@@ -25,7 +25,7 @@
     "start": "app.post(\"/api/ai/prepare-content\"",
     "end": "function facebookGraphService()",
     "candidateEnd": "function metaWorkspace(req)",
-    "sha256": "f0d9450b9f76d328eb607f68513546563627d1cee713586d189f7658ac0ca62a"
+    "sha256": "90cace75117ae323b365a3b65e3e3d3917bc38198dea90e4af3efed351cfb326"
   },
   {
     "file": "server/index.js",
@@ -39,6 +39,6 @@
     "start": "  executionServices = createExecutionServices(",
     "end": "  workflowStore = createWorkflowStore(",
     "candidateEnd": "  workflowStore = createWorkflowStore(",
-    "sha256": "d5a835bdb7d4b923e18560980674bd4ba17e7121c0937ad7d679742a610f2b4b"
+    "sha256": "86af5c99e90205044efe48ba2abc3dde124dd75783ec67a6de5b23d138c9df6a"
   }
 ]

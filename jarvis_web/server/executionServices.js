@@ -18,7 +18,10 @@ function createExecutionServices(dependencies) {
   const executeYouTubeUpload = input.executeYouTubeUpload || productionYouTubeUpload;
   const services = {
     google: { ...google, searchFiles: (request, owner) => executeDriveSearch({ request, owner, ...google, logger }),
-      downloadFile: (request, owner) => executeDriveDownload({ request, owner, ...google, binaryDir: required("binaryDirectory", input.binaryDirectory) }),
+      downloadFile: async (request, owner) => {
+        const result = await executeDriveDownload({ request, owner, ...google, binaryDir: required("binaryDirectory", input.binaryDirectory) });
+        return input.prepareContentPolicy ? input.prepareContentPolicy.register(result, owner) : result;
+      },
       moveFile: (request, owner) => executeDriveMove({ request, owner, ...google }) },
     facebook: { graphRequest: (request, owner) => required("facebookExecutionContext", input.facebookExecutionContext).graphRequest(request, owner),
       publishReel: (request, owner) => required("facebookExecutionContext", input.facebookExecutionContext).publishReel(request, owner) },
@@ -26,8 +29,11 @@ function createExecutionServices(dependencies) {
       createOAuthClient: google.createOAuthClient, createYouTubeClient: required("createYouTubeClient", input.createYouTubeClient),
       binaryDir: required("binaryDirectory", input.binaryDirectory), logger }) },
     binary: { directory: required("binaryDirectory", input.binaryDirectory) },
-    openAI: { prepare: (request) => required("prepareContent", input.prepareContent)({ ...request, binaryDir: required("binaryDirectory", input.binaryDirectory),
-      geminiApiKey: input.geminiApiKey || "", geminiModel: input.geminiModel, logger }),
+    openAI: { prepare: (request, owner) => {
+      const run = () => required("prepareContent", input.prepareContent)({ ...request, binaryDir: required("binaryDirectory", input.binaryDirectory),
+        geminiApiKey: input.geminiApiKey || "", geminiModel: input.geminiModel, geminiProvider: input.geminiProvider || "developer", geminiVertex: input.geminiVertex, logger });
+      return input.prepareContentPolicy ? input.prepareContentPolicy.run(request.body?.binary?.referenceId, owner, run) : run();
+    },
       apiKey: required("openAIApiKey", input.openAIApiKey), model: required("openAIModel", input.openAIModel) },
     history: { store: required("executionStore", input.executionStore) },
     logger,

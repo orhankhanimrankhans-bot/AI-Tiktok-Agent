@@ -59,7 +59,7 @@ test("OpenAI prompt performs metadata generation rather than visual detection", 
 test("dedicated route accepts no browser keys and reports server configuration booleans", () => {
   const source = fs.readFileSync(require.resolve("./index.js"), "utf8");
   const route = source.slice(source.indexOf('app.post("/api/ai/prepare-content"'), source.indexOf('app.get("/api/facebook/credentials"'));
-  assert.match(route, /executionServices\.openAI\.prepare\(\{ body: req\.body, apiKey: executionServices\.openAI\.apiKey, model: executionServices\.openAI\.model \}\)/);
+  assert.match(route, /executionServices\.openAI\.prepare\(\{ body: req\.body, apiKey: executionServices\.openAI\.apiKey, model: executionServices\.openAI\.model \}, owner\)/);
   assert.doesNotMatch(route, /req\.body\.(apiKey|token|authorization)/i);
   assert.match(source, /openAIConfigured/); assert.match(source, /geminiConfigured/);
   assert.match(route, /diagnosticCode/);
