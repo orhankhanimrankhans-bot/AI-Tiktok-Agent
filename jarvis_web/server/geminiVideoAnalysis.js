@@ -1,3 +1,4 @@
+const inferenceDiagnostics = require("./geminiInferenceDiagnostics");
 const uploadDiagnostics = require("./geminiUploadDiagnostics");
 "use strict";
 
@@ -258,14 +259,15 @@ async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, mo
     if (!remoteFile.uri) { remoteFile = { ...remoteFile, state: "PROCESSING" }; const error = new Error("Processed Gemini file has no usable URI."); const diagnostic = logFailure({ logger, stage: "processing", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt }); throw new GeminiVideoError("gemini_processing_failed", "Gemini did not provide a processed video reference.", diagnostic, true); }
     let response;
     try {
-      response = await withTimeout(client.models.generateContent({
+      response = await inferenceDiagnostics.observe({ logger, correlationId: session.correlationId, attempt: session.inferenceAttempt, model,
+        fileActive: fileState(remoteFile) === "ACTIVE", classify: error => classifyFailure(error, "generateContent"), maxAttempts: RETRY_DELAYS_MS.length + 1 }, () => withTimeout(client.models.generateContent({
         model,
         contents: [
           { fileData: { fileUri: remoteFile.uri, mimeType: remoteFile.mimeType || mimeType } },
           { text: "Inspect the entire short video and return factual visual analysis only. Identify the real primary object, any important secondary object, the actual action, the scene, and concrete visible details. Ignore the filename completely. Do not create a title, caption, hashtags, or marketing copy. Do not guess; use broader terminology when uncertain and lower confidence." },
         ],
         config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: Math.max(1, deadline - Date.now()) }, temperature: 0, maxOutputTokens: 700, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA },
-      }), Math.max(1, deadline - Date.now()), "gemini_analysis_timeout", "Gemini video understanding timed out.");
+      }), Math.max(1, deadline - Date.now()), "gemini_analysis_timeout", "Gemini video understanding timed out."));
     } catch (error) {
       const diagnostic = logFailure({ logger, stage: "generateContent", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt });
       if (error instanceof GeminiVideoError) { error.diagnosticCode = diagnostic; throw error; }
@@ -301,7 +303,7 @@ async function analyzeVideo(options) {
   const session = { correlationId: uploadDiagnostics.newCorrelationId(), fileName: "video" + (options.fileExtension || "") };
   try {
     for (let attempt = 0; ; attempt++) {
-      try { return await analyzeAttempt({ ...options, sleep, session }); }
+      try { session.inferenceAttempt = attempt + 1; return await analyzeAttempt({ ...options, sleep, session }); }
       catch (error) {
         if (!isRetryable(error) || attempt >= RETRY_DELAYS_MS.length) throw error;
         if (fileState(session.remoteFile) === "FAILED") await cleanupDeveloperFile(session, options);
