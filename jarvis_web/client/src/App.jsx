@@ -1,3 +1,4 @@
+import { readPrepareContentResponse } from "./prepareContentResponse.js";
 import { workflowDraftKey, canStartNewDraft } from "./workflowDraftIdentity.js";
 import FacebookPages from "./FacebookPages.jsx";
 import { useEffect, useRef, useState } from "react";
@@ -2881,8 +2882,7 @@ function storeWorkflowLinkage(workflow) {
             method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(buildPrepareContentRequest(node.config, item)),
           });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data?.error || "Prepare Content failed.");
+          const data = await readPrepareContentResponse(response);
           return mergePreparedContent(item, data, node.config?.preserveInput !== false);
         });
       }

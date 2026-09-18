@@ -1,3 +1,4 @@
+const { trackPrepareContentHttp } = require("./prepareContentHttpDiagnostics");
 const { registerFacebookPageCredentialRoutes } = require("./facebookPageCredentials");
 const express = require("express");
 const path = require("path");
@@ -301,6 +302,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.post("/api/ai/prepare-content", async (req, res) => {
+  trackPrepareContentHttp(req, res);
   try {
     return res.json(await executionServices.openAI.prepare({ body: req.body, apiKey: executionServices.openAI.apiKey, model: executionServices.openAI.model }));
   } catch (error) {
