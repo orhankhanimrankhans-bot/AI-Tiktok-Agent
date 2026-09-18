@@ -40,7 +40,7 @@ test("unsafe input, missing keys, Gemini failure, and malformed OpenAI output fa
 
 test("OpenAI cannot replace the high-confidence detected object", async () => {
   const generic = { output_text: JSON.stringify({ title: "You Won't Believe This Crush", description: "A machine crushes something.", hashtags: ["one", "two", "three", "four", "five"] }) };
-  await assert.rejects(() => prepareContent(options({ fetchImpl: async () => response(generic) })), (error) => error.code === "openai_factual_mismatch");
+  await assert.rejects(() => prepareContent(options({ fetchImpl: async () => response(generic) })), (error) => error.code === "openai_title_repair_failed");
 });
 
 test("OpenAI auth, rate limit, timeout, and network errors remain secret-safe", async () => {
@@ -97,7 +97,7 @@ test("real Download output survives browser and server Prepare Content and resol
     createOAuthClient: () => Object.assign(new EventEmitter(), { setCredentials() {} }),
     createDriveClient: () => ({ files: { get: async (request) => ({ data: request.alt === "media" ? bytes : { name: "clip.mp4", mimeType: "video/mp4", size: String(bytes.length) } }) } }) });
   assert.equal(downloaded.title, undefined);
-  let uploads = 0, generations = 0, cleanups = 0;
+  let uploads = 0, generations = 0, cleanups = 0, repairs = 0;
   const config = prepareContentDefaults();
   const generate = (body) => prepareContent(options({ body, binaryDir, analyzeVideoImpl: async ({ binary }) => {
     assert.equal(binary.referenceId, downloaded.binary.referenceId);
@@ -111,7 +111,10 @@ test("real Download output survives browser and server Prepare Content and resol
         generations++; if (++attempts === 1) throw Object.assign(new Error("busy"), { status: 503 });
         return { text: JSON.stringify(visual) };
       } } }) });
-  }, fetchImpl: async () => response(success) }));
+  }, fetchImpl: async (_url, request) => {
+    if (JSON.parse(request.body).text.format.name === "repaired_video_title") { repairs++; return response({ output_text: JSON.stringify({ title: "Electric scooter meets the shredder" }) }); }
+    return response({ output_text: JSON.stringify({ title: "An e-scooter meets the shredder", description: "An electric scooter is crushed.", hashtags: ["one", "two", "three", "four", "five"] }) });
+  } }));
   const browser = mergePreparedContent(downloaded, await generate(buildPrepareContentRequest(config, downloaded)));
   const nodes = [{ id: "t", name: "Schedule Trigger", config: {} }, { id: "d", name: "Download File", config: { credentialId: "test", fileId: "source-video" } }, { id: "p", name: "Prepare Content", config }, { id: "f", name: "Facebook Graph API", config: { operation: "Publish Reel", credentialId: "test-facebook", title: "{{ $json.title }}", description: "{{ $json.socialCaptionWithHashtags }}" } }];
   let publishedRequest;
@@ -122,7 +125,7 @@ test("real Download output survives browser and server Prepare Content and resol
   assert.equal(publishedRequest.description, server.socialCaptionWithHashtags);
   assert.deepEqual(publishedRequest.binary, downloaded.binary);
   assert.deepEqual(browser, server);
-  assert.equal(uploads, 2); assert.equal(generations, 4); assert.equal(cleanups, 2);
+  assert.equal(repairs, 2); assert.equal(uploads, 2); assert.equal(generations, 4); assert.equal(cleanups, 2);
   for (const item of [browser, server]) {
     assert.deepEqual(item.binary, downloaded.binary);
     assert.equal(item.fileId, downloaded.fileId);
@@ -144,4 +147,56 @@ test("real Download output survives browser and server Prepare Content and resol
 test("terminal readiness maps to a useful HTTP error without OpenAI generation", async () => {
  const { GeminiVideoError } = require("./geminiVideoAnalysis");
  await assert.rejects(prepareContent(options({ analyzeVideoImpl: async () => { throw new GeminiVideoError("gemini_file_not_ready", "Uploaded video is not ready.", "GEMINI_GENERATE_400"); }, fetchImpl: () => assert.fail("OpenAI must not run") })), { code: "gemini_file_not_ready", statusCode: 503, diagnosticCode: "GEMINI_GENERATE_400" });
+});
+
+test("normalized complete phrases accept benign typography without a repair", async () => {
+  for (const title of ["ELECTRIC SCOOTER crushed", "Electric-scooter crushed", "Electric—scooter crushed", "Electric   scooter crushed", "An (electric) scooter is crushed"]) {
+    let calls = 0;
+    const result = await prepareContent(options({ fetchImpl: async () => { calls++; return response({ output_text: JSON.stringify({ title, description: "Unchanged caption", hashtags: ["one", "two", "three", "four", "five"] }) }); } }));
+    assert.equal(calls, 1); assert.equal(result.title, title);
+  }
+});
+
+test("plural variants, synonyms and substring collisions use one canonical title repair", async () => {
+  for (const [primaryObject, initialTitle] of [["electric scooters", "An electric scooter is crushed"], ["electric scooter", "Electric scooters are crushed"], ["electric scooter", "An e-scooter is crushed"], ["car", "Cargo is loaded"]]) {
+    let calls = 0, analyses = 0;
+    const originalBinary = structuredClone(input.binary);
+    const facts = { ...visual, primaryObject };
+    const content = { title: initialTitle, description: "Original caption", hashtags: ["one", "two", "three", "four", "five"] };
+    const result = await prepareContent(options({ analyzeVideoImpl: async ({ binary }) => { analyses++; assert.deepEqual(binary, originalBinary); return facts; }, fetchImpl: async (_url, request) => {
+      const req = JSON.parse(request.body);
+      if (++calls === 1) return response({ output_text: JSON.stringify(content) });
+      assert.equal(calls, 2);
+      assert.deepEqual(req.text.format.schema.required, ["title"]);
+      assert.deepEqual(Object.keys(req.text.format.schema.properties), ["title"]);
+      assert.match(req.instructions, /canonical detected object phrase explicitly, verbatim/);
+      assert.equal(JSON.parse(req.input).canonicalDetectedObject, primaryObject);
+      assert.doesNotMatch(req.input, /referenceId|Original caption|test-openai-key|test-gemini-key/);
+      return response({ output_text: JSON.stringify({ title: `${primaryObject} in action` }) });
+    } }));
+    assert.equal(calls, 2); assert.equal(analyses, 1);
+    assert.equal(result.title, `${primaryObject} in action`);
+    assert.equal(result.caption, content.description); assert.equal(result.description, content.description);
+    assert.deepEqual(result.hashtags, content.hashtags.map(tag => `#${tag}`));
+    assert.equal(result.socialCaption, 'Original caption\n\n#one #two #three #four #five');
+    assert.equal(result.socialCaptionWithHashtags, result.socialCaption);
+    assert.deepEqual(input.binary, originalBinary);
+  }
+});
+
+test("invalid repair is classified and never loops or replaces other fields", async () => {
+  for (const repair of [{ title: "Still unrelated" }, { title: "" }, { title: "Electric scooter", description: "replacement" }, {}, null]) {
+    let calls = 0, analyses = 0;
+    await assert.rejects(prepareContent(options({ analyzeVideoImpl: async () => { analyses++; return visual; }, fetchImpl: async () => {
+      calls++;
+      return response({ output_text: JSON.stringify(calls === 1 ? { title: "Unrelated", description: "Original", hashtags: ["one", "two", "three", "four", "five"] } : repair) });
+    } })), { code: "openai_title_repair_failed", statusCode: 502 });
+    assert.equal(calls, 2); assert.equal(analyses, 1);
+  }
+});
+
+test("repair service failures retain existing safe error classifications", async () => {
+  let calls = 0;
+  await assert.rejects(prepareContent(options({ fetchImpl: async () => ++calls === 1 ? response({ output_text: JSON.stringify({ title: "Unrelated", description: "Original", hashtags: ["one", "two", "three", "four", "five"] }) }) : response({}, 429) })), { code: "openai_rate_limited" });
+  assert.equal(calls, 2);
 });
