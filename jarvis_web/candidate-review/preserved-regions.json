@@ -18,14 +18,14 @@
     "start": "      if (node.name === \"Prepare Content\") {",
     "end": "      if (node.name === \"Facebook Graph API\") {",
     "candidateEnd": "      if (node.name === \"Facebook Graph API\") {",
-    "sha256": "2fe901811dfba8fc450bd53664759ef0e1f335d8f95f07208c09a3e328959cd9"
+    "sha256": "a9d15259ed16ed0e08b4aadce7fea876e8ba5f21b1fd4f9a99920b5b1e688641"
   },
   {
     "file": "server/index.js",
     "start": "app.post(\"/api/ai/prepare-content\"",
     "end": "function facebookGraphService()",
     "candidateEnd": "function metaWorkspace(req)",
-    "sha256": "df09f71f9753f2d843ae7471142f6c1acfc2d3d93349e43fae7b1213adf5f34b"
+    "sha256": "f0d9450b9f76d328eb607f68513546563627d1cee713586d189f7658ac0ca62a"
   },
   {
     "file": "server/index.js",

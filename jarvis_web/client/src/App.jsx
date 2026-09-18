@@ -1,4 +1,4 @@
-import { readPrepareContentResponse } from "./prepareContentResponse.js";
+import { executePrepareContentJob } from "./prepareContentJobs.js";
 import { workflowDraftKey, canStartNewDraft } from "./workflowDraftIdentity.js";
 import FacebookPages from "./FacebookPages.jsx";
 import { useEffect, useRef, useState } from "react";
@@ -2878,11 +2878,7 @@ function storeWorkflowLinkage(workflow) {
       }
       if (node.name === "Prepare Content") {
         return executePerItem(input, async (item) => {
-          const response = await fetch(`${API_BASE_URL}/api/ai/prepare-content`, {
-            method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(buildPrepareContentRequest(node.config, item)),
-          });
-          const data = await readPrepareContentResponse(response);
+          const data = await executePrepareContentJob(API_BASE_URL, buildPrepareContentRequest(node.config, item));
           return mergePreparedContent(item, data, node.config?.preserveInput !== false);
         });
       }

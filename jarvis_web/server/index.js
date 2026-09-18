@@ -1,3 +1,4 @@
+const { PrepareContentJobs, registerPrepareContentJobs } = require("./prepareContentJobs");
 const { trackPrepareContentHttp } = require("./prepareContentHttpDiagnostics");
 const { registerFacebookPageCredentialRoutes } = require("./facebookPageCredentials");
 const express = require("express");
@@ -11,7 +12,7 @@ const { validateMetaTokenApp, exchangeMetaCode } = require("./metaTokenValidatio
 const { createBuildDiagnostics, metaConfigDiagnostics } = require("./buildDiagnostics");
 const { google } = require("googleapis");
 const { CredentialStore, GOOGLE_DRIVE_PROVIDER, YOUTUBE_PROVIDER } = require("./credentialStore");
-const { AccessControlStore, sessionIdentity, workflowWorkspace } = require("./accessControl");
+const { AccessControlStore, sessionIdentity, workflowWorkspace, hasPermission } = require("./accessControl");
 const { enforceSecurity, registerSecurityRoutes } = require("./securityAccess");
 const { DriveSearchError } = require("./driveSearch");
 const { executeDriveDelete } = require("./driveFiles");
@@ -310,6 +311,24 @@ app.post("/api/ai/prepare-content", async (req, res) => {
     console.error("Prepare Content failed safely.");
     return res.status(500).json({ status: "error", code: "prepare_content_server_error", error: "Prepare Content could not be completed." });
   }
+});
+
+let prepareContentJobs;
+registerPrepareContentJobs(app, {
+  getStore: () => prepareContentJobs ||= new PrepareContentJobs(path.join(path.dirname(JARVIS_DB_PATH), "prepare-content-jobs.sqlite3")),
+  getOwner: req => {
+    const owner = workflowWorkspace(req, accessControlStore);
+    if (!owner) return null;
+    if (accessControlStore?.securityState() !== "disabled") {
+      if (!hasPermission(req, "run_workflow", accessControlStore)) throw new PrepareContentError(403, "permission_denied", "This session cannot run Prepare Content.");
+      const identity = sessionIdentity(req, Date.now(), accessControlStore);
+      if (!identity) return null;
+      accessControlStore.touchSession(identity.sessionId);
+    }
+    return owner;
+  },
+  getService: () => executionServices.openAI,
+  binaryDir: BINARY_DATA_DIR,
 });
 
 function metaWorkspace(req) {

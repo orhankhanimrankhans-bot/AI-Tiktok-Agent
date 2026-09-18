@@ -36,7 +36,7 @@ test("node picker, dispatcher, editor, and Facebook expression wiring are regist
   const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   assert.match(source, /name:\s*"Prepare Content"/); assert.match(source, /provider:\s*"Jarvis AI"/);
   for (const term of ["OpenAI", "Generate Content", "caption", "hashtags"]) assert.match(source, new RegExp(term, "i"));
-  assert.match(source, /node\.name === "Prepare Content"/); assert.match(source, /\/api\/ai\/prepare-content/);
+  assert.match(source, /node\.name === "Prepare Content"/); assert.match(source, /executePrepareContentJob/);
   assert.match(source, /editingNode\?\.name === "Prepare Content"/);
   const reelSource = fs.readFileSync(new URL("./facebookReelConfig.js", import.meta.url), "utf8");
   assert.match(reelSource, /\{\{ \$json\.socialCaption \}\}/);

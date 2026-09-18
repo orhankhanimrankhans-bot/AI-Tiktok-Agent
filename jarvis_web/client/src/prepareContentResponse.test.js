@@ -25,10 +25,8 @@ test('only validated HTTP correlation IDs reach frontend diagnostics',async()=>{
  await assert.rejects(readPrepareContentResponse(r,{warn:(_,d)=>seen=d}));assert.equal(seen.correlationId,undefined);
 });
 
-test('response guard is wired only to the Prepare Content fetch',async()=>{
- const {readFileSync}=await import('node:fs');const source=readFileSync(new URL('./App.jsx',import.meta.url),'utf8');
- const start=source.indexOf('const response = await fetch(`${API_BASE_URL}/api/ai/prepare-content`');
- const end=source.indexOf('return mergePreparedContent',start);const region=source.slice(start,end);
- assert.match(region,/await readPrepareContentResponse\(response\)/);assert.doesNotMatch(region,/response\.json\(/);
- assert.equal((source.match(/await readPrepareContentResponse\(response\)/g)||[]).length,1);
+test('async Prepare Content transport uses the response guard',async()=>{
+ const {readFileSync}=await import('node:fs');const app=readFileSync(new URL('./App.jsx',import.meta.url),'utf8');const transport=readFileSync(new URL('./prepareContentJobs.js',import.meta.url),'utf8');
+ assert.match(app,/await executePrepareContentJob\(API_BASE_URL, buildPrepareContentRequest/);
+ assert.match(transport,/await readPrepareContentResponse\(response\)/);
 });
