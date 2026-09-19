@@ -64,3 +64,16 @@ test("Prepare Content receives the workspace in linear and joined scheduled work
     assert.equal(result.nodes.find(node => node.nodeId === "p").status, "success");
   }
 });
+
+test("linear YouTube archive moves once on success and never on rejected uploads", async () => {
+ for (const uploadStatus of ["uploaded", "processed", "failed", "rejected"]) {
+  const calls=[]; const svc=services();
+  svc.youtube.uploadVideo=async()=>({success:true,videoId:"v1",channelId:"c1",uploadStatus,sourceFileId:"drive1"});
+  svc.google.moveFile=async(request)=>{calls.push(request);return {status:"moved"};};
+  const pipeline=[{id:"t",name:"Schedule Trigger"},{id:"y",name:"YouTube",config:{}},{id:"m",name:"Move File",config:{credentialId:"g",fileId:"{{ $json.sourceFileId }}",destinationFolderId:"done"}}];
+  const result=await createWorkflowExecutor({executionServices:svc,logger:{error(){}}}).execute({workflowId:"w",nodes:pipeline,connections:[{source:"t",target:"y"},{source:"y",target:"m"}]});
+  const accepted=["uploaded","processed"].includes(uploadStatus);
+  assert.equal(result.status,accepted?"success":"error"); assert.equal(calls.length,accepted?1:0);
+  if(accepted) assert.equal(calls[0].fileId,"drive1");
+ }
+});

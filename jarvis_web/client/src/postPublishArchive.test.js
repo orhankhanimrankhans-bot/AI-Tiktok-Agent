@@ -32,3 +32,9 @@ test("Move File node exposes Folder ID configuration and the real move route", (
   assert.match(source, /Destination Folder ID/); assert.match(source, /\/api\/google\/drive\/\$\{action\}/);
   assert.match(source, /buildArchiveMoveRequest/); assert.match(source, /preservePublishedSource/);
 });
+
+test("YouTube upload results archive only on successful completion", () => {
+ const result = { success: true, videoId: "v1", channelId: "c1", uploadStatus: "uploaded", sourceFileId: "drive1" };
+ assert.equal(buildArchiveMoveRequest(config, result).fileId, "drive1");
+ for (const change of [{success:false}, {videoId:""}, {channelId:""}, {uploadStatus:"failed"}, {uploadStatus:"rejected"}, {processingStatus:"failed"}, {status:"submitted"}]) assert.throws(() => buildArchiveMoveRequest(config, {...result,...change}), /successfully published/);
+});
