@@ -5,5 +5,6 @@ export function resolvePublicPage(pathname) {
 
   if (normalizedPath === "/privacy-policy") return "privacy-policy";
   if (normalizedPath === "/terms") return "terms";
+  if (normalizedPath === "/data-deletion") return "data-deletion";
   return null;
 }

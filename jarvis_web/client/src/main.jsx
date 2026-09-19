@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import PrivacyPolicy from './PrivacyPolicy.jsx'
 import TermsOfService from './TermsOfService.jsx'
+import DataDeletion from './DataDeletion.jsx'
 import { resolvePublicPage } from './publicRoutes.js'
 import { JarvisAuthGate, useJarvisAuth } from './JarvisAuth.jsx'
 import build from '../../shared/buildVersion.json'
@@ -18,7 +19,9 @@ const RootComponent = publicPage === 'privacy-policy'
   ? PrivacyPolicy
   : publicPage === 'terms'
     ? TermsOfService
-    : () => <JarvisAuthGate><WorkspaceApp /></JarvisAuthGate>
+    : publicPage === 'data-deletion'
+      ? DataDeletion
+      : () => <JarvisAuthGate><WorkspaceApp /></JarvisAuthGate>
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
