@@ -39,6 +39,7 @@ import { CANVAS_APPEARANCE_KEY, appearanceCssVariables, canvasBackground,
   canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
+import TikTokCredentialModal from "./TikTokCredentialModal.jsx";
 import { buildTikTokUploadRequest, tiktokNodeDefaults, TIKTOK_OPERATION } from "./tiktokConfig.js";
 import { buildYouTubeUploadRequest, YOUTUBE_OPERATION_UPLOAD, YOUTUBE_PRIVACY_STATUSES, youtubeCredentialLabel, youtubeNodeDefaults } from "./youtubeConfig.js";
 
@@ -2127,6 +2128,7 @@ function TikTokEditor({ node, previousNode, credentials, onRefreshCredentials, o
   const [output, setOutput] = useState(node.output ?? null);
   const [activeTab, setActiveTab] = useState("Parameters"), [busy, setBusy] = useState(false);
   const latestExecution = useRef(null);
+  const [showCredential, setShowCredential] = useState(false);
   const account = credentials.find(item => item.id === config.credentialId);
   const execute = async () => { if (busy) return; setBusy(true); try { const result = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" }); latestExecution.current = result; setOutput(result.output); onSaveNode(result); } finally { setBusy(false); } };
   const close = () => { onSaveNode({ ...node, ...latestExecution.current, config, input, output, status: latestExecution.current?.status ?? node.status ?? "idle" }); onClose(); };
@@ -2136,9 +2138,7 @@ function TikTokEditor({ node, previousNode, credentials, onRefreshCredentials, o
       <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
       <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map(tab => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" disabled={busy || !account || !config.uploadConsent} onClick={execute}>{busy ? "Uploading…" : "Execute step"}</button></div>
         <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
-          <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={event => setConfig({ ...config, credentialId: event.target.value, uploadConsent: false })}><option value="">Select TikTok account</option>{credentials.map(item => <option key={item.id} value={item.id}>{item.accountName} · TikTok</option>)}</select></div>
-          <button type="button" onClick={() => window.open("/tiktok", "_blank", "noopener")}>Connect / manage TikTok account</button>
-          <button type="button" onClick={onRefreshCredentials}>Refresh connection</button>
+          <label>Credential</label><div className="credential-row"><select aria-label="TikTok credential" value={config.credentialId} onChange={event => event.target.value === "__create__" ? setShowCredential(true) : setConfig({ ...config, credentialId: event.target.value, uploadConsent: false })}><option value="">Select credential</option>{credentials.map(item => <option key={item.id} value={item.id}>{item.accountName} &middot; TikTok</option>)}<option value="__create__">+ Create new credential</option></select><button type="button" className="credential-button" aria-label="Edit TikTok credential" onClick={() => setShowCredential(true)}>&#9998;</button></div>
           <label>Operation</label><select value={config.operation} disabled><option>{TIKTOK_OPERATION}</option></select>
           <label>Binary Property</label><input value={config.binaryProperty} onChange={event => setConfig({ ...config, binaryProperty: event.target.value, uploadConsent: false })} placeholder="data" />
           <p>Connect Download File or Prepare Content to this node. Each video is sent to the selected account's TikTok inbox. Open its inbox notification in TikTok to edit your caption, choose settings, and publish.</p>
@@ -2146,7 +2146,7 @@ function TikTokEditor({ node, previousNode, credentials, onRefreshCredentials, o
           <p>Up to 32 MiB per video. Move File waits for confirmed inbox delivery from TikTok and successful results from every connected branch. Inbox delivery is not publication.</p>
         </div> : <GenericNodeSettings settings={config.settings} onChange={(key, value) => setConfig(current => ({ ...current, settings: { ...current.settings, [key]: value } }))} version="TikTok inbox node version 1.0" />}</div>
       </section><NodeOutputPanel output={output} onExecute={execute} />
-    </div></div></div>;
+    </div></div>{showCredential && <TikTokCredentialModal apiBaseUrl={API_BASE_URL} icon={<TikTokIcon className="drive-provider-logo" />} onClose={() => setShowCredential(false)} onRefreshCredentials={onRefreshCredentials} onSave={credentialId => { setConfig(current => ({ ...current, credentialId, uploadConsent: false })); setShowCredential(false); }} />}</div>;
 }
 
 function YouTubeEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { returnTikTokPopup } from "./tiktokOAuth.js";
 import { useJarvisAuth } from "./JarvisAuth.jsx";
 import "./TikTokUpload.css";
 
@@ -37,6 +38,7 @@ export default function TikTokUpload() {
   }, [file]);
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get("connection");
+    if (returnTikTokPopup(window, result)) return;
     if (result === "connected") setMessage("TikTok account connected.");
     if (result === "failed") setError("TikTok connection was not completed. Check your app configuration and try connecting again.");
     if (result) window.history.replaceState({}, "", "/tiktok");
