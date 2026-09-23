@@ -18,11 +18,11 @@ export default function PrivacyPolicy() {
       <article className="privacy-card">
         <p className="privacy-kicker">PUBLIC POLICY</p>
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: September 20, 2026</p>
+        <p className="privacy-updated">Last updated: September 23, 2026</p>
 
         <p>
           This Privacy Policy explains how Corex handles information when you use its
-          workflow builder and connect supported Google or Meta accounts.
+          workflow builder and connect supported Google, Meta, YouTube, or TikTok accounts.
         </p>
 
         <section>
@@ -55,6 +55,35 @@ export default function PrivacyPolicy() {
             status. It stores Page identifiers, publication records, and available performance
             information to display results and help avoid duplicate publishing. Page access
             credentials are handled by the server and are not shown in the browser.
+          </p>
+        </section>
+
+        <section>
+          <h2>TikTok connection and uploads</h2>
+          <p>
+            Corex stores your TikTok account identifier, display name, granted permissions, and
+            encrypted access and refresh tokens in your workspace. After you preview a selected
+            video and explicitly consent, Corex transfers it to TikTok. You may also authorize a
+            TikTok workflow node to send its input videos on manual or scheduled runs. You finish editing and
+            posting through your TikTok inbox. This flow does not publish automatically.
+            TikTok processes received content under its own policies.
+          </p>
+          <p>
+            Video bytes selected on the TikTok page are processed temporarily in server memory
+            for transfer, without saving a video file. Workflow videos use the existing workspace-owned
+            downloaded media storage and retention controls. Upload identifiers, file fingerprints for
+            duplicate detection, timestamps, and status are retained until you disconnect TikTok.
+            Disconnecting removes those account and upload records from Corex and attempts to
+            revoke access. If revocation fails, revoke Corex access in TikTok account settings.
+          </p>
+        </section>
+
+        <section>
+          <h2>Content preparation and YouTube</h2>
+          <p>
+            Content preparation sends selected media, prompts, and inputs to the configured AI
+            provider, such as Google or OpenAI. Requested YouTube uploads send the selected video
+            and metadata to Google. Only process content you are authorized to use and share.
           </p>
         </section>
 
@@ -93,7 +122,7 @@ export default function PrivacyPolicy() {
         <section>
           <h2>Sharing of data</h2>
           <p>
-            Corex sends data to Google or Meta as needed to complete the operations you request.
+            Corex sends data to Google, Meta, or TikTok as needed to complete the operations you request.
             AI workflow steps may send selected video, text, or generated analysis to configured
             providers such as Google Gemini/Vertex AI and OpenAI for analysis and content generation.
             Data may also be processed by infrastructure providers used to host and operate

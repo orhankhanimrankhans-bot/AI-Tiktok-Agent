@@ -8,7 +8,7 @@ export function preservePublishedSource(publication, sourceItem) {
 }
 
 export function buildArchiveMoveRequest(config, publication) {
-  if (publication?.success !== true || !(publication?.status === "published" || (publication?.status == null && Boolean(publication?.videoId) && Boolean(publication?.channelId) && ["uploaded", "processed"].includes(publication?.uploadStatus) && !["failed", "terminated"].includes(publication?.processingStatus)))) {
+  if (publication?.success !== true || !((publication?.provider === "tiktok" && publication?.status === "inbox_uploaded" && Boolean(publication?.uploadId) && ["SEND_TO_USER_INBOX", "PUBLISH_COMPLETE"].includes(publication?.inboxStatus)) || publication?.status === "published" || (publication?.status == null && Boolean(publication?.videoId) && Boolean(publication?.channelId) && ["uploaded", "processed"].includes(publication?.uploadStatus) && !["failed", "terminated"].includes(publication?.processingStatus)))) {
     throw new Error("Move File requires successfully published results from every requested publisher.");
   }
   const fileId = String(resolveExpression(config?.fileId || "", publication) || "").trim();

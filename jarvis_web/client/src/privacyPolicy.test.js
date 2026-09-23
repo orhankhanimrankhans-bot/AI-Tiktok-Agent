@@ -21,8 +21,11 @@ test("privacy policy covers the connected services and required privacy topics",
   }
 });
 
-test("privacy policy does not contain secret values or claim Facebook publishing", () => {
+test("privacy policy avoids secret values and distinguishes requested publishing from TikTok inbox upload", () => {
   assert.doesNotMatch(source, /process\.env|CLIENT_SECRET|JARVIS_DB_PATH|access_token\s*[:=]/i);
   assert.match(source, /does not sell or rent user\s+data/i);
-  assert.match(source, /does not currently\s+publish, modify, or delete Facebook content/i);
+  assert.match(source, /Facebook Reels when you run or schedule a publishing workflow/i);
+  assert.match(source, /This flow does not publish automatically/i);
+  assert.match(source, /finish editing and\s+posting through your TikTok inbox/i);
+  assert.match(source, /Disconnecting removes those account and upload records/i);
 });

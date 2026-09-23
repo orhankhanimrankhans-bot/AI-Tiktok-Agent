@@ -77,3 +77,21 @@ test("linear YouTube archive moves once on success and never on rejected uploads
   if(accepted) assert.equal(calls[0].fileId,"drive1");
  }
 });
+
+test("TikTok joins YouTube and Facebook with workspace ownership and an all-provider archive gate", async () => {
+ const owner={ownerType:"additional",ownerId:"creator"};
+ for (const inboxStatus of ["SEND_TO_USER_INBOX","PROCESSING_UPLOAD"]) {
+  const calls=[],svc=itemServices(calls);
+  svc.youtube.uploadVideo=async request=>({success:true,videoId:"yt",sourceFileId:request.sourceFileId});
+  svc.tiktok={uploadVideo:async (request,actualOwner)=>{assert.deepEqual(actualOwner,owner);assert.equal(request.binary.referenceId,"bin-test");assert.equal(request.uploadConsent,true);return {success:true,provider:"tiktok",status:"inbox_uploaded",uploadId:"job",inboxStatus,sourceFileId:request.sourceFileId};}};
+  const result=await createWorkflowExecutor({executionServices:svc,logger:{error(){}}}).execute({workflowId:"triple",owner,triggerMode:"schedule",nodes:[...dualPublisherNodes,{id:"tt",name:"TikTok",config:{operation:"Upload to Inbox",uploadConsent:true}}],connections:[...dualPublisherLinks,{source:"p",target:"tt"},{source:"tt",target:"m"}]});
+  assert.equal(result.status,inboxStatus==="SEND_TO_USER_INBOX"?"success":"error");
+  assert.equal(calls.filter(([name])=>name==="move").length,inboxStatus==="SEND_TO_USER_INBOX"?1:0);
+ }
+});
+test("linear TikTok sends input and workspace and archives only confirmed inbox delivery", async()=>{
+ const calls=[],svc=itemServices(calls),owner={ownerType:"admin",ownerId:"primary"};
+ svc.tiktok={uploadVideo:async(request,actual)=>{assert.deepEqual(actual,owner);return {success:true,provider:"tiktok",status:"inbox_uploaded",uploadId:"job",inboxStatus:"SEND_TO_USER_INBOX",sourceFileId:request.sourceFileId};}};
+ const result=await createWorkflowExecutor({executionServices:svc}).execute({workflowId:"single-tiktok",owner,nodes:itemPipelineNodes.map(n=>n.id==="f"?{...n,name:"TikTok",config:{operation:"Upload to Inbox",uploadConsent:true}}:n),connections:itemPipelineLinks});
+ assert.equal(result.status,"success");assert.deepEqual(calls.at(-1),["move","file-1"]);
+});

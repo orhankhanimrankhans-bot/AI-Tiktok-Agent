@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import TikTokUpload from './TikTokUpload.jsx'
 import PrivacyPolicy from './PrivacyPolicy.jsx'
 import TermsOfService from './TermsOfService.jsx'
 import DataDeletion from './DataDeletion.jsx'
@@ -11,6 +12,7 @@ import build from '../../shared/buildVersion.json'
 
 function WorkspaceApp() {
   const { session } = useJarvisAuth();
+  if (window.location.pathname.replace(/\/+$/, "") === "/tiktok") return <TikTokUpload key={session?.workspaceId || "unauthenticated"} />;
   return <App key={session?.workspaceId || "unauthenticated"} />;
 }
 

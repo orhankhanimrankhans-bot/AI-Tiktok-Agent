@@ -96,12 +96,13 @@ function credentialHealth(credentialId, credentials) {
   return "connected";
 }
 
-export function nodeConnectionHealth(node = {}, { googleCredentials = [], facebookCredentials = [], youtubeCredentials = [], openAIConfigured = false } = {}) {
+export function nodeConnectionHealth(node = {}, { googleCredentials = [], facebookCredentials = [], youtubeCredentials = [], tiktokCredentials = [], openAIConfigured = false } = {}) {
   if (node.config?.configurationError || node.config?.credentialError) return "error";
   if (node.provider === "Google Drive" || /^Google Drive/.test(node.name || "") || ["Search Files and Folders", "Download File", "Delete File", "Move File"].includes(node.name)) {
     return credentialHealth(node.config?.credentialId, googleCredentials);
   }
   if (node.name === "Facebook Graph API") return credentialHealth(node.config?.credentialId, facebookCredentials);
+  if (node.name === "TikTok") return credentialHealth(node.config?.credentialId, tiktokCredentials);
   if (node.name === "YouTube") return credentialHealth(node.config?.credentialId, youtubeCredentials);
   if (["Prepare Content", "Prepare Content / AI"].includes(node.name)) return openAIConfigured ? "connected" : "disconnected";
   if (node.name === "Limit") return Number(node.config?.maxItems || 1) > 0 ? "connected" : "disconnected";
@@ -232,9 +233,9 @@ export function validateConnectionCandidate(nodes, connections, sourceId, target
     seen.add(nodeId); pending.push(...(outgoing.get(nodeId) || []));
   }
   const existingParents = connections.filter((connection) => connection.target === targetId).map((connection) => nodeMap.get(connection.source));
-  if (existingParents.length && !(target.name === "Move File" && [...existingParents, source].every((node) => ["Facebook Graph API", "YouTube"].includes(node?.name)) && new Set([...existingParents, source].map((node) => node.name)).size === existingParents.length + 1)) return { ok: false, error: "Workflow merges are supported only when Move File joins one Facebook and one YouTube publishing branch." };
+  if (existingParents.length && !(target.name === "Move File" && [...existingParents, source].every((node) => ["Facebook Graph API", "YouTube", "TikTok"].includes(node?.name)) && new Set([...existingParents, source].map((node) => node.name)).size === existingParents.length + 1)) return { ok: false, error: "Workflow merges are supported only when Move File joins distinct Facebook, YouTube, or TikTok branches." };
   const existingChildren = connections.filter((connection) => connection.source === sourceId).map((connection) => nodeMap.get(connection.target));
-  if (source.name !== "Schedule Trigger" && existingChildren.length && !(source.name === "Prepare Content" && [...existingChildren, target].every((node) => ["Facebook Graph API", "YouTube"].includes(node?.name)) && new Set([...existingChildren, target].map((node) => node.name)).size === existingChildren.length + 1)) return { ok: false, error: "Only Schedule Trigger or Prepare Content may branch; Prepare Content supports one Facebook and one YouTube publisher." };
+  if (source.name !== "Schedule Trigger" && existingChildren.length && !(source.name === "Prepare Content" && [...existingChildren, target].every((node) => ["Facebook Graph API", "YouTube", "TikTok"].includes(node?.name)) && new Set([...existingChildren, target].map((node) => node.name)).size === existingChildren.length + 1)) return { ok: false, error: "Only Schedule Trigger or Prepare Content may branch; Prepare Content supports one publisher per platform: Facebook, YouTube, or TikTok." };
   return { ok: true, error: "" };
 }
 

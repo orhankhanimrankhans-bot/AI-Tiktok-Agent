@@ -39,6 +39,7 @@ import { CANVAS_APPEARANCE_KEY, appearanceCssVariables, canvasBackground,
   canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
+import { buildTikTokUploadRequest, tiktokNodeDefaults, TIKTOK_OPERATION } from "./tiktokConfig.js";
 import { buildYouTubeUploadRequest, YOUTUBE_OPERATION_UPLOAD, YOUTUBE_PRIVACY_STATUSES, youtubeCredentialLabel, youtubeNodeDefaults } from "./youtubeConfig.js";
 
 
@@ -76,6 +77,9 @@ function FacebookIcon({ className = "" }) {
 
 
 
+function TikTokIcon({ className = "" }) {
+  return <span className={`youtube-mark ${className}`} aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false"><rect width="32" height="32" rx="7" fill="#10141b" /><path d="M20 6v14a6 6 0 1 1-5-6v4a2 2 0 1 0 1 2V6h4c1 3 3 4 6 4v4a10 10 0 0 1-6-2" fill="#25f4ee"/><path d="M18 5v14a5 5 0 1 1-4-5v3a2 2 0 1 0 1 2V5h3c1 3 3 4 6 4v3a9 9 0 0 1-6-2" fill="#fff" /></svg></span>;
+}
 function YouTubeIcon({ className = "" }) {
   return <span className={`youtube-mark ${className}`} aria-hidden="true"><svg viewBox="0 0 32 24" focusable="false"><rect x="1" y="1" width="30" height="22" rx="7" fill="#ff0033" /><path d="m13 7 8 5-8 5z" fill="#fff" /></svg></span>;
 }
@@ -83,6 +87,7 @@ function YouTubeIcon({ className = "" }) {
 function NodeProviderIcon({ node }) {
   if (node.provider === "Google Drive") return <GoogleDriveIcon />;
   if (node.provider === "Facebook") return <FacebookIcon />;
+  if (node.provider === "TikTok") return <TikTokIcon />;
   if (node.provider === "YouTube") return <YouTubeIcon />;
   if (node.name === "Schedule Trigger") return <span className="trigger-mark" aria-hidden="true">
     <svg viewBox="0 0 32 32" focusable="false">
@@ -125,6 +130,9 @@ const NODE_LIBRARY = [
     description: "Interact with Facebook through the Meta Graph API",
     type: "ACTION",
     icon: "f",
+  },
+  {
+    id: "tiktok-upload", provider: "TikTok", name: "TikTok", description: "Upload a downloaded video to TikTok inbox; finish posting in TikTok", type: "ACTION", icon: "♪",
   },
   {
     id: "youtube-upload",
@@ -1898,6 +1906,7 @@ function createPhase2Config(nodeId) {
   if (nodeId === "google-move") return { credentialId: "", resource: "File", operation: "Move", fileIdMode: "Expression",
     fileId: "{{ $json.sourceFileId }}", destinationFolderId: "", settings: defaultNodeSettings() };
   if (nodeId === "facebook-graph-api") return { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
+  if (nodeId === "tiktok-upload") return { ...tiktokNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "youtube-upload") return { ...youtubeNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "prepare-content") return { ...prepareContentDefaults(), settings: defaultNodeSettings() };
   return null;
@@ -2109,6 +2118,35 @@ function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecuteP
       <NodeOutputPanel output={output} onExecute={executeStep} />
     </div>
   </div></div>;
+}
+
+function TikTokEditor({ node, previousNode, credentials, onRefreshCredentials, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
+  const defaults = { ...tiktokNodeDefaults(), settings: defaultNodeSettings() };
+  const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
+  const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
+  const [output, setOutput] = useState(node.output ?? null);
+  const [activeTab, setActiveTab] = useState("Parameters"), [busy, setBusy] = useState(false);
+  const latestExecution = useRef(null);
+  const account = credentials.find(item => item.id === config.credentialId);
+  const execute = async () => { if (busy) return; setBusy(true); try { const result = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" }); latestExecution.current = result; setOutput(result.output); onSaveNode(result); } finally { setBusy(false); } };
+  const close = () => { onSaveNode({ ...node, ...latestExecution.current, config, input, output, status: latestExecution.current?.status ?? node.status ?? "idle" }); onClose(); };
+  return <div className="node-editor-overlay"><div className="node-editor-window">
+    <header className="node-editor-header"><div className="node-editor-title"><TikTokIcon className="facebook-title-icon" /><strong>TikTok</strong></div><button className="node-editor-close" onClick={close}>×</button></header>
+    <div className="node-editor-body google-three-column">
+      <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
+      <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map(tab => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" disabled={busy || !account || !config.uploadConsent} onClick={execute}>{busy ? "Uploading…" : "Execute step"}</button></div>
+        <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
+          <label>Credential</label><div className="credential-row"><select value={config.credentialId} onChange={event => setConfig({ ...config, credentialId: event.target.value, uploadConsent: false })}><option value="">Select TikTok account</option>{credentials.map(item => <option key={item.id} value={item.id}>{item.accountName} · TikTok</option>)}</select></div>
+          <button type="button" onClick={() => window.open("/tiktok", "_blank", "noopener")}>Connect / manage TikTok account</button>
+          <button type="button" onClick={onRefreshCredentials}>Refresh connection</button>
+          <label>Operation</label><select value={config.operation} disabled><option>{TIKTOK_OPERATION}</option></select>
+          <label>Binary Property</label><input value={config.binaryProperty} onChange={event => setConfig({ ...config, binaryProperty: event.target.value, uploadConsent: false })} placeholder="data" />
+          <p>Connect Download File or Prepare Content to this node. Each video is sent to the selected account's TikTok inbox. Open its inbox notification in TikTok to edit your caption, choose settings, and publish.</p>
+          <label><input type="checkbox" checked={config.uploadConsent === true} disabled={!account} onChange={event => setConfig({ ...config, uploadConsent: event.target.checked })} /> I authorize this node to upload its input videos to {account?.accountName || "the selected account"} on manual and scheduled runs. I have permission to share them.</label>
+          <p>Up to 32 MiB per video. Move File waits for confirmed inbox delivery from TikTok and successful results from every connected branch. Inbox delivery is not publication.</p>
+        </div> : <GenericNodeSettings settings={config.settings} onChange={(key, value) => setConfig(current => ({ ...current, settings: { ...current.settings, [key]: value } }))} version="TikTok inbox node version 1.0" />}</div>
+      </section><NodeOutputPanel output={output} onExecute={execute} />
+    </div></div></div>;
 }
 
 function YouTubeEditor({ node, previousNode, credentials, onCreateCredential, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
@@ -2340,6 +2378,14 @@ function storeWorkflowLinkage(workflow) {
   const pendingGoogleCredentialNodeId = useRef(null);
   const [showYouTubeCredential, setShowYouTubeCredential] = useState(false);
   const [youtubeCredentials, setYouTubeCredentials] = useState([]);
+  const [tiktokCredentials, setTikTokCredentials] = useState([]);
+  const syncTikTokCredentials = async () => {
+    try { const response = await fetch(`${API_BASE_URL}/api/tiktok/config`, { credentials: "include" });
+      if (!response.ok) { setTikTokCredentials([]); return; }
+      const data = await response.json(); setTikTokCredentials(data.connected && data.accountRef ? [{ id: data.accountRef, accountName: data.accountName, connected: true }] : []);
+    } catch { setTikTokCredentials([]); }
+  };
+  useEffect(() => { syncTikTokCredentials(); const refresh = () => syncTikTokCredentials(); window.addEventListener("focus", refresh); return () => window.removeEventListener("focus", refresh); }, []);
   const [editingYouTubeCredentialId, setEditingYouTubeCredentialId] = useState(null);
   const pendingYouTubeCredentialNodeId = useRef(null);
   const [credentialToast, setCredentialToast] = useState("");
@@ -2910,6 +2956,12 @@ function storeWorkflowLinkage(workflow) {
         };
         return String(node.config.endpoint || "").includes("{{") ? executePerItem(input, executeRead) : executeRead(input);
       }
+      if (node.name === "TikTok") {
+        return executePerItem(input, async (item) => {
+          const response = await fetch(`${API_BASE_URL}/api/tiktok/videos/upload`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-Corex-TikTok": "1" }, body: JSON.stringify(buildTikTokUploadRequest(node.config, item)) });
+          const data = await response.json(); if (!response.ok) throw new Error(data.error || "TikTok inbox upload failed."); return data;
+        });
+      }
       if (node.name === "YouTube") {
         if (!node.config?.credentialId) throw new Error("Select a connected YouTube credential.");
         return executePerItem(input, async (item) => {
@@ -3427,7 +3479,7 @@ function storeWorkflowLinkage(workflow) {
             ["⚙", "Settings"],
             ["〽", "System Health"],
           ].filter(([, label]) => session.role === "admin" || ({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label] && can({ Home: "dashboard", Chat: "conversation", Voice: "voice", Tasks: "tools", "Facebook Control": "dashboard" }[label]))).map(([icon, label]) => (
-            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") navigateTopPage("DASHBOARD", "/"); else if (label === "Facebook Control") navigateTopPage("FACEBOOK CONTROL", "/"); else setMobileMenuOpen(false); }}>
+            <button key={label} type="button" className={visibleTopPage === label.toUpperCase() ? "active" : ""} onClick={() => { if (label === "Home") navigateTopPage("DASHBOARD", "/"); else if (label === "TikTok") window.location.assign("/tiktok"); else if (label === "Facebook Control") navigateTopPage("FACEBOOK CONTROL", "/"); else setMobileMenuOpen(false); }}>
               <span>{icon}</span>
               {label}
             </button>
@@ -3648,7 +3700,7 @@ function storeWorkflowLinkage(workflow) {
 
                       {canvasNodes.map(
                         (node, index) => {
-                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured });
+                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, youtubeCredentials, tiktokCredentials, openAIConfigured });
                           const borderState = nodeBorderVisualState(node, isWorkflowRunning, health); const candidate = connectionDrag && validateConnectionCandidate(canvasNodes, connections, connectionDrag.sourceId, node.id); const inputState = candidate?.ok ? " connection-target-valid" : connectionDrag?.targetId === node.id ? " connection-target-invalid" : ""; const outputState = connectionDrag?.sourceId === node.id ? " connection-source-active" : "";
                           return <div
   key={node.id}
@@ -3890,7 +3942,7 @@ function storeWorkflowLinkage(workflow) {
           </section>
         ) : visibleTopPage === "DASHBOARD" ? (
           <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
-            healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
+            healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, tiktokCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
             onOpenFacebookPages={() => navigateTopPage("FACEBOOK PERFORMANCE", "/facebook-performance")}
             onOpenWorkflow={(workflowId) => { if (!workflowId) { if (can("edit_workflow")) setShowWorkflowManager(true); return; } if (!can("view_workflow")) return; navigateTopPage("WORKFLOW", "/"); if (workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
@@ -3961,6 +4013,8 @@ function storeWorkflowLinkage(workflow) {
           onClose={() => setEditingNode(null)}
         />
       )}
+
+      {editingNode?.name === "TikTok" && <TikTokEditor node={editingNode} previousNode={getPreviousNode(editingNode.id)} credentials={tiktokCredentials} onRefreshCredentials={syncTikTokCredentials} onExecutePreviousNodes={executePreviousNodesFor} onExecuteNode={executeRuntimeNode} onSaveNode={updateCanvasNode} onClose={() => setEditingNode(null)} />}
 
       {editingNode?.name === "YouTube" && (
         <YouTubeEditor

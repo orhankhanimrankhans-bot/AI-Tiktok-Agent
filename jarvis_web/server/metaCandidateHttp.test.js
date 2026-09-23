@@ -59,7 +59,7 @@ test('real HTTP: config CRUD, OAuth callback, Graph use, legacy compatibility an
  assert.equal((await request(a.cookie,'DELETE',`/api/facebook/meta-config?ownerId=${b.data.session.profileId}`)).status,200);assert.equal((await request(b.cookie,'GET','/api/facebook/meta-config')).data.appId,'222222');
  assert.equal((await request(a.cookie,'POST','/api/facebook/graph/me',{credentialId:ca[0].id})).status,200); // owned tokens survive config removal
  const profile=await request(admin.cookie,'POST','/api/security/children',{displayName:'viewer',email:'viewer@example.test',password,permissions:{view_facebook:true}});const viewer=await request(null,'POST','/api/security/login',{role:'additional',profileId:profile.data.id,password});assert.equal((await request(viewer.cookie,'PUT','/api/facebook/meta-config',config('333333'))).status,403);
- const build=await request(null,'GET','/api/system/build');assert.equal(build.status,200);assert.equal(build.data.version,'META-ONLY-2026-09-16-01');assert.match(build.cache,/no-store/);
+ const build=await request(null,'GET','/api/system/build');assert.equal(build.status,200);assert.equal(build.data.version,require('../shared/buildVersion.json').version);assert.match(build.cache,/no-store/);
  const verified=await promisify(execFile)(process.execPath,[path.join(__dirname,'../scripts/verify-corex-build.mjs'),base],{windowsHide:true});assert.equal(JSON.parse(verified.stdout).passed,true);
  assert.doesNotMatch(bodies,/http-private-|appSecret|access_token|refresh_token|session_token|token_ciphertext/);assert.doesNotMatch(logs,/http-private-/);
  const check=new DatabaseSync(dbPath);try{assert.deepEqual(check.prepare('SELECT * FROM facebook_credentials WHERE id=?').get(legacy.id),legacyBefore);}finally{check.close();}

@@ -3,6 +3,9 @@ const { PrepareContentPolicy } = require("./prepareContentPolicy");
 const { trackPrepareContentHttp } = require("./prepareContentHttpDiagnostics");
 const { registerFacebookPageCredentialRoutes } = require("./facebookPageCredentials");
 const express = require("express");
+const { createTikTokWorkflowService } = require("./tiktokWorkflow");
+const { TikTokStore } = require("./tiktokStore");
+const { registerTikTokRoutes } = require("./tiktokRoutes");
 const path = require("path");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -275,6 +278,9 @@ let executionStore;
 let facebookCredentialStore;
 let metaAppConfigStore;
 let accessControlStore;
+let tiktokStore;
+let tiktokWorkflowService;
+registerTikTokRoutes(app, { getStore: () => tiktokStore, getAccessStore: () => accessControlStore, getWorkflowService: () => tiktokWorkflowService, clientUrl: CLIENT_URL });
 let executionServices;
 let facebookExecutionContext;
 let workflowExecutor;
@@ -996,6 +1002,7 @@ async function startServer() {
   executionStore.open();
   accessControlStore = new AccessControlStore({ db: credentialStore.db });
   accessControlStore.open();
+  tiktokStore = new TikTokStore(credentialStore.db, CREDENTIAL_ENCRYPTION_SECRET);
   metaAppConfigStore = new MetaAppConfigStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET, isActive: workspaceActive });
   metaAppConfigStore.open();
   facebookCredentialStore = new FacebookCredentialStore({ db: credentialStore.db, encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
@@ -1007,7 +1014,15 @@ async function startServer() {
   registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: metaWorkspace, facebookCredentialStore, graphServiceFactory: facebookGraphService, publicMetricsService: facebookPublicMetricsService, logger: console });
   facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   const prepareContentPolicy = new PrepareContentPolicy(path.join(path.dirname(JARVIS_DB_PATH), "prepare-content-policy.sqlite3"));
-  executionServices = createExecutionServices({ credentialStore, createOAuthClient, prepareContentPolicy,
+  tiktokWorkflowService = createTikTokWorkflowService({ store: tiktokStore, binaryDirectory: BINARY_DATA_DIR,
+    requireMedia: (reference, owner) => prepareContentPolicy.requireMedia(reference, owner),
+    authorizeOwner: (owner) => {
+      if (accessControlStore.securityState() !== "enabled" || !owner) throw new Error("Authenticated workspace required.");
+      if (owner.ownerType === "admin" && owner.ownerId === "primary") return;
+      const profile = owner.ownerType === "child" ? accessControlStore.childAccount() : accessControlStore.getChild(owner.ownerId);
+      if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now()) || !profile.permissions?.manage_workflow_credentials || !profile.permissions?.run_workflow) throw new Error("TikTok workspace access denied.");
+    } });
+  executionServices = createExecutionServices({ tiktokWorkflowService, credentialStore, createOAuthClient, prepareContentPolicy,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
     createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
     facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL,

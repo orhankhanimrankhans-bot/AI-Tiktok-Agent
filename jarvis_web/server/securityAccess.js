@@ -9,7 +9,7 @@ function loginKey(req, role) { return `${req.ip || req.socket?.remoteAddress || 
 function loginBlocked(key, now = Date.now()) { const value = failures.get(key); if (!value) return false; if (value.lockedUntil > now) return true; if (value.lockedUntil) failures.delete(key); return false; }
 function recordFailure(key, now = Date.now()) { const value = failures.get(key) || { count: 0, lockedUntil: 0 }; value.count += 1; if (value.count >= MAX_FAILURES) { value.count = 0; value.lockedUntil = now + LOCK_MS; } failures.set(key, value); }
 function allowResetRequest(key, now = Date.now()) { const value = resetRequests.get(key); if (!value || now - value.startedAt >= RESET_WINDOW_MS) { resetRequests.set(key, { count: 1, startedAt: now }); return true; } if (value.count >= RESET_MAX) return false; value.count += 1; return true; }
-const STORAGE_NODE_PERMISSIONS = Object.freeze({ "Search Files and Folders": "storage", "Download File": "storage", "Move File": "storage_modify", "Delete File": "storage_modify", YouTube: "storage_modify" });
+const STORAGE_NODE_PERMISSIONS = Object.freeze({ "Search Files and Folders": "storage", "Download File": "storage", "Move File": "storage_modify", "Delete File": "storage_modify", YouTube: "storage_modify", TikTok: "manage_workflow_credentials" });
 function requiredPermissions(req) {
   const permissions = [];
   if (req.path === "/api/workflow-executions/run") {

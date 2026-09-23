@@ -16,7 +16,7 @@ export default function TermsOfService() {
       <article className="privacy-card">
         <p className="privacy-kicker">PUBLIC POLICY</p>
         <h1>Terms of Service</h1>
-        <p className="privacy-updated">Last updated: August 11, 2026</p>
+        <p className="privacy-updated">Last updated: September 23, 2026</p>
 
         <p>
           These Terms of Service govern your use of COREX. By using COREX, you agree to these
@@ -46,6 +46,17 @@ export default function TermsOfService() {
             You are responsible for content generated, uploaded, published, or otherwise managed
             through COREX. You must ensure that your content complies with applicable laws and
             the policies of each connected service.
+          </p>
+        </section>
+
+        <section>
+          <h2>TikTok Uploads</h2>
+          <p>
+            You must consent before Corex sends videos to your TikTok inbox, either by reviewing
+            a selected video or by authorizing the input videos of a manual or scheduled workflow
+            node. Complete editing, post settings, and publication in TikTok. Transfer acceptance
+            does not guarantee publication. You are responsible for obtaining rights to the video,
+            audio, and other materials you upload and for complying with TikTok policies.
           </p>
         </section>
 
@@ -92,7 +103,7 @@ export default function TermsOfService() {
         <section>
           <h2>Contact</h2>
           <p>
-            If you have questions about these Terms of Service, please contact the COREX operator.
+            If you have questions about these Terms of Service, please contact the COREX operator at <a href="mailto:muhammadkazimamzksa@gmail.com">muhammadkazimamzksa@gmail.com</a>.
           </p>
         </section>
 
