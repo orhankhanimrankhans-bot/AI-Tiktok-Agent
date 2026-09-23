@@ -64,8 +64,9 @@ export default function PrivacyPolicy() {
             Corex stores your TikTok account identifier, display name, granted permissions, and
             encrypted access and refresh tokens in your workspace. After you preview a selected
             video and explicitly consent, Corex transfers it to TikTok. You may also authorize a
-            TikTok workflow node to send its input videos on manual or scheduled runs. You finish editing and
-            posting through your TikTok inbox. This flow does not publish automatically.
+            TikTok workflow node to send its input videos on manual or scheduled runs. Inbox uploads
+            are finished in TikTok. Where Direct Post is enabled, you review and approve each video's
+            caption, privacy and other settings before a manual or scheduled run publishes it.
             TikTok processes received content under its own policies.
           </p>
           <p>
@@ -73,6 +74,8 @@ export default function PrivacyPolicy() {
             for transfer, without saving a video file. Workflow videos use the existing workspace-owned
             downloaded media storage and retention controls. Upload identifiers, file fingerprints for
             duplicate detection, timestamps, and status are retained until you disconnect TikTok.
+            Direct Post also retains the approved caption, settings and consent record. For approved
+            Direct Posts, TikTok retrieves the video through an expiring, single-video link.
             Disconnecting removes those account and upload records from Corex and attempts to
             revoke access. If revocation fails, revoke Corex access in TikTok account settings.
           </p>

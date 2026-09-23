@@ -8,7 +8,8 @@ function configFromEnv(env = process.env) {
   const redirectUri = env.TIKTOK_REDIRECT_URI || "";
   let valid = false;
   try { const url = new URL(redirectUri); valid = url.protocol === "https:" && !url.search && !url.hash && !url.username && !url.password && url.pathname === "/api/tiktok/auth/callback"; } catch { /* unavailable */ }
-  return { clientKey, clientSecret, redirectUri, configured: Boolean(clientKey && clientSecret && valid) };
+  return { clientKey, clientSecret, redirectUri, configured: Boolean(clientKey && clientSecret && valid),
+    directPostEnabled: env.TIKTOK_DIRECT_POST_ENABLED !== "false", directPostPublicEnabled: env.TIKTOK_DIRECT_POST_PUBLIC_ENABLED === "true" };
 }
 function validateVideo(buffer, type) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 12 || buffer.length > MAX_VIDEO_BYTES) throw new TikTokError("invalid_video", "Choose a video up to 32 MiB.");
@@ -30,6 +31,8 @@ class TikTokApi {
     } catch { throw new TikTokError("tiktok_unavailable", "TikTok did not return a usable response. Check status before retrying an upload.", 502); }
     const code = typeof result.error === "string" ? result.error : result.error?.code;
     if (!response.ok || (code && code !== "ok")) {
+      const directErrors = { unaudited_client_can_only_post_to_private_accounts: "TikTok requires a private account for unaudited Direct Post testing.", url_ownership_unverified: "Verify the Corex video URL domain in this TikTok app before Direct Post testing.", privacy_level_option_mismatch: "TikTok privacy options changed. Review your post again.", reached_active_user_cap: "TikTok's active-user limit was reached. Try later.", spam_risk_too_many_posts: "TikTok's posting limit was reached. Try later." };
+      if (directErrors[code]) throw new TikTokError(`tiktok_${code}`, directErrors[code], 409);
       const known = ["access_token_invalid", "scope_not_authorized", "rate_limit_exceeded", "spam_risk_too_many_pending_share", "invalid_grant"];
       throw new TikTokError(known.includes(code) ? code : "tiktok_request_failed", "TikTok rejected the request. Check your connection, app permissions, and pending uploads.", 502);
     }

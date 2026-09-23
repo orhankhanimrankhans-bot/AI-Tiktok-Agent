@@ -89,6 +89,15 @@ test("TikTok joins YouTube and Facebook with workspace ownership and an all-prov
   assert.equal(calls.filter(([name])=>name==="move").length,inboxStatus==="SEND_TO_USER_INBOX"?1:0);
  }
 });
+test("Direct Post joins other publishers and archives only PUBLISH_COMPLETE",async()=>{
+ for(const postStatus of ["PUBLISH_COMPLETE","SEND_TO_USER_INBOX","PROCESSING_DOWNLOAD","FAILED"]){
+  const calls=[],svc=itemServices(calls);
+  svc.youtube.uploadVideo=async request=>({success:true,videoId:"yt",sourceFileId:request.sourceFileId});
+  svc.tiktok={uploadVideo:async request=>{assert.equal(request.operation,"Direct Post");return {success:true,provider:"tiktok",status:"direct_published",published:true,uploadId:"job",postStatus,sourceFileId:request.sourceFileId};}};
+  const result=await createWorkflowExecutor({executionServices:svc,logger:{error(){}}}).execute({workflowId:"direct-triple",triggerMode:"schedule",nodes:[...dualPublisherNodes,{id:"tt",name:"TikTok",config:{operation:"Direct Post"}}],connections:[...dualPublisherLinks,{source:"p",target:"tt"},{source:"tt",target:"m"}]});
+  assert.equal(result.status,postStatus==="PUBLISH_COMPLETE"?"success":"error");assert.equal(calls.filter(([name])=>name==="move").length,postStatus==="PUBLISH_COMPLETE"?1:0);
+ }
+});
 test("linear TikTok sends input and workspace and archives only confirmed inbox delivery", async()=>{
  const calls=[],svc=itemServices(calls),owner={ownerType:"admin",ownerId:"primary"};
  svc.tiktok={uploadVideo:async(request,actual)=>{assert.deepEqual(actual,owner);return {success:true,provider:"tiktok",status:"inbox_uploaded",uploadId:"job",inboxStatus:"SEND_TO_USER_INBOX",sourceFileId:request.sourceFileId};}};

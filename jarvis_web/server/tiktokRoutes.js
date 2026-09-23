@@ -7,6 +7,17 @@ const { workflowWorkspace, sessionIdentity, hasPermission } = require("./accessC
 function registerTikTokRoutes(app, { getStore, getAccessStore, getWorkflowService, clientUrl, config = configFromEnv(), api = new TikTokApi(config) }) {
   const router = express.Router(), origin = new URL(clientUrl).origin;
   const configHash = hash(JSON.stringify([config.clientKey, config.clientSecret, config.redirectUri]));
+  // A narrowly scoped, expiring video capability is the only unauthenticated route.
+  // It is issued only after explicit approval and is never a directory/file lookup.
+  router.get("/media/:token", async (req, res) => {
+    res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" });
+    try {
+      const service = getWorkflowService?.()?.direct;
+      if (!service) return res.sendStatus(404);
+      const value = await service.publicMedia(req.params.token);
+      res.type(value.mime).send(value.bytes);
+    } catch { res.sendStatus(404); }
+  });
   router.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     const security = getAccessStore();
@@ -35,6 +46,8 @@ function registerTikTokRoutes(app, { getStore, getAccessStore, getWorkflowServic
   router.get("/config", (req, res) => {
     const value = getStore().account(req.tiktokOwner);
     res.json({ configured: config.configured, redirectUri: config.redirectUri, maxVideoBytes: MAX_VIDEO_BYTES,
+      directPostEnabled: config.directPostEnabled === true, directPostPublicEnabled: config.directPostPublicEnabled === true,
+      directPostAuthorized: value?.configHash === configHash && String(value.scopes || "").split(",").includes("video.publish"),
       connected: Boolean(value && value.configHash === configHash), accountName: value?.configHash === configHash ? value.displayName : "",
       accountRef: value?.configHash === configHash ? hash(value.openId + configHash) : "",
       uploads: getStore().recent(req.tiktokOwner) });
@@ -43,7 +56,9 @@ function registerTikTokRoutes(app, { getStore, getAccessStore, getWorkflowServic
     ready();
     const state = getStore().begin(req.tiktokOwner, req.sessionID, configHash);
     const url = new URL("https://www.tiktok.com/v2/auth/authorize/");
-    url.search = new URLSearchParams({ client_key: config.clientKey, response_type: "code", scope: "user.info.basic,video.upload", redirect_uri: config.redirectUri, state, disable_auto_auth: "1" }).toString();
+    const direct = req.body?.directPost === true;
+    if (direct && !config.directPostEnabled) throw new TikTokError("direct_disabled", "Enable Direct Post testing on the server first.");
+    url.search = new URLSearchParams({ client_key: config.clientKey, response_type: "code", scope: direct ? "user.info.basic,video.upload,video.publish" : "user.info.basic,video.upload", redirect_uri: config.redirectUri, state, disable_auto_auth: "1" }).toString();
     res.json({ url: url.href });
   });
   router.get("/auth/callback", locked, async (req, res) => {
@@ -64,6 +79,7 @@ function registerTikTokRoutes(app, { getStore, getAccessStore, getWorkflowServic
     if (value && config.configured && value.configHash === configHash) {
       try { await api.request("oauth/revoke/", { form: { client_key: config.clientKey, client_secret: config.clientSecret, token: value.accessToken } }); revoked = true; } catch { /* local removal still works */ }
     }
+    getWorkflowService?.()?.direct?.remove(req.tiktokOwner);
     getStore().remove(req.tiktokOwner);
     res.json({ disconnected: true, revoked, message: revoked ? "Disconnected." : "Removed from Corex. Also revoke Corex access in TikTok account settings; remote revocation could not be confirmed." });
   });
@@ -71,6 +87,20 @@ function registerTikTokRoutes(app, { getStore, getAccessStore, getWorkflowServic
     if (!getWorkflowService?.()) throw new TikTokError("tiktok_not_ready", "TikTok workflow service is unavailable.", 503);
     res.json(await getWorkflowService().uploadVideo(req.body, req.tiktokOwner));
   });
+  const direct = () => {
+    const service = getWorkflowService?.()?.direct;
+    if (!service) throw new TikTokError("tiktok_not_ready", "Direct Post service is unavailable.", 503);
+    return service;
+  };
+  router.post("/direct/review", locked, async (req, res) => res.json(await direct().review(req.body, req.tiktokOwner)));
+  router.get("/direct/reviews/:id/preview", async (req, res) => {
+    const value = await direct().preview(req.tiktokOwner, req.params.id);
+    res.set("X-Content-Type-Options", "nosniff").type(value.mime).send(value.bytes);
+  });
+  router.post("/direct/approve", locked, async (req, res) => res.json(await direct().approve(req.body, req.tiktokOwner)));
+  router.get("/direct/posts", (req, res) => res.json({ posts: direct().recent(req.tiktokOwner) }));
+  router.post("/direct/posts/:id/cancel", locked, (req, res) => res.json(direct().cancel(req.tiktokOwner, req.params.id)));
+  router.post("/direct/posts/:id/status", locked, async (req, res) => res.json(await direct().status(req.tiktokOwner, req.params.id)));
   router.post("/uploads", locked, (req, res, next) => {
     ready(); const selectedAccount = account(req.tiktokOwner);
     if (req.get("X-TikTok-Account") !== hash(selectedAccount.openId + configHash)) throw new TikTokError("account_changed", "The connected account changed. Reload, review the account, and consent again.", 409);

@@ -2,6 +2,7 @@
 const fs = require("node:fs/promises"), path = require("node:path"), crypto = require("node:crypto");
 const { TikTokApi, TikTokError, configFromEnv, MAX_VIDEO_BYTES, validateVideo } = require("./tiktokApi");
 const { hash } = require("./tiktokStore");
+const { createTikTokDirectService } = require("./tiktokDirect");
 
 function createTikTokWorkflowService({ store, binaryDirectory, requireMedia, authorizeOwner, config = configFromEnv(), api = new TikTokApi(config), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   const configHash = hash(JSON.stringify([config.clientKey, config.clientSecret, config.redirectUri]));
@@ -14,6 +15,7 @@ function createTikTokWorkflowService({ store, binaryDirectory, requireMedia, aut
     return value;
   }
   async function uploadVideo(request, owner) {
+    if (request?.operation === "Direct Post") return direct.publish(request, owner);
     let account = connected(owner, request?.credentialId);
     if (request?.operation !== "Upload to Inbox" || request?.uploadConsent !== true) fail("consent_required", "Open the TikTok node and authorize sending its videos to your TikTok inbox.");
     const reference = String(request.binary?.referenceId || ""), property = String(request.binaryProperty || "data");
@@ -67,6 +69,7 @@ function createTikTokWorkflowService({ store, binaryDirectory, requireMedia, aut
       fail("upload_error", "TikTok upload could not be completed. Check upload status before retrying.", 502);
     } finally { store.unlock(owner); }
   }
-  return { uploadVideo, connected };
+  const direct = createTikTokDirectService({ store, api, config, binaryDirectory, requireMedia, connected, sleep });
+  return { uploadVideo, connected, direct };
 }
 module.exports = { createTikTokWorkflowService };

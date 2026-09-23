@@ -40,6 +40,7 @@ import { CANVAS_APPEARANCE_KEY, appearanceCssVariables, canvasBackground,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
 import TikTokCredentialModal from "./TikTokCredentialModal.jsx";
+import TikTokDirectReview from "./TikTokDirectReview.jsx";
 import { buildTikTokUploadRequest, tiktokNodeDefaults, TIKTOK_OPERATION } from "./tiktokConfig.js";
 import { buildYouTubeUploadRequest, YOUTUBE_OPERATION_UPLOAD, YOUTUBE_PRIVACY_STATUSES, youtubeCredentialLabel, youtubeNodeDefaults } from "./youtubeConfig.js";
 
@@ -133,7 +134,7 @@ const NODE_LIBRARY = [
     icon: "f",
   },
   {
-    id: "tiktok-upload", provider: "TikTok", name: "TikTok", description: "Upload a downloaded video to TikTok inbox; finish posting in TikTok", type: "ACTION", icon: "♪",
+    id: "tiktok-upload", provider: "TikTok", name: "TikTok", description: "Upload to TikTok inbox or review a video for Direct Post", type: "ACTION", icon: "♪",
   },
   {
     id: "youtube-upload",
@@ -2136,15 +2137,15 @@ function TikTokEditor({ node, previousNode, credentials, onRefreshCredentials, o
     <header className="node-editor-header"><div className="node-editor-title"><TikTokIcon className="facebook-title-icon" /><strong>TikTok</strong></div><button className="node-editor-close" onClick={close}>×</button></header>
     <div className="node-editor-body google-three-column">
       <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
-      <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map(tab => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" disabled={busy || !account || !config.uploadConsent} onClick={execute}>{busy ? "Uploading…" : "Execute step"}</button></div>
+      <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map(tab => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" disabled={busy || !account || (config.operation !== "Direct Post" && !config.uploadConsent)} onClick={execute}>{busy ? "Uploading…" : "Execute step"}</button></div>
         <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
           <label>Credential</label><div className="credential-row"><select aria-label="TikTok credential" value={config.credentialId} onChange={event => event.target.value === "__create__" ? setShowCredential(true) : setConfig({ ...config, credentialId: event.target.value, uploadConsent: false })}><option value="">Select credential</option>{credentials.map(item => <option key={item.id} value={item.id}>{item.accountName} &middot; TikTok</option>)}<option value="__create__">+ Create new credential</option></select><button type="button" className="credential-button" aria-label="Edit TikTok credential" onClick={() => setShowCredential(true)}>&#9998;</button></div>
-          <label>Operation</label><select value={config.operation} disabled><option>{TIKTOK_OPERATION}</option></select>
+          <label>Operation</label><select value={config.operation} onChange={event => setConfig({ ...config, operation: event.target.value, uploadConsent: false })}><option>{TIKTOK_OPERATION}</option><option>Direct Post</option></select>
           <label>Binary Property</label><input value={config.binaryProperty} onChange={event => setConfig({ ...config, binaryProperty: event.target.value, uploadConsent: false })} placeholder="data" />
-          <p>Connect Download File or Prepare Content to this node. Each video is sent to the selected account's TikTok inbox. Open its inbox notification in TikTok to edit your caption, choose settings, and publish.</p>
+          {config.operation === "Direct Post" ? <TikTokDirectReview key={`${config.credentialId}:${config.binaryProperty}`} config={config} input={input} apiBaseUrl={API_BASE_URL} /> : <><p>Connect Download File or Prepare Content to this node. Each video is sent to the selected account's TikTok inbox. Open its inbox notification in TikTok to edit your caption, choose settings, and publish.</p>
           <label><input type="checkbox" checked={config.uploadConsent === true} disabled={!account} onChange={event => setConfig({ ...config, uploadConsent: event.target.checked })} /> I authorize this node to upload its input videos to {account?.accountName || "the selected account"} on manual and scheduled runs. I have permission to share them.</label>
-          <p>Up to 32 MiB per video. Move File waits for confirmed inbox delivery from TikTok and successful results from every connected branch. Inbox delivery is not publication.</p>
-        </div> : <GenericNodeSettings settings={config.settings} onChange={(key, value) => setConfig(current => ({ ...current, settings: { ...current.settings, [key]: value } }))} version="TikTok inbox node version 1.0" />}</div>
+          <p>Up to 32 MiB per video. Move File waits for confirmed inbox delivery from TikTok and successful results from every connected branch. Inbox delivery is not publication.</p></>}
+        </div> : <GenericNodeSettings settings={config.settings} onChange={(key, value) => setConfig(current => ({ ...current, settings: { ...current.settings, [key]: value } }))} version="TikTok node version 2.0" />}</div>
       </section><NodeOutputPanel output={output} onExecute={execute} />
     </div></div>{showCredential && <TikTokCredentialModal apiBaseUrl={API_BASE_URL} icon={<TikTokIcon className="drive-provider-logo" />} onClose={() => setShowCredential(false)} onRefreshCredentials={onRefreshCredentials} onSave={credentialId => { setConfig(current => ({ ...current, credentialId, uploadConsent: false })); setShowCredential(false); }} />}</div>;
 }
@@ -2959,7 +2960,7 @@ function storeWorkflowLinkage(workflow) {
       if (node.name === "TikTok") {
         return executePerItem(input, async (item) => {
           const response = await fetch(`${API_BASE_URL}/api/tiktok/videos/upload`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-Corex-TikTok": "1" }, body: JSON.stringify(buildTikTokUploadRequest(node.config, item)) });
-          const data = await response.json(); if (!response.ok) throw new Error(data.error || "TikTok inbox upload failed."); return data;
+          const data = await response.json(); if (!response.ok) throw new Error(data.error || "TikTok posting request failed."); return data;
         });
       }
       if (node.name === "YouTube") {

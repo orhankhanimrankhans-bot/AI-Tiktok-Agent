@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import {buildTikTokUploadRequest,tiktokNodeDefaults} from "./tiktokConfig.js";
 import {buildArchiveMoveRequest} from "./postPublishArchive.js";
 import {validateConnectionCandidate,nodeConnectionHealth} from "./workflowCanvas.js";
+test("Direct Post preserves operation and archives only a completed publication",()=>{
+ const config={...tiktokNodeDefaults(),operation:"Direct Post",credentialId:"a".repeat(64)};
+ const request=buildTikTokUploadRequest(config,{fileId:"drive",binary:{property:"data",referenceId:"bin_abcdefghijklmnopqrstuv"}});
+ assert.equal(request.operation,"Direct Post");assert.equal(request.uploadConsent,false);
+ const move={credentialId:"g",fileId:"{{ $json.sourceFileId }}",destinationFolderId:"done"};
+ const result={success:true,provider:"tiktok",status:"direct_published",published:true,postStatus:"PUBLISH_COMPLETE",uploadId:"id",sourceFileId:"drive"};
+ assert.equal(buildArchiveMoveRequest(move,result).fileId,"drive");
+ for(const patch of [{published:false},{postStatus:"PROCESSING_DOWNLOAD"},{postStatus:"SEND_TO_USER_INBOX"},{uploadId:""}])assert.throws(()=>buildArchiveMoveRequest(move,{...result,...patch}));
+});
 test("TikTok config requires explicit consent, account and downloaded media",()=>{
  const config={...tiktokNodeDefaults(),credentialId:"a".repeat(64),uploadConsent:true};
  const item={fileId:"drive",binary:{property:"data",referenceId:"bin_abcdefghijklmnopqrstuv"}};

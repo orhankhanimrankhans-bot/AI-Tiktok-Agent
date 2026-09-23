@@ -36,13 +36,13 @@ export default function TikTokCredentialModal({ apiBaseUrl = "", icon, onClose, 
     document.addEventListener("keydown", escape, true);
     return () => document.removeEventListener("keydown", escape, true);
   }, [onClose]);
-  const connect = async () => {
+  const connect = async (directPost = false) => {
     if (pending.current) return;
     const opened = window.open("", "corex-tiktok-oauth", "popup,width=620,height=740");
     if (!opened) { setMessage("Allow popups for Corex, then sign in again."); return; }
     popup.current = opened; pending.current = true; setBusy(true); setMessage("Complete sign-in in the TikTok window.");
     try {
-      const result = await request("/auth/start", {});
+      const result = await request("/auth/start", { directPost: directPost === true });
       const url = new URL(result.url);
       if (url.origin !== "https://www.tiktok.com" || url.pathname !== "/v2/auth/authorize/") throw new Error("TikTok returned an invalid sign-in address.");
       if (popup.current === opened && !opened.closed) opened.location.assign(url.href);
@@ -59,11 +59,11 @@ export default function TikTokCredentialModal({ apiBaseUrl = "", icon, onClose, 
     <div className="credential-modal-body"><aside className="credential-tabs">{["Connection", "Details"].map(value => <button type="button" key={value} className={tab === value ? "credential-tab-active" : ""} onClick={() => setTab(value)}>{value}</button>)}</aside>
       <section className="credential-content google-credential-content">{tab === "Connection" ? <>
         <div className="credential-content-top"><h3>Setup credential</h3><select aria-label="Authentication method" value="oauth2" disabled><option value="oauth2">Managed OAuth2</option></select></div>
-        {config?.connected ? <div className="credential-connected"><span>✓</span><strong>Account connected · {config.accountName}</strong><div><button type="button" disabled={busy} onClick={connect}>Reconnect</button><button type="button" className="disconnect-button" disabled={busy} onClick={disconnect}>Disconnect</button></div></div> : <div className="credential-warning"><span>!</span><span>{!config ? "Checking connection…" : config.configured ? "Connect your account to use this credential" : "TikTok app is not configured on this server."}</span><button type="button" disabled={busy || !config?.configured} onClick={connect}>Sign in with TikTok</button></div>}
+        {config?.connected ? <div className="credential-connected"><span>✓</span><strong>Account connected · {config.accountName}</strong><div><button type="button" disabled={busy} onClick={() => connect(false)}>Reconnect</button><button type="button" className="disconnect-button" disabled={busy} onClick={disconnect}>Disconnect</button></div></div> : <div className="credential-warning"><span>!</span><span>{!config ? "Checking connection…" : config.configured ? "Connect your account to use this credential" : "TikTok app is not configured on this server."}</span><button type="button" disabled={busy || !config?.configured} onClick={() => connect(false)}>Sign in with TikTok</button></div>}
         <button type="button" disabled={busy} onClick={() => refresh().catch(error => setMessage(error.message))}>Refresh connection</button>
-        <div className="credential-note">Your account is private to this Corex workspace. Videos are sent to your TikTok inbox, where you finish editing and posting.</div>
+        <div className="credential-note">This connection is private to your Corex workspace. The node operation determines inbox upload or reviewed Direct Post.</div>{config?.directPostEnabled && <><p>{config.directPostAuthorized ? "Direct Post permission granted." : "Reconnect to grant video.publish for Direct Post testing."}</p><button type="button" disabled={busy} onClick={() => connect(true)}>Connect with Direct Post permission</button></>}
         <div className="credential-note">OAuth tokens are stored on the Corex backend, not in this browser.</div>
-      </> : <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Provider</dt><dd>TikTok</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{config?.connected ? "Connected" : "Not connected"}</dd></div><div><dt>Account</dt><dd>{config?.accountName || "Not connected"}</dd></div><div><dt>Operation</dt><dd>Upload to Inbox</dd></div><div><dt>Workspace</dt><dd>Private · one connected TikTok account</dd></div></dl></div>}
+      </> : <div className="credential-metadata-panel"><h3>Credential details</h3><dl><div><dt>Provider</dt><dd>TikTok</dd></div><div><dt>Credential type</dt><dd>OAuth2</dd></div><div><dt>Status</dt><dd>{config?.connected ? "Connected" : "Not connected"}</dd></div><div><dt>Account</dt><dd>{config?.accountName || "Not connected"}</dd></div><div><dt>Operations</dt><dd>Inbox upload; Direct Post when enabled and authorized</dd></div><div><dt>Workspace</dt><dd>Private · one connected TikTok account</dd></div></dl></div>}
       {message && <div className="credential-backend-status" role="status">{message}</div>}</section>
     </div></div></div>;
 }

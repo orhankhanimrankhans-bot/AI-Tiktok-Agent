@@ -54,7 +54,10 @@ export default function TermsOfService() {
           <p>
             You must consent before Corex sends videos to your TikTok inbox, either by reviewing
             a selected video or by authorizing the input videos of a manual or scheduled workflow
-            node. Complete editing, post settings, and publication in TikTok. Transfer acceptance
+            node. Complete inbox-upload editing, post settings, and publication in TikTok. Direct Post,
+            when enabled, requires review and approval of the exact video, caption and settings before
+            a manual or scheduled publication. Public availability depends on TikTok permissions.
+            Transfer acceptance
             does not guarantee publication. You are responsible for obtaining rights to the video,
             audio, and other materials you upload and for complying with TikTok policies.
           </p>
