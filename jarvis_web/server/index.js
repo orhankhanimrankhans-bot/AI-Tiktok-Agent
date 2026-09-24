@@ -6,6 +6,9 @@ const express = require("express");
 const { createTikTokWorkflowService } = require("./tiktokWorkflow");
 const { TikTokStore } = require("./tiktokStore");
 const { registerTikTokRoutes } = require("./tiktokRoutes");
+const { registerFacebookTikTokRoutes } = require("./facebookTikTokRoutes");
+const { createFacebookTikTokCrosspost } = require("./facebookTikTokCrosspost");
+const { createFacebookTikTokSource } = require("./facebookTikTokSource");
 const path = require("path");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -280,6 +283,8 @@ let metaAppConfigStore;
 let accessControlStore;
 let tiktokStore;
 let tiktokWorkflowService;
+let facebookTikTokCrosspost;
+registerFacebookTikTokRoutes(app, { getService: () => facebookTikTokCrosspost, getAccessStore: () => accessControlStore, clientUrl: CLIENT_URL });
 registerTikTokRoutes(app, { getStore: () => tiktokStore, getAccessStore: () => accessControlStore, getWorkflowService: () => tiktokWorkflowService, clientUrl: CLIENT_URL });
 let executionServices;
 let facebookExecutionContext;
@@ -1022,6 +1027,17 @@ async function startServer() {
       const profile = owner.ownerType === "child" ? accessControlStore.childAccount() : accessControlStore.getChild(owner.ownerId);
       if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now()) || !profile.permissions?.manage_workflow_credentials || !profile.permissions?.run_workflow) throw new Error("TikTok workspace access denied.");
     } });
+  facebookTikTokCrosspost = createFacebookTikTokCrosspost({ db: tiktokStore.db,
+    source: createFacebookTikTokSource({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService }),
+    tiktok: tiktokWorkflowService, binaryDirectory: BINARY_DATA_DIR,
+    registerMedia: (result, owner) => prepareContentPolicy.register(result, owner),
+    authorize: owner => {
+      if (accessControlStore.securityState() !== "enabled" || !owner) throw new Error("Authenticated workspace required.");
+      if (owner.ownerType === "admin" && owner.ownerId === "primary") return;
+      const profile = owner.ownerType === "child" ? accessControlStore.childAccount() : owner.ownerType === "additional" ? accessControlStore.getChild(owner.ownerId) : null;
+      if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now())
+        || !["view_facebook", "manage_workflow_credentials", "run_workflow"].every(p => profile.permissions?.[p])) throw new Error("Crossposting workspace access denied.");
+    } });
   executionServices = createExecutionServices({ tiktokWorkflowService, credentialStore, createOAuthClient, prepareContentPolicy,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
     createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
@@ -1049,6 +1065,7 @@ async function startServer() {
     workflowScheduler.start();
     facebookVerificationWorker.start();
     facebookPublicScanScheduler.start();
+    facebookTikTokCrosspost.start();
     console.log("");
     console.log("=================================");
     console.log(" COREX BACKEND");
@@ -1068,6 +1085,7 @@ async function startServer() {
     workflowScheduler.stop();
     facebookVerificationWorker.stop();
     facebookPublicScanScheduler?.stop();
+    facebookTikTokCrosspost?.stop();
     process.exitCode = 1;
   });
   return server;

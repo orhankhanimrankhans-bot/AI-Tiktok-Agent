@@ -58,6 +58,7 @@ export default function TikTokUpload() {
   });
   return <main className="tiktok-page">
     <header><a href="/">← Back to Corex</a><span>COREX / TIKTOK</span></header>
+    <p><a href="/tiktok/crosspost">Facebook → TikTok crossposting</a></p>
     <section className="tiktok-card"><p className="tiktok-eyebrow">SHARE YOUR VIDEO</p><h1>Upload to TikTok</h1>
       <p>Preview your video and send it to your connected TikTok account. Open the inbox notification in TikTok to edit the caption, choose post settings, and publish.</p>
       {!allowed ? <p role="alert">Your Corex session needs account connection and workflow execution permissions.</p> : <>
