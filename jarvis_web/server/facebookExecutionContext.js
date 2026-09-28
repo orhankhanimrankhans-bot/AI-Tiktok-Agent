@@ -48,7 +48,7 @@ function validateGraphOperation({ credentialId, method, endpoint, body, query },
   if (query && Object.keys(query).length) throw graphRequestError(400, "unsupported_graph_query", "Unsupported Facebook Graph query.");
 }
 
-function createFacebookExecutionContext({ credentialStore, graphServiceFactory, publishPageReel, publicationStore, binaryDirectory, binaryResolver, validateCredentialId = () => true, logger = console }) {
+function createFacebookExecutionContext({ credentialStore, graphServiceFactory, publishPageReel, publicationStore, duplicateGuard, binaryDirectory, binaryResolver, validateCredentialId = () => true, logger = console }) {
   required("credentialStore", credentialStore); required("graphServiceFactory", graphServiceFactory); required("publishPageReel", publishPageReel); required("binaryDirectory", binaryDirectory);
   function resolveBinaryReference(referenceId) {
     return binaryResolver ? binaryResolver(referenceId) : { referenceId, binaryDirectory };
@@ -91,8 +91,8 @@ function createFacebookExecutionContext({ credentialStore, graphServiceFactory, 
       throw graphRequestError(400, "missing_binary_reference", "Binary property data does not contain a valid downloaded file reference.");
     }
     const result = await publishPageReel({ request: input, service: graphServiceFactory(owner, credential), credential,
-      binaryDir: binary.binaryDirectory || binaryDirectory });
-    if (result?.success === true && publicationStore) publicationStore.create({ ...result, ...source, owner,
+      binaryDir: binary.binaryDirectory || binaryDirectory, duplicateGuard, owner });
+    if (result?.success === true && !result.duplicateBlocked && publicationStore) publicationStore.create({ ...result, ...source, owner,
       executionId: input.executionId, workflowId: input.workflowId, workflowName: input.workflowName, triggerMode: input.triggerMode,
       credentialId: credential.id, authMode: credential.authMode === "manual_access_token" ? "manual_token" : "managed_oauth",
       status: result.publicationVerificationStatus, snapshots: [{ checkedAt: result.publishedAt || result.submittedAt,

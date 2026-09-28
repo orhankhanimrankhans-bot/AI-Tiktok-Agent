@@ -214,7 +214,30 @@ async function publishPageReel(options) {
     fileName: options.request.fileName, mimeType: options.request.mimeType });
   const title = cleanText(options.request.title, "title", 255); const description = cleanText(options.request.description, "description", 63206);
   const page = await pageContext(options.service, options.credential);
+  const guard = options.duplicateGuard;
+  const claim = guard ? await guard.claim(options.owner, page.pageId, options.request.sourceFileId, file.filePath) : null;
+  if (claim && !claim.acquired) {
+    if (claim.result_json) {
+      const previous = JSON.parse(claim.result_json);
+      if (previous.status === "published") return { ...previous, duplicateBlocked: true, code: "DUPLICATE_ALREADY_POSTED" };
+    }
+    if (!claim.video_id) throw guard.blocked();
+    // Status-only recovery handles processing timeouts and submissions imported
+    // from existing history. Never initialize or finish another upload here.
+    const status = await options.service.reelStatus(page.token, claim.video_id);
+    if (!published(status)) throw guard.blocked();
+    const verification = verificationFromStatus(status);
+    const previous = { success: true, status: "published", videoId: claim.video_id,
+      pageId: page.pageId, pageName: page.pageName, expectedPageId: page.pageId,
+      resolvedPageId: page.pageId, pageIdentityVerified: true,
+      publicationVerificationStatus: verification.status, metaVerification: verification.metaVerification,
+      finalProcessingState: verification.finalProcessingState, copyrightState: verification.copyrightState,
+      publicAudienceCheck: "manual_check_required", duplicateBlocked: true, code: "DUPLICATE_ALREADY_POSTED" };
+    guard.complete(claim.id, previous);
+    return previous;
+  }
   const session = await options.service.startPageReelUpload(page.token);
+  if (claim) guard.video(claim.id, session.videoId);
   await uploadVideo({ fetchImpl: options.uploadFetch || fetch, uploadUrl: session.uploadUrl, token: page.token,
     filePath: file.filePath, size: file.size, timeoutMs: options.uploadTimeoutMs });
   await options.service.finishPageReelUpload(page.token, { videoId: session.videoId, title, description });
@@ -232,12 +255,14 @@ async function publishPageReel(options) {
         metaVerification: unavailable ? "unavailable" : "failed", finalProcessingState: "published", copyrightState: null };
     }
   }
-  return { success: true, videoId: session.videoId, pageId: page.pageId, pageName: page.pageName,
+  const result = { success: true, videoId: session.videoId, pageId: page.pageId, pageName: page.pageName,
     expectedPageId: String(options.credential.pageId), resolvedPageId: page.pageId, pageIdentityVerified: true,
     fileName: file.fileName, status: wait ? "published" : "submitted", publicationVerificationStatus: verification.status,
     metaVerification: verification.metaVerification, publicAudienceCheck: "manual_check_required",
     finalProcessingState: verification.finalProcessingState, copyrightState: verification.copyrightState,
     submittedAt: options.now ? options.now().toISOString() : new Date().toISOString(), publishedAt: wait ? (options.now ? options.now().toISOString() : new Date().toISOString()) : null };
+  if (claim) guard.complete(claim.id, result);
+  return result;
 }
 
 module.exports = { buildDiagnostic, logReelFailure, pageContext, processingFailed, publishPageReel, published,

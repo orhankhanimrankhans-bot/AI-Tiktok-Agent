@@ -1014,10 +1014,12 @@ async function startServer() {
     legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS });
   facebookCredentialStore.open();
   const facebookPublicationStore = new FacebookPublicationStore(credentialStore.db); facebookPublicationStore.open();
+  const facebookDuplicateGuard = new (require("./facebookDuplicateGuard").FacebookDuplicateGuard)(credentialStore.db);
+  facebookDuplicateGuard.open();
   const facebookControlStore = createFacebookControlStore({ db: credentialStore.db });
   const facebookPublicMetricsService = createFacebookPublicMetricsService({ logger: console });
   registerFacebookControlRoutes(app, { store: facebookControlStore, workspaceForRequest: metaWorkspace, facebookCredentialStore, graphServiceFactory: facebookGraphService, publicMetricsService: facebookPublicMetricsService, logger: console });
-  facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
+  facebookExecutionContext = createFacebookExecutionContext({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, publishPageReel, publicationStore: facebookPublicationStore, duplicateGuard: facebookDuplicateGuard, binaryDirectory: BINARY_DATA_DIR, validateCredentialId: FacebookCredentialStore.isValidId, logger: console });
   const prepareContentPolicy = new PrepareContentPolicy(path.join(path.dirname(JARVIS_DB_PATH), "prepare-content-policy.sqlite3"));
   tiktokWorkflowService = createTikTokWorkflowService({ store: tiktokStore, binaryDirectory: BINARY_DATA_DIR,
     requireMedia: (reference, owner) => prepareContentPolicy.requireMedia(reference, owner),
