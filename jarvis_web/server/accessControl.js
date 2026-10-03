@@ -3,7 +3,7 @@
 const crypto = require("node:crypto");
 
 const DEFAULT_CHILD_PERMISSIONS = Object.freeze({
-  dashboard: false, tools: false, view_workflow: false, edit_workflow: false,
+  dashboard: false, tools: false, view_workflow: false, edit_workflow: false, delete_workflow: false,
   run_workflow: false, publish_facebook: false, view_facebook: false,
   storage: false, storage_modify: false,
 });

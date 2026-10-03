@@ -25,6 +25,20 @@ async function storageFixture(t) {
   return { store, request: async (route, options = {}) => { const response = await fetch(`${base}${route}`, options); return { response, body: await response.json(), cookie: response.headers.get("set-cookie")?.split(";")[0] }; } };
 }
 
+test("Additional Access deletion is explicitly grantable and revocation affects existing sessions", async t => {
+  const {store,request}=await fixture(t);
+  await store.setup("admin secure password",0,"owner@example.test");
+  const profile=await store.createChild({displayName:"Editor",email:"editor@example.test",password:"editor secure password",permissions:{view_workflow:true,edit_workflow:true}});
+  const login=await request("/api/security/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profileId:profile.id,password:"editor secure password"})});
+  const options={method:"DELETE",headers:{cookie:login.cookie}};
+  assert.equal((await request("/api/workflows",options)).response.status,403);
+  const updated=store.updateChild(profile.id,{permissions:{...profile.permissions,delete_workflow:true}});
+  assert.equal(updated.permissions.delete_workflow,true);
+  assert.equal((await request("/api/workflows",options)).response.status,200);
+  store.updateChild(profile.id,{permissions:profile.permissions});
+  assert.equal((await request("/api/workflows",options)).response.status,403);
+});
+
 test("production forwarded HTTPS issues a secure session and preserves Admin API authentication", async (t) => { const { store, request } = await fixture(t, { productionProxy: true }); await store.setup("admin secure password", 0, "owner@example.test"); const login = await request("/api/security/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "admin", password: "admin secure password" }) }); assert.equal(login.response.status, 200); assert.match(login.setCookie, /; Secure/i); assert.match(login.setCookie, /; HttpOnly/i); assert.match(login.setCookie, /; SameSite=Lax/i); const owner = await request("/api/security/owner-account", { headers: { cookie: login.cookie } }); assert.equal(owner.response.status, 200); assert.equal(owner.body.account.email, "owner@example.test"); });
 
 test("Admin endpoints reject unauthenticated and Child sessions behind the production proxy", async (t) => { const { store, request } = await fixture(t, { productionProxy: true }); await store.setup("admin secure password", 0, "owner@example.test"); await store.setChildPassword("child secure password", { displayName: "Child", email: "child@example.test" }); assert.ok([401, 403].includes((await request("/api/security/sessions")).response.status)); const login = await request("/api/security/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "child", password: "child secure password" }) }); assert.equal(login.response.status, 200); assert.equal((await request("/api/security/children", { headers: { cookie: login.cookie } })).response.status, 403); });

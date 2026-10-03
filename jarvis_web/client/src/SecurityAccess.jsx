@@ -3,7 +3,7 @@ import { durationRequest, formatDuration, profileStatus } from "./securityDurati
 
 const API = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:3001" : "");
 const CHILD_PERMISSIONS = [["dashboard", "Dashboard"], ["conversation", "Corex Conversation"], ["ai_office", "AI Office"], ["voice", "Voice"], ["tools", "Tools"], ["view_workflow", "View workflows"], ["run_workflow", "Run workflows"], ["edit_workflow", "Edit workflows"], ["delete_workflow", "Delete workflows"], ["manage_workflow_credentials", "Manage workflow credentials"], ["media", "Media features"], ["credentials", "Credentials"], ["additional_access", "Additional Access"], ["security", "Security settings"], ["system_settings", "System settings"]];
-const ACCESS_PERMISSIONS = [["view_workflow", "View workflows"], ["edit_workflow", "Edit workflows"], ["run_workflow", "Run workflows"], ["dashboard", "Dashboard"], ["tools", "Tools"], ["storage", "View storage"], ["storage_modify", "Modify storage"], ["view_facebook", "View Facebook"], ["publish_facebook", "Publish Facebook"]];
+const ACCESS_PERMISSIONS = [["view_workflow", "View workflows"], ["edit_workflow", "Edit workflows"], ["delete_workflow", "Delete own workflows"], ["run_workflow", "Run workflows"], ["dashboard", "Dashboard"], ["tools", "Tools"], ["storage", "View storage"], ["storage_modify", "Modify storage"], ["view_facebook", "View Facebook"], ["publish_facebook", "Publish Facebook"]];
 const PERMISSION_KEYS = ACCESS_PERMISSIONS.map(([key]) => key);
 const EMPTY_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, false]));
 const PRESETS = {
