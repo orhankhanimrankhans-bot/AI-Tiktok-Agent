@@ -41,6 +41,7 @@ const { DEFAULT_GEMINI_MODEL } = require("./geminiVideoAnalysis");
 const { configureSessionProxy, sessionOptions } = require("./sessionConfig");
 const { SqliteSessionStore } = require("./sqliteSessionStore");
 const { createWorkflowScheduler } = require("./workflowScheduler");
+const { createDriveVideoStock } = require("./driveVideoStock");
 const { YouTubeUploadError } = require("./youtubeUpload");
 const { createFacebookControlStore } = require("./facebookControlStore");
 const { registerFacebookControlRoutes } = require("./facebookControlRoutes");
@@ -1047,6 +1048,16 @@ async function startServer() {
     geminiApiKey: GEMINI_API_KEY, geminiModel: GEMINI_MODEL, geminiProvider: geminiConfiguration.provider, geminiVertex: geminiConfiguration.vertex, executionStore, logger: console });
   workflowExecutor = createWorkflowExecutor({ executionServices, logger: console });
   workflowStore = createWorkflowStore({ dbPath: WORKFLOW_DB_PATH });
+  const driveStock = createDriveVideoStock({ db: credentialStore.db,
+    listWorkflows: () => workflowStore.listMonitorWorkflows(), credentialStore, createOAuthClient,
+    createDriveClient: auth => google.drive({ version: "v3", auth }),
+    authorize: owner => {
+      if (accessControlStore.securityState() !== "enabled" || !owner) throw new Error("Authentication required.");
+      if (owner.ownerType === "admin" && owner.ownerId === "primary") return;
+      const profile = owner.ownerType === "child" ? accessControlStore.childAccount() : owner.ownerType === "additional" ? accessControlStore.getChild(owner.ownerId) : null;
+      if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now()) || !profile.permissions?.storage || !profile.permissions?.view_workflow) throw new Error("Drive monitoring access denied.");
+    } });
+  require("./driveVideoStockRoutes").registerDriveVideoStockRoutes(app, { service: driveStock, workspaceForRequest: req => workflowWorkspace(req, accessControlStore) });
   registerWorkflowRoutes(app, { workflowStore, workspaceForRequest: (req) => workflowWorkspace(req, accessControlStore),
     validateCredentialReferences: async (nodes, owner) => {
       for (const node of Array.isArray(nodes) ? nodes : []) {
@@ -1064,6 +1075,7 @@ async function startServer() {
   facebookVerificationWorker = createFacebookVerificationWorker({ store: facebookPublicationStore, credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService, logger: console });
   facebookPublicScanScheduler = createFacebookPublicScanScheduler({ store: facebookControlStore, publicMetricsService: facebookPublicMetricsService, logger: console });
   const server = app.listen(PORT, () => {
+    driveStock.start();
     workflowScheduler.start();
     facebookVerificationWorker.start();
     facebookPublicScanScheduler.start();
@@ -1081,7 +1093,9 @@ async function startServer() {
     console.log("=================================");
     console.log("");
   });
+  server.on("close", () => driveStock.stop());
   server.on("error", (error) => {
+    driveStock.stop();
     if (error?.code === "EADDRINUSE") console.error(`FATAL ERROR: Corex backend is already running on port ${PORT}.`);
     else console.error("FATAL ERROR: Corex backend listener failed.");
     workflowScheduler.stop();

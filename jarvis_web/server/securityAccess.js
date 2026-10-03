@@ -12,6 +12,7 @@ function allowResetRequest(key, now = Date.now()) { const value = resetRequests.
 const STORAGE_NODE_PERMISSIONS = Object.freeze({ "Search Files and Folders": "storage", "Download File": "storage", "Move File": "storage_modify", "Delete File": "storage_modify", YouTube: "storage_modify", TikTok: "manage_workflow_credentials" });
 function requiredPermissions(req) {
   const permissions = [];
+  if (req.path.startsWith("/api/drive/video-stock")) return ["storage", "view_workflow"];
   if (req.path === "/api/workflow-executions/run") {
     permissions.push("run_workflow");
     for (const node of Array.isArray(req.body?.nodes) ? req.body.nodes : []) { const permission = STORAGE_NODE_PERMISSIONS[node?.name]; if (permission) permissions.push(permission); }

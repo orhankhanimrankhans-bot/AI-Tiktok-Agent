@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import DriveVideoStock from "./DriveVideoStock.jsx";
+import { useDriveVideoStock, stockSummary } from "./driveVideoStockState.js";
 import OfficeSimulation from "./OfficeSimulation.jsx";
 import { handoffIntent } from "./officeMovement.js";
 import { listWorkflows } from "./workflowApi.js";
@@ -32,12 +34,12 @@ function WorkflowStatusModal({ title, workflows, tone, onClose, onOpenWorkflow }
   return <div className="workflow-status-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside className={`workflow-status-modal ${tone}`} role="dialog" aria-modal="true" aria-label={title}><header><div><span>WORKFLOW STATUS</span><h2>{title}</h2></div><button type="button" onClick={onClose} aria-label="Close workflow status">X</button></header>{workflows.length ? <div className="workflow-status-list">{workflows.map((workflow) => <button type="button" key={workflow.id} onClick={() => { onClose(); onOpenWorkflow?.(workflow.id); }}><i /><strong>{workflow.name}</strong><span>{workflow.status}</span><small>{workflow.lastRunAt ? `Last run: ${new Date(workflow.lastRunAt).toLocaleString()}` : workflow.updatedAt ? `Updated: ${new Date(workflow.updatedAt).toLocaleString()}` : "No activity yet"}</small></button>)}</div> : <p className="workflow-status-empty">No workflows in this group.</p>}</aside></div>;
 }
 
-function CorexLiveEngine({ activeWorkflows, inactiveWorkflows, facts, facebookPageCount }) {
+function CorexLiveEngine({ activeWorkflows, inactiveWorkflows, facts, facebookPageCount, stock }) {
   const pipelines = [
     ["WORKFLOWS", activeWorkflows.length ? "healthy" : inactiveWorkflows.length ? "warning" : "disabled", `${activeWorkflows.length} active / ${inactiveWorkflows.length} inactive`],
     ["FACEBOOK", facebookPageCount ? "healthy" : facts.facebookCredentials.length ? "warning" : "disabled", facebookPageCount ? `${facebookPageCount} pages` : facts.facebookCredentials.length ? "Credentials ready" : "Not configured"],
     ["WHATSAPP", "disabled", "Not connected"],
-    ["TIKTOK", "disabled", "Not connected"],
+    ["DRIVE", stockSummary(stock).tone, stockSummary(stock).text],
     ["AI AGENT", facts.nodeCount ? "healthy" : "warning", `${facts.nodeCount} workflow nodes`],
     ["QUEUE", facts.queuedItems.length ? "warning" : "healthy", facts.queuedItems.length ? `${facts.queuedItems.length} queued` : "Clear"],
   ];
@@ -45,8 +47,9 @@ function CorexLiveEngine({ activeWorkflows, inactiveWorkflows, facts, facebookPa
   return <section className={`corex-live-engine ${mixed ? "mixed" : "healthy"}`} aria-label="Corex Live Engine"><header><div><span>LIVE OPERATIONS CORE</span><h2>COREX LIVE ENGINE</h2></div><strong>{mixed ? "MIXED HEALTH" : "READY"}</strong></header><div className="engine-stage"><div className="engine-pipelines left">{pipelines.slice(0, 3).map(([label, status, meta]) => <article key={label} className={`engine-pipeline ${status}`}><b>{label}</b><small>{meta}</small><i /></article>)}</div><div className="engine-core" aria-hidden="true"><span className="ring one" /><span className="ring two" /><span className="ring three" /><strong>AI</strong></div><div className="engine-pipelines right">{pipelines.slice(3).map(([label, status, meta]) => <article key={label} className={`engine-pipeline ${status}`}><b>{label}</b><small>{meta}</small><i /></article>)}</div></div></section>;
 }
 
-function CorexSummaryDashboard({ facts, workflows, facebookPages, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation, onOpenFacebookPages }) {
+function CorexSummaryDashboard({ apiBaseUrl, facts, workflows, facebookPages, state, workflowActive, workflowError, onControl, onOpenWorkflow, onFocusConversation, onOpenFacebookPages }) {
   const [modal, setModal] = useState(null);
+  const stock = useDriveVideoStock(apiBaseUrl);
   const activeWorkflows = workflows.filter((workflow) => workflow.status === "ACTIVE");
   const inactiveWorkflows = workflows.filter((workflow) => workflow.status !== "ACTIVE");
   const stateLabel = workflowError ? "Needs Check" : workflowActive ? "Running" : state.toUpperCase();
@@ -59,7 +62,8 @@ function CorexSummaryDashboard({ facts, workflows, facebookPages, state, workflo
   return <section className="corex-summary-dashboard" aria-label="Corex dashboard overview">
     <header className="corex-summary-hero"><div><span>AI CONTROL SYSTEM</span><h1>COREX CORE</h1><p>Clean command overview for workflows, Facebook pages, and live operations.</p></div><button type="button" className="corex-summary-orb" onClick={onFocusConversation} aria-label="Focus Corex conversation"><span>ISK</span></button><strong className={`corex-summary-state ${workflowError ? "error" : workflowActive ? "running" : "ready"}`}><i />{stateLabel}</strong></header>
     <div className="corex-summary-grid top-three">{cards.map(([label, value, meta, kind]) => <button type="button" className={`corex-summary-card ${kind}${kind === "inactive" && inactiveWorkflows.length === 0 ? " neutral" : ""}`} key={label} onClick={() => openCard(kind)}><span>{label}</span><strong>{value}</strong><small>{meta}</small></button>)}</div>
-    <CorexLiveEngine activeWorkflows={activeWorkflows} inactiveWorkflows={inactiveWorkflows} facts={facts} facebookPageCount={facebookPages.length} />
+    <CorexLiveEngine activeWorkflows={activeWorkflows} inactiveWorkflows={inactiveWorkflows} facts={facts} facebookPageCount={facebookPages.length} stock={stock} />
+    <DriveVideoStock stock={stock} />
     {modal === "active" && <WorkflowStatusModal title="Active Workflows" workflows={activeWorkflows} tone="active" onClose={() => setModal(null)} onOpenWorkflow={onOpenWorkflow} />}
     {modal === "inactive" && <WorkflowStatusModal title="Inactive Workflows" workflows={inactiveWorkflows} tone="inactive" onClose={() => setModal(null)} onOpenWorkflow={onOpenWorkflow} />}
   </section>;
@@ -89,5 +93,5 @@ export default function JarvisDashboard({ apiBaseUrl = "", graph, workflowActive
     setMessages((current) => [...current, { id: `${id}-result`, role: "jarvis", text: `${name}: ${result}` }]);
   };
   const sendMessage = (event) => { event.preventDefault(); const text = draft.trim(); if (!text) return; taskSequence.current += 1; setMessages((current) => [...current, { id: `message-${taskSequence.current}`, role: "user", text }]); setDraft(""); routeCommand(text); };
-  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}${conversationOpen ? " conversation-open" : ""}`} data-control-state={state}><div className="dashboard-main-column"><CorexSummaryDashboard facts={facts} workflows={workflows} facebookPages={facebookControl.pages} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} onOpenFacebookPages={onOpenFacebookPages} /><OfficeSimulation agentStates={{ ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit }} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><button type="button" className="mobile-conversation-fab" onClick={focusConversation} aria-label="Open Corex Conversation">COREX</button><button type="button" className="conversation-mobile-backdrop" aria-label="Close Corex Conversation" onClick={() => setConversationOpen(false)} /><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} onClose={() => setConversationOpen(false)} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
+  return <section className={`dashboard-page jarvis-control-center technical-dashboard control-${state}${conversationOpen ? " conversation-open" : ""}`} data-control-state={state}><div className="dashboard-main-column"><CorexSummaryDashboard apiBaseUrl={apiBaseUrl} facts={facts} workflows={workflows} facebookPages={facebookControl.pages} state={state} workflowActive={workflowActive} workflowError={workflowError} onControl={setDetail} onOpenWorkflow={onOpenWorkflow} onFocusConversation={focusConversation} onOpenFacebookPages={onOpenFacebookPages} /><OfficeSimulation agentStates={{ ...agentStates, orbit: workflowActive ? "WORKING" : workflowError ? "ERROR" : agentStates.orbit }} activeWorkspace={activeWorkspace} tasks={tasks} handoff={officeHandoff} onHandoffComplete={(id) => setOfficeHandoff((current) => current?.id === id ? null : current)} platformStates={{ amazon: "NOT CONNECTED", facebook: facts.facebookCredentials.length ? "CONNECTED" : "NOT CONNECTED", tiktok: "NOT CONNECTED", youtube: "NOT CONNECTED" }} onPlatformSelect={setDetail} /></div><button type="button" className="mobile-conversation-fab" onClick={focusConversation} aria-label="Open Corex Conversation">COREX</button><button type="button" className="conversation-mobile-backdrop" aria-label="Close Corex Conversation" onClick={() => setConversationOpen(false)} /><ConversationPanel inputRef={inputRef} messages={messages} draft={draft} onDraft={setDraft} onSend={sendMessage} onClose={() => setConversationOpen(false)} /><OperationalDetail detail={detail} facts={facts} state={state} onClose={() => setDetail(null)} /></section>;
 }
