@@ -3,6 +3,16 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const { PrepareContentPolicy } = require("./prepareContentPolicy");
 const a = { ownerType: "additional", ownerId: "a" }, b = { ownerType: "additional", ownerId: "b" };
+test("persistent operator limit allows 100 attempts despite cached hosting value 50", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prepare-limit-"));
+  fs.writeFileSync(path.join(dir, "prepare-content-limits.json"), JSON.stringify({ dailyAttemptsPerWorkspace: 100 }));
+  const policy = new PrepareContentPolicy(path.join(dir, "policy.sqlite3"), { env: { PREPARE_CONTENT_DAILY_LIMIT: "50" } });
+  t.after(() => { policy.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  policy.register({ binary: { referenceId: "limit-video" } }, a);
+  assert.equal(policy.daily, 100);
+  for (let i = 0; i < 100; i++) await policy.run("limit-video", a, () => "ok");
+  await assert.rejects(policy.run("limit-video", a, () => "no"), { code: "prepare_content_daily_limit" });
+});
 function setup(t, env = {}, now = Date.now) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prepare-policy-"));
   const db = path.join(dir, "policy.sqlite3");

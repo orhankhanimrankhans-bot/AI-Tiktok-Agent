@@ -1,6 +1,8 @@
 "use strict";
 const { DatabaseSync } = require("node:sqlite");
 const { randomUUID } = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
 const { PrepareContentError } = require("./openaiPrepareContent");
 
 function workspace(owner) {
@@ -18,7 +20,11 @@ function limit(value, fallback) {
 class PrepareContentPolicy {
   constructor(dbPath, { env = process.env, now = Date.now } = {}) {
     this.now = now;
-    this.daily = limit(env.PREPARE_CONTENT_DAILY_LIMIT, 50);
+    // Operator-managed persistent setting takes precedence over cached hosting
+    // environment values. This file is never writable through a client API.
+    const settingsPath = path.join(path.dirname(path.resolve(dbPath)), "prepare-content-limits.json");
+    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, "utf8")) : {};
+    this.daily = limit(settings.dailyAttemptsPerWorkspace ?? env.PREPARE_CONTENT_DAILY_LIMIT, 50);
     this.perOwner = limit(env.PREPARE_CONTENT_WORKSPACE_CONCURRENCY, 2);
     this.global = limit(env.PREPARE_CONTENT_GLOBAL_CONCURRENCY, 4);
     this.db = new DatabaseSync(dbPath);
