@@ -28,6 +28,7 @@ function createExecutionServices(dependencies) {
     youtube: { uploadVideo: (request, owner) => executeYouTubeUpload({ request, owner, credentialStore: google.credentialStore,
       createOAuthClient: google.createOAuthClient, createYouTubeClient: required("createYouTubeClient", input.createYouTubeClient),
       binaryDir: required("binaryDirectory", input.binaryDirectory), logger }) },
+    instagram: { publishReel: (request, owner) => required("instagramService", input.instagramService).publishReel(request, owner) },
     tiktok: { uploadVideo: (request, owner) => required("tiktokWorkflowService", input.tiktokWorkflowService).uploadVideo(request, owner) },
     binary: { directory: required("binaryDirectory", input.binaryDirectory) },
     openAI: { prepare: (request, owner) => {

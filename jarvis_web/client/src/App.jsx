@@ -39,6 +39,8 @@ import { CANVAS_APPEARANCE_KEY, appearanceCssVariables, canvasBackground,
   canvasPointFromClient, canvasViewportStyle, clampCanvasZoom, connectionMidpoint, connectionPath, connectionPathToPoint, connectionVisualState, fitCanvasViewport, insertNodeBetween, isPersistedWorkflowActive, moveNodeFromPointer,
   validateConnectionCandidate, nodeBorderVisualState, nodeConnectionHealth, readableForeground, safeAppearance, visualNodeStatus, workflowNodeSubtitle } from "./workflowCanvas.js";
 import { buildPrepareContentRequest, mergePreparedContent, PREPARE_CONTENT_TONES, prepareContentDefaults } from "./prepareContentConfig.js";
+import InstagramCredentialModal from "./InstagramCredentialModal.jsx";
+import { instagramNodeDefaults, buildInstagramRequest } from "./instagramConfig.js";
 import TikTokCredentialModal from "./TikTokCredentialModal.jsx";
 import TikTokDirectReview from "./TikTokDirectReview.jsx";
 import { buildTikTokUploadRequest, tiktokNodeDefaults, TIKTOK_OPERATION } from "./tiktokConfig.js";
@@ -89,6 +91,7 @@ function YouTubeIcon({ className = "" }) {
 function NodeProviderIcon({ node }) {
   if (node.provider === "Google Drive") return <GoogleDriveIcon />;
   if (node.provider === "Facebook") return <FacebookIcon />;
+  if (node.provider === "Instagram") return <span aria-hidden="true" style={{ color: "#f472b6", fontSize: 26 }}>◎</span>;
   if (node.provider === "TikTok") return <TikTokIcon />;
   if (node.provider === "YouTube") return <YouTubeIcon />;
   if (node.name === "Schedule Trigger") return <span className="trigger-mark" aria-hidden="true">
@@ -132,6 +135,9 @@ const NODE_LIBRARY = [
     description: "Interact with Facebook through the Meta Graph API",
     type: "ACTION",
     icon: "f",
+  },
+  {
+    id: "instagram-reel", provider: "Instagram", name: "Instagram", description: "Publish Reels to a connected Creator or Business account", type: "ACTION", icon: "◎",
   },
   {
     id: "tiktok-upload", provider: "TikTok", name: "TikTok", description: "Upload to TikTok inbox or review a video for Direct Post", type: "ACTION", icon: "♪",
@@ -1908,6 +1914,7 @@ function createPhase2Config(nodeId) {
   if (nodeId === "google-move") return { credentialId: "", resource: "File", operation: "Move", fileIdMode: "Expression",
     fileId: "{{ $json.sourceFileId }}", destinationFolderId: "", settings: defaultNodeSettings() };
   if (nodeId === "facebook-graph-api") return { ...facebookNodeDefaults(), settings: defaultNodeSettings() };
+  if (nodeId === "instagram-reel") return { ...instagramNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "tiktok-upload") return { ...tiktokNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "youtube-upload") return { ...youtubeNodeDefaults(), settings: defaultNodeSettings() };
   if (nodeId === "prepare-content") return { ...prepareContentDefaults(), settings: defaultNodeSettings() };
@@ -2120,6 +2127,35 @@ function PrepareContentEditor({ node, previousNode, openAIConfigured, onExecuteP
       <NodeOutputPanel output={output} onExecute={executeStep} />
     </div>
   </div></div>;
+}
+
+function InstagramEditor({ node, previousNode, credentials, onRefreshCredentials, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
+  const defaults = { ...instagramNodeDefaults(), settings: defaultNodeSettings() };
+  const [config, setConfig] = useState({ ...defaults, ...node.config, settings: { ...defaults.settings, ...node.config?.settings } });
+  const [input, setInput] = useState(node.input ?? previousNode?.output ?? null);
+  const [output, setOutput] = useState(node.output ?? null);
+  const [activeTab, setActiveTab] = useState("Parameters"), [busy, setBusy] = useState(false);
+  const latestExecution = useRef(null);
+  const [showCredential, setShowCredential] = useState(false);
+  const account = credentials.find(item => item.id === config.credentialId);
+  const execute = async () => { if (busy) return; setBusy(true); try { const result = await onExecuteNode({ ...node, config }, input, { triggerMode: "manual" }); latestExecution.current = result; setOutput(result.output); onSaveNode(result); } finally { setBusy(false); } };
+  const close = () => { onSaveNode({ ...node, ...latestExecution.current, config, input, output, status: latestExecution.current?.status ?? node.status ?? "idle" }); onClose(); };
+  return <div className="node-editor-overlay"><div className="node-editor-window">
+    <header className="node-editor-header"><div className="node-editor-title"><span aria-hidden="true">◎</span><strong>Instagram</strong></div><button className="node-editor-close" onClick={close}>×</button></header>
+    <div className="node-editor-body google-three-column">
+      <NodeInputPanel previousNode={previousNode} input={input} onInputChange={setInput} onExecutePreviousNodes={onExecutePreviousNodes} nodeId={node.id} />
+      <section className="node-config-panel google-config-panel"><div className="node-editor-tabs">{["Parameters", "Settings"].map(tab => <button key={tab} className={activeTab === tab ? "node-tab-active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>)}<button className="execute-step" disabled={busy || !account || !config.publishConsent} onClick={execute}>{busy ? "Publishing…" : "Execute step"}</button></div>
+        <div className="node-config-scroll">{activeTab === "Parameters" ? <div className="drive-parameters">
+          <label>Credential</label><div className="credential-row"><select aria-label="Instagram credential" value={config.credentialId} onChange={event => event.target.value === "__create__" ? setShowCredential(true) : setConfig({ ...config, credentialId: event.target.value, publishConsent: false })}><option value="">Select credential</option>{credentials.map(item => <option key={item.id} value={item.id}>{item.accountName} &middot; Instagram</option>)}<option value="__create__">+ Create new credential</option></select><button type="button" className="credential-button" aria-label="Edit Instagram credential" onClick={() => setShowCredential(true)}>&#9998;</button></div>
+          <label>Operation</label><select value="Publish Reel" disabled><option>Publish Reel</option></select>
+          <label>Binary Property</label><input value={config.binaryProperty} onChange={event => setConfig({ ...config, binaryProperty: event.target.value })} />
+          <label>Caption</label><textarea rows="4" value={config.caption} onChange={event => setConfig({ ...config, caption: event.target.value })} placeholder="{{ $json.socialCaption }}" />
+          <label><input type="checkbox" checked={config.shareToFeed !== false} onChange={event => setConfig({ ...config, shareToFeed: event.target.checked })} /> Share Reel to feed</label>
+          <label><input type="checkbox" checked={config.publishConsent === true} disabled={!account} onChange={event => setConfig({ ...config, publishConsent: event.target.checked })} /> I authorize this node to publish its input videos to @{account?.accountName || "the selected account"} on manual and scheduled runs. I have permission to share them.</label>
+          <p>MP4 or MOV, up to 128 MiB. Instagram must finish processing before Move File can archive the source. A retry checks the existing submission.</p>
+        </div> : <GenericNodeSettings settings={config.settings} onChange={(key, value) => setConfig(current => ({ ...current, settings: { ...current.settings, [key]: value } }))} version="Instagram node version 1.0" />}</div>
+      </section><NodeOutputPanel output={output} onExecute={execute} />
+    </div></div>{showCredential && <InstagramCredentialModal apiBaseUrl={API_BASE_URL} onClose={() => setShowCredential(false)} onRefreshCredentials={onRefreshCredentials} onSave={credentialId => { setConfig(current => ({ ...current, credentialId, publishConsent: false })); setShowCredential(false); }} />}</div>;
 }
 
 function TikTokEditor({ node, previousNode, credentials, onRefreshCredentials, onExecutePreviousNodes, onExecuteNode, onSaveNode, onClose }) {
@@ -2379,6 +2415,14 @@ function storeWorkflowLinkage(workflow) {
   const pendingGoogleCredentialNodeId = useRef(null);
   const [showYouTubeCredential, setShowYouTubeCredential] = useState(false);
   const [youtubeCredentials, setYouTubeCredentials] = useState([]);
+  const [instagramCredentials, setInstagramCredentials] = useState([]);
+  const syncInstagramCredentials = async () => {
+    try { const response = await fetch(`${API_BASE_URL}/api/instagram/config`, { credentials: "include" });
+      if (!response.ok) { setInstagramCredentials([]); return; }
+      const data = await response.json(); setInstagramCredentials(data.connected && data.accountRef ? [{ id: data.accountRef, accountName: data.accountName, connected: true }] : []);
+    } catch { setInstagramCredentials([]); }
+  };
+  useEffect(() => { Promise.resolve().then(syncInstagramCredentials); const refresh = () => syncInstagramCredentials(); window.addEventListener("focus", refresh); return () => window.removeEventListener("focus", refresh); }, []);
   const [tiktokCredentials, setTikTokCredentials] = useState([]);
   const syncTikTokCredentials = async () => {
     try { const response = await fetch(`${API_BASE_URL}/api/tiktok/config`, { credentials: "include" });
@@ -2956,6 +3000,12 @@ function storeWorkflowLinkage(workflow) {
           const data = await response.json(); if (!response.ok) throw new Error(data?.error || "Facebook Graph request failed."); return data;
         };
         return String(node.config.endpoint || "").includes("{{") ? executePerItem(input, executeRead) : executeRead(input);
+      }
+      if (node.name === "Instagram") {
+        return executePerItem(input, async item => {
+          const response = await fetch(`${API_BASE_URL}/api/instagram/videos/publish`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-Corex-Instagram": "1" }, body: JSON.stringify(buildInstagramRequest(node.config, item, resolveExpression)) });
+          const data = await response.json(); if (!response.ok) throw new Error(data.error || "Instagram publishing failed."); return data;
+        });
       }
       if (node.name === "TikTok") {
         return executePerItem(input, async (item) => {
@@ -3701,7 +3751,7 @@ function storeWorkflowLinkage(workflow) {
 
                       {canvasNodes.map(
                         (node, index) => {
-                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, youtubeCredentials, tiktokCredentials, openAIConfigured });
+                          const health = nodeConnectionHealth(node, { googleCredentials, facebookCredentials, youtubeCredentials, tiktokCredentials, instagramCredentials, openAIConfigured });
                           const borderState = nodeBorderVisualState(node, isWorkflowRunning, health); const candidate = connectionDrag && validateConnectionCandidate(canvasNodes, connections, connectionDrag.sourceId, node.id); const inputState = candidate?.ok ? " connection-target-valid" : connectionDrag?.targetId === node.id ? " connection-target-invalid" : ""; const outputState = connectionDrag?.sourceId === node.id ? " connection-source-active" : "";
                           return <div
   key={node.id}
@@ -3943,7 +3993,7 @@ function storeWorkflowLinkage(workflow) {
           </section>
         ) : visibleTopPage === "DASHBOARD" ? (
           <JarvisDashboard apiBaseUrl={API_BASE_URL} graph={dashboardGraph} workflowActive={isWorkflowRunning} workflowError={!isWorkflowRunning && workflowNotice?.status === "error"}
-            healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, tiktokCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
+            healthContext={{ googleCredentials, facebookCredentials, youtubeCredentials, tiktokCredentials, instagramCredentials, openAIConfigured }} executions={executions} lastExecutionAt={lastExecutionAt}
             activeWorkflowId={editorWorkflowSource === "server" ? activeServerWorkflow?.id : "local-workflow"}
             onOpenFacebookPages={() => navigateTopPage("FACEBOOK PERFORMANCE", "/facebook-performance")}
             onOpenWorkflow={(workflowId) => { if (!workflowId) { if (can("edit_workflow")) setShowWorkflowManager(true); return; } if (!can("view_workflow")) return; navigateTopPage("WORKFLOW", "/"); if (workflowId !== "local-workflow" && workflowId !== activeServerWorkflow?.id) requestOpenServerWorkflow(workflowId); else if (workflowId === "local-workflow" && editorWorkflowSource !== "local") requestOpenLocalWorkflow(); }} />
@@ -4015,6 +4065,7 @@ function storeWorkflowLinkage(workflow) {
         />
       )}
 
+      {editingNode?.name === "Instagram" && <InstagramEditor node={editingNode} previousNode={getPreviousNode(editingNode.id)} credentials={instagramCredentials} onRefreshCredentials={syncInstagramCredentials} onExecutePreviousNodes={executePreviousNodesFor} onExecuteNode={executeRuntimeNode} onSaveNode={updateCanvasNode} onClose={() => setEditingNode(null)} />}
       {editingNode?.name === "TikTok" && <TikTokEditor node={editingNode} previousNode={getPreviousNode(editingNode.id)} credentials={tiktokCredentials} onRefreshCredentials={syncTikTokCredentials} onExecutePreviousNodes={executePreviousNodesFor} onExecuteNode={executeRuntimeNode} onSaveNode={updateCanvasNode} onClose={() => setEditingNode(null)} />}
 
       {editingNode?.name === "YouTube" && (

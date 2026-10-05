@@ -59,6 +59,8 @@ export default function PrivacyPolicy() {
         </section>
 
         <section>
+          <h2>Instagram connection and Reels</h2>
+          <p>When you connect Instagram, Corex stores your workspace's app credentials and account authorization encrypted on the server. With your authorization, an Instagram workflow node publishes its input videos and captions on manual or scheduled runs. Instagram retrieves only the selected video through an expiring link. Corex retains content fingerprints and publication status to prevent duplicate posts. Disconnecting removes local account tokens and active video links; duplicate history remains. You can also revoke the app in Instagram's Apps and Websites settings.</p>
           <h2>TikTok connection and uploads</h2>
           <p>
             Corex stores your TikTok account identifier, display name, granted permissions, and

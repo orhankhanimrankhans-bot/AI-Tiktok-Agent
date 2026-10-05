@@ -1,0 +1,9 @@
+.instagram-credential-modal { width: min(760px, calc(100vw - 24px)); height: auto; max-height: calc(100dvh - 32px); }
+.instagram-credential-modal .credential-modal-header { flex-shrink: 0; min-height: 72px; height: auto; padding: 16px 20px; gap: 16px; flex-wrap: wrap; }
+.instagram-credential-modal .credential-modal-body { display: block; overflow-y: auto; }
+.instagram-credential-modal .credential-content { padding: 20px; min-width: 0; }
+.instagram-credential-modal input { display: block; box-sizing: border-box; width: 100%; min-height: 42px; padding: 10px; background: #161b21; color: #f2f5f7; border: 1px solid #59636e; border-radius: 5px; }
+.instagram-credential-modal p { line-height: 1.55; color: #d0d7df; overflow-wrap: anywhere; }
+.instagram-credential-modal button { min-height: 40px; padding: 8px 14px; border: 1px solid #626a74; border-radius: 5px; color: #fff; background: #303940; cursor: pointer; }
+.instagram-credential-modal button:disabled { opacity: .5; cursor: not-allowed; }
+.instagram-credential-modal .credential-modal-actions { flex-wrap: wrap; gap: 8px; }

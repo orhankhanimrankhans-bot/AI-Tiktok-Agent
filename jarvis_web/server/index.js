@@ -278,6 +278,7 @@ const credentialStore = new CredentialStore({
   encryptionSecret: CREDENTIAL_ENCRYPTION_SECRET,
   legacyEncryptionSecrets: LEGACY_CREDENTIAL_ENCRYPTION_SECRETS,
 });
+let instagramStore, instagramService;
 let executionStore;
 let facebookCredentialStore;
 let metaAppConfigStore;
@@ -286,6 +287,7 @@ let tiktokStore;
 let tiktokWorkflowService;
 let facebookTikTokCrosspost;
 registerFacebookTikTokRoutes(app, { getService: () => facebookTikTokCrosspost, getAccessStore: () => accessControlStore, clientUrl: CLIENT_URL });
+require("./instagramRoutes").registerInstagramRoutes(app, { getStore: () => instagramStore, getAccessStore: () => accessControlStore, getService: () => instagramService, clientUrl: CLIENT_URL });
 registerTikTokRoutes(app, { getStore: () => tiktokStore, getAccessStore: () => accessControlStore, getWorkflowService: () => tiktokWorkflowService, clientUrl: CLIENT_URL });
 let executionServices;
 let facebookExecutionContext;
@@ -1030,6 +1032,10 @@ async function startServer() {
       const profile = owner.ownerType === "child" ? accessControlStore.childAccount() : accessControlStore.getChild(owner.ownerId);
       if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now()) || !profile.permissions?.manage_workflow_credentials || !profile.permissions?.run_workflow) throw new Error("TikTok workspace access denied.");
     } });
+  instagramStore = new (require("./instagramStore").InstagramStore)(credentialStore.db, CREDENTIAL_ENCRYPTION_SECRET);
+  instagramService = require("./instagramWorkflow").createInstagramWorkflowService({ store: instagramStore, binaryDirectory: BINARY_DATA_DIR, clientUrl: CLIENT_URL,
+    requireMedia: (reference, owner) => prepareContentPolicy.requireMedia(reference, owner),
+    authorizeOwner: owner => require("./instagramAccess").authorizeInstagramOwner(accessControlStore, owner) });
   facebookTikTokCrosspost = createFacebookTikTokCrosspost({ db: tiktokStore.db,
     source: createFacebookTikTokSource({ credentialStore: facebookCredentialStore, graphServiceFactory: facebookGraphService }),
     tiktok: tiktokWorkflowService, binaryDirectory: BINARY_DATA_DIR,
@@ -1041,7 +1047,7 @@ async function startServer() {
       if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now())
         || !["view_facebook", "manage_workflow_credentials", "run_workflow"].every(p => profile.permissions?.[p])) throw new Error("Crossposting workspace access denied.");
     } });
-  executionServices = createExecutionServices({ tiktokWorkflowService, credentialStore, createOAuthClient, prepareContentPolicy,
+  executionServices = createExecutionServices({ instagramService, tiktokWorkflowService, credentialStore, createOAuthClient, prepareContentPolicy,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
     createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
     facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL,
@@ -1063,6 +1069,7 @@ async function startServer() {
       for (const node of Array.isArray(nodes) ? nodes : []) {
         const id = node?.config?.credentialId;
         if (typeof id !== "string" || !id) continue;
+        if (node?.name === "Instagram") { try { instagramService.connected(owner, id); } catch { return false; } }
         if (CredentialStore.isValidId(id)) {
           const provider = node?.name === "YouTube" ? YOUTUBE_PROVIDER : GOOGLE_DRIVE_PROVIDER;
           if (!await credentialStore.get(id, { owner, provider })) return false;
