@@ -1047,7 +1047,9 @@ async function startServer() {
       if (!profile?.enabled || (profile.accessExpiresAt && profile.accessExpiresAt <= Date.now())
         || !["view_facebook", "manage_workflow_credentials", "run_workflow"].every(p => profile.permissions?.[p])) throw new Error("Crossposting workspace access denied.");
     } });
-  executionServices = createExecutionServices({ instagramService, tiktokWorkflowService, credentialStore, createOAuthClient, prepareContentPolicy,
+  const videoSelection = new (require("./workflowVideoSelection").WorkflowVideoSelection)({ db: credentialStore.db, binaryDirectory: BINARY_DATA_DIR,
+    requireMedia: (reference, owner) => prepareContentPolicy.requireMedia(reference, owner), facebookCredentials: facebookCredentialStore });
+  executionServices = createExecutionServices({ videoSelection, instagramService, tiktokWorkflowService, credentialStore, createOAuthClient, prepareContentPolicy,
     createDriveClient: (oauth2Client) => google.drive({ version: "v3", auth: oauth2Client }),
     createYouTubeClient: (oauth2Client) => google.youtube({ version: "v3", auth: oauth2Client }),
     facebookExecutionContext, binaryDirectory: BINARY_DATA_DIR, prepareContent, openAIApiKey: OPENAI_API_KEY, openAIModel: OPENAI_MODEL,

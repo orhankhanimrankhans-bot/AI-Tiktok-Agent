@@ -77,6 +77,7 @@ test("empty, truncated and recognized network failures recover without reupload"
     const calls = [], delays = []; let attempts = 0;
     const client = mockClient(async request => {
       assert.equal(request.config.httpOptions.retryOptions.attempts, 1);
+      assert.equal(request.config.maxOutputTokens, attempts === 0 || mode === "network" ? 2048 : 4096);
       if (++attempts === 1) {
         if (mode === "network") throw Object.assign(new Error("private network detail"), { cause: { code: "ECONNRESET" } });
         return { text: "", ...(mode === "truncated" ? { candidates: [{ finishReason: "MAX_TOKENS" }] } : {}) };

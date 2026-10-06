@@ -222,3 +222,8 @@ test("Return All follows pagination while normal limit stops at requested count"
   assert.equal(calls, 2);
   assert.equal(result.count, 2);
 });
+
+test("revoked Google authorization is classified as reconnect rather than invalid search", async () => {
+ const store=credentialStoreWith({id:CREDENTIAL_ID,tokens:{access_token:"private"}});
+ await assert.rejects(executeDriveSearch({request:{credentialId:CREDENTIAL_ID,query:"clip"},credentialStore:store,createOAuthClient:()=>new FakeOAuthClient(),createDriveClient:()=>({files:{list:async()=>{throw Object.assign(new Error("invalid_grant"),{response:{status:400,data:{error:"invalid_grant"}}});}}}),logger:{error(){}}}),{code:"invalid_google_credential"});
+});

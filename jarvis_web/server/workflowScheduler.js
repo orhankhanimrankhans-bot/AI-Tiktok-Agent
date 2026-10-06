@@ -18,7 +18,21 @@ function ruleMatches(rule, date, timezone) {
   const period = interval === "Hours" ? Number(rule.hours) * 60 : interval === "Minutes" ? Number(rule.minutes) : Math.max(1, Math.ceil(Number(rule.seconds) / 60));
   return Number.isInteger(period) && period > 0 && Math.floor(date.getTime() / 60_000) % period === 0 && (interval !== "Hours" || p.minute === Number(rule.minute || 0));
 }
-function scheduleRules(workflow) { const trigger = workflow.nodes.find((node) => node?.name === "Schedule Trigger"); return Array.isArray(trigger?.config?.rules) ? trigger.config.rules : Array.isArray(workflow.schedule?.rules) ? workflow.schedule.rules : []; }
+function scheduleRules(workflow) {
+  const trigger = workflow.nodes.find(node => node?.name === "Schedule Trigger");
+  const rules = Array.isArray(trigger?.config?.rules) ? trigger.config.rules : Array.isArray(workflow.schedule?.rules) ? workflow.schedule.rules : [];
+  const seen = new Set();
+  return rules.filter(rule => {
+    const interval = rule.interval || "Days";
+    const key = JSON.stringify(interval === "Days" ? [interval, hourNumber(rule.hour), Number(rule.minute || 0)]
+      : interval === "Weeks" ? [interval, rule.weekday, hourNumber(rule.hour)]
+      : interval === "Months" ? [interval, Number(rule.monthDay), hourNumber(rule.hour)]
+      : interval === "Custom (Cron)" ? [interval, String(rule.cron || "").trim().replace(/\s+/g, " ")]
+      : [interval, rule.hours, rule.minutes, rule.seconds, rule.minute]);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
 function occurrenceKey(workflow, rule, scheduledFor) { return `${workflow.id}:${String(rule.id)}:${scheduledFor.toISOString()}`; }
 
 function createWorkflowScheduler({ workflowStore, workflowExecutor, executionStore, now = () => new Date(), pollMs = 15_000, logger = console, timezone = DEFAULT_TIMEZONE } = {}) {

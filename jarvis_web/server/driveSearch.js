@@ -84,7 +84,7 @@ function inspectGoogleError(error) {
 function googleErrorDetails(error) {
   const diagnostic = inspectGoogleError(error);
   const { status, reason, message } = diagnostic;
-  if (status === 401) {
+  if (status === 401 || /invalid_grant/i.test(`${message} ${error?.response?.data?.error || ""}`)) {
     return new DriveSearchError(401, "invalid_google_credential", "The selected Google credential is expired or invalid. Reconnect it and try again.");
   }
   if (status === 403 && /rateLimit|userRateLimit|quota/i.test(reason)) {

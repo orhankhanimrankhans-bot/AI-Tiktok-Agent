@@ -275,7 +275,7 @@ async function analyzeAttempt({ session, binaryDir, binary, mimeType, apiKey, mo
           { fileData: { fileUri: remoteFile.uri, mimeType: remoteFile.mimeType || mimeType } },
           { text: VISUAL_ANALYSIS_PROMPT },
         ],
-        config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: Math.max(1, deadline - Date.now()) }, temperature: 0, maxOutputTokens: 700, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA },
+        config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: Math.max(1, deadline - Date.now()) }, temperature: 0, maxOutputTokens: session.outputTokens || 2048, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA },
       }), Math.max(1, deadline - Date.now()), "gemini_analysis_timeout", "Gemini video understanding timed out."));
     } catch (error) {
       const diagnostic = logFailure({ logger, stage: "generateContent", model, error, apiKey, state: fileState(remoteFile), mimeType, fileSize, startedAt });
@@ -320,6 +320,7 @@ async function analyzeVideo(options) {
       try { session.inferenceAttempt = attempt + 1; return await analyzeAttempt({ ...options, sleep, session }); }
       catch (error) {
         if (!isRetryable(error) || attempt >= RETRY_DELAYS_MS.length) throw error;
+        if (error.code === "gemini_invalid_analysis") session.outputTokens = Math.min(4096, (session.outputTokens || 2048) * 2);
         if (fileState(session.remoteFile) === "FAILED") await cleanupDeveloperFile(session, options);
         if (!session.remoteFile?.name) session.remoteFile = undefined;
         const delayMs = Math.max(RETRY_DELAYS_MS[attempt], error.providerRetryDelayMs || 0);
