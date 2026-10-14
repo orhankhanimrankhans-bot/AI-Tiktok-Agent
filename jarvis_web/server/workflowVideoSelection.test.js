@@ -29,7 +29,7 @@ function setup(t) {
   const request = { workflowId: "workflow-a", nodes, connections, owner, triggerMode: "schedule" };
   let files = ["one", "two", "three"], failFacebook = false; const calls = [], moved = [];
   const download = async ({ fileId }) => {
-    const ref = "bin_" + fileId.padEnd(22,"x"); fs.writeFileSync(path.join(dir,ref),fileId === "alias" ? "one" : fileId);
+    const ref = "bin_" + fileId.padEnd(22,"x"); fs.writeFileSync(path.join(dir,ref),fileId === "empty" ? "" : fileId === "alias" ? "one" : fileId);
     return { fileId, fileName: fileId+".mp4", mimeType: "video/mp4", binary: { property: "data", referenceId: ref } };
   };
   const executor = createWorkflowExecutor({ logger: { error() {} }, executionServices: {
@@ -73,4 +73,10 @@ test("reservations block concurrent selection but pre-publish failure releases t
 test("legacy partial success is read only within its workspace and workflow", async t => {
   const x=setup(t); x.history.save({workflowId:"workflow-a",status:"error",startedAt:"2026-10-05",finishedAt:"2026-10-05",nodes:[{nodeId:"youtube",status:"success",output:[{success:true,videoId:"old",sourceFileId:"one"}]}]},owner);
   await x.executor.execute(x.request); assert.deepEqual(x.calls.map(c=>c[1]),["two","two"]);
+});
+
+test("empty video is skipped and next video posts in the same run without analyzing empty media", async t => {
+ const x=setup(t);x.setFiles(["empty","two"]);const result=await x.executor.execute(x.request);
+ assert.equal(result.status,"success");assert.deepEqual(x.calls,[["facebook","two"],["youtube","two"]]);assert.deepEqual(x.moved,["two"]);
+ assert.ok(result.nodes.some(n=>n.skippedVideos?.some(s=>s.reason==="empty_video")));
 });

@@ -31,3 +31,12 @@ test("YouTube request validation and API failures are safe", async (t) => {
   const value = fixture(t); value.youtube.videos.insert = async (request) => { await closeMedia(request.media.body); const error = new Error("Bearer private-token"); error.response = { status: 403, data: { error: { errors: [{ reason: "insufficientPermissions" }] } } }; throw error; };
   await assert.rejects(() => executeYouTubeUpload({ request: { credentialId: "gcred_1234567890123456789012", binaryProperty: "data", binary: { property: "data", referenceId }, mimeType: "video/mp4", title: "Title" }, credentialStore: value.credentialStore, createOAuthClient: () => value.auth, createYouTubeClient: () => value.youtube, binaryDir: value.binaryDir, logger: { error() {} } }), (error) => error.code === "insufficient_youtube_scope" && !/private-token|Bearer/.test(error.message));
 });
+
+test("YouTube upload limits and invalid metadata retain actionable secret-safe codes without retries", async t => {
+ for(const [reason,code] of [["uploadLimitExceeded","youtube_upload_limit"],["invalidTags","youtube_invalid_tags"],["invalidCategoryId","youtube_invalid_category"]]) {
+ const f=fixture(t);let attempts=0;const logs=[];
+ f.youtube.videos.insert=async request=>{attempts++;await closeMedia(request.media.body);throw Object.assign(new Error("Bearer secret"),{response:{status:400,data:{error:{errors:[{reason}]}}}});};
+ await assert.rejects(executeYouTubeUpload({request:{credentialId:"gcred_1234567890123456789012",binary:{property:"data",referenceId},title:"Title"},credentialStore:f.credentialStore,createOAuthClient:()=>f.auth,createYouTubeClient:()=>f.youtube,binaryDir:f.binaryDir,logger:{error:(...a)=>logs.push(a)}}),{code});
+ assert.equal(attempts,1);assert.match(JSON.stringify(logs),new RegExp(code));assert.doesNotMatch(JSON.stringify(logs),/Bearer|secret/);
+ }
+});

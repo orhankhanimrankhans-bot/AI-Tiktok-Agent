@@ -49,6 +49,18 @@ function youtubeFailure(error) {
   if (error instanceof YouTubeUploadError) return error;
   const status = Number(error?.response?.status || error?.code || 0);
   const reason = String(error?.response?.data?.error?.errors?.[0]?.reason || "");
+  const reasons = {
+    uploadLimitExceeded: [429, "youtube_upload_limit", "This YouTube channel reached its upload limit. Wait until YouTube allows uploads again."],
+    invalidCategoryId: [400, "youtube_invalid_category", "YouTube rejected the category. Select a supported video category."],
+    invalidTitle: [400, "youtube_invalid_title", "YouTube rejected the title. Check its length and characters."],
+    invalidDescription: [400, "youtube_invalid_description", "YouTube rejected the description. Check its length and characters."],
+    invalidTags: [400, "youtube_invalid_tags", "YouTube rejected the tags. Shorten the tags and remove invalid characters."],
+    invalidVideoMetadata: [400, "youtube_invalid_metadata", "YouTube rejected the video metadata. Check the YouTube node settings."],
+    mediaBodyRequired: [400, "youtube_missing_media", "YouTube did not receive the video file."],
+    forbiddenPrivacySetting: [403, "youtube_privacy_restricted", "YouTube does not allow the selected privacy setting for this account."],
+    youtubeSignupRequired: [403, "youtube_channel_required", "Create a YouTube channel for the connected Google account, then reconnect it."],
+  };
+  if (Object.hasOwn(reasons, reason)) return new YouTubeUploadError(...reasons[reason]);
   if (status === 401) return new YouTubeUploadError(401, "invalid_youtube_credential", "The YouTube credential is expired or invalid. Reconnect it and try again.");
   if (status === 403 && /insufficientPermissions|insufficient_scope/i.test(reason)) return new YouTubeUploadError(403, "insufficient_youtube_scope", "The credential lacks YouTube upload permission. Reconnect it and grant access.");
   if (status === 403 && /quota/i.test(reason)) return new YouTubeUploadError(429, "youtube_quota_exceeded", "YouTube API upload quota is unavailable. Try again after quota resets.");
@@ -94,8 +106,9 @@ async function executeYouTubeUpload({ request, owner, credentialStore, createOAu
       sourceFileId: params.sourceFileId, sourceFileName: params.sourceFileName,
       youtubeUrl: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}` };
   } catch (error) {
-    logger.error?.("YouTube upload failed safely", { code: error?.code || "youtube_upload_failed" });
-    throw youtubeFailure(error);
+    const failure = youtubeFailure(error);
+    logger.error?.("YouTube upload failed safely", { code: failure.code, status: failure.statusCode });
+    throw failure;
   } finally {
     if (refreshed) await credentialStore.save({ id: credential.id, provider: YOUTUBE_PROVIDER, accountEmail: credential.accountEmail,
       accountName: credential.accountName, tokens: { ...credential.tokens, ...refreshed } }, owner);

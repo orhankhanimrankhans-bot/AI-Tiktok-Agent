@@ -104,6 +104,9 @@ class WorkflowVideoSelection {
             if (!/^bin_[A-Za-z0-9_-]{16,128}$/.test(result.binary?.referenceId || "")) throw new Error("Invalid video reference.");
             const file = path.join(this.binaryDirectory, result.binary.referenceId), stat = fs.lstatSync(file);
             if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Invalid video file.");
+            if (stat.size === 0) {
+              skip(source, "empty_video"); candidate = alternatives.get(node.id)?.shift(); continue;
+            }
             const hash = crypto.createHash("sha256"); for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
             const after = fs.statSync(file);
             if (stat.size !== after.size || stat.mtimeMs !== after.mtimeMs) throw new Error("Video changed during selection.");

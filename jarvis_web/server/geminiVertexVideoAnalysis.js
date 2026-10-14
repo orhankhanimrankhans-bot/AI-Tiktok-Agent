@@ -65,6 +65,7 @@ async function analyzeVertexVideo(options) {
     } catch (error) { throw classifyFailure(error, "upload"); }
     finally { controller.abort(); stream.destroy(); }
 
+    let outputTokens = 2048;
     for (let attempt = 1; attempt <= RETRY_DELAYS_MS.length + 1; attempt++) {
       try { await cooldown.wait(sleep); }
       catch { throw new GeminiVideoError("gemini_cooldown_wait_timeout", "Gemini shared cooldown is still active. Try again later."); }
@@ -78,15 +79,20 @@ async function analyzeVertexVideo(options) {
         () => withTimeout(client.models.generateContent({ model: vertex.model,
           contents: [{ fileData: { fileUri: `gs://${vertex.bucket}/${object}`, mimeType } }, { text: VISUAL_ANALYSIS_PROMPT }],
           config: { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 }, timeout: timeoutMs },
-            temperature: 0, maxOutputTokens: 700, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA } }),
+            temperature: 0, maxOutputTokens: outputTokens, responseMimeType: "application/json", responseJsonSchema: FACT_SCHEMA } }),
         timeoutMs, "gemini_analysis_timeout", "Vertex video analysis timed out."));
         stage = "structuredParse";
+        const finish = response?.candidates?.[0]?.finishReason;
+        emit(logger, { correlationId, stage, attempt, event: "response", outputBudget: outputTokens,
+          finishReason: ["STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"].includes(finish) ? finish : "unknown",
+          textCharacters: typeof response?.text === "string" ? response.text.length : 0 });
         return await parseAnalysisResponse(response);
       } catch (error) {
         controller.abort();
         const failure = classifyFailure(error, stage), provider = failure.retryable ? guidance(error) : { delayMs: 0 };
         if (provider.requestQuota && provider.delayMs > 0) cooldown.record(provider.delayMs);
         if (!failure.retryable || attempt > RETRY_DELAYS_MS.length) throw failure;
+        if (failure.code === "gemini_invalid_analysis") outputTokens = Math.min(4096, outputTokens * 2);
         const delayMs = Math.max(RETRY_DELAYS_MS[attempt - 1], provider.delayMs);
         emit(logger, { correlationId, stage, attempt, event: "retry", delayMs, classificationCode: failure.code });
         await sleep(delayMs);

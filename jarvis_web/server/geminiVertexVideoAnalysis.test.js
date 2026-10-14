@@ -133,3 +133,10 @@ test("Vertex Prepare Content requires no Developer key and preserves title/capti
   assert.equal(result.socialCaptionWithHashtags, result.socialCaption);
   assert.equal(body.binary, f.binary);
 });
+
+test("Vertex retries truncated analysis with a larger bounded output budget and one upload", async t => {
+ const f=fixture(t,async(req,attempt)=>attempt===1?{text:"",candidates:[{finishReason:"MAX_TOKENS"}]}:{text:JSON.stringify(facts)});
+ assert.deepEqual(await analyzeVertexVideo(f),facts);
+ assert.deepEqual(f.requests.map(r=>r.config.maxOutputTokens),[2048,4096]);
+ assert.equal(f.uploads.length,1);assert.equal(f.deletes.length,1);
+});
